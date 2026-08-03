@@ -1,0 +1,44 @@
+# Private commerce data is denylisted by default. Public and evaluation assets
+# must be explicitly reviewed and allowlisted before they are committed.
+/data/**
+!/data/public/
+!/data/public/README.md
+!/data/evals/
+!/data/evals/README.md
+
+# Never commit source communications, invoices, or archive containers.
+*.pdf
+*.mbox
+*.eml
+*.zip
+
+# Secrets and local configuration.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# JavaScript and frontend build output.
+node_modules/
+.next/
+.vercel/
+coverage/
+
+# Local tooling and operating-system files.
+.DS_Store
+*.log
+
