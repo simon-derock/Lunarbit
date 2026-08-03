@@ -6,7 +6,6 @@ from subprocess import run
 
 from lunarbit.models import OrderCategory, Platform, SourceMessage
 
-
 PRIVATE_SUFFIXES = {".eml", ".mbox", ".pdf", ".zip"}
 
 

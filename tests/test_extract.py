@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import mailbox
+from email.message import EmailMessage
 from hashlib import sha256
 from json import dumps
 from pathlib import Path
+from stat import S_IMODE
 
 from lunarbit.extract import (
     build_source_inventory,
@@ -12,6 +15,7 @@ from lunarbit.extract import (
     document_id_from_bytes,
     extract_order_id_candidates,
     message_id_from_bytes,
+    write_source_inventory,
 )
 from lunarbit.models import (
     DocumentRole,
@@ -37,6 +41,13 @@ def test_platform_classification_uses_sender_and_subject() -> None:
     assert classify_platform("noreply@swiggy.in", "Your invoice") is Platform.SWIGGY
     assert classify_platform("orders@example.com", "Your Instamart order") is Platform.SWIGGY
     assert classify_platform("hello@example.com", "Interview update") is None
+    assert (
+        classify_platform(
+            "Swiggy <alerts@internshala.com>",
+            "Internship application update",
+        )
+        is None
+    )
 
 
 def test_document_roles_are_content_aware() -> None:
@@ -54,7 +65,10 @@ def test_document_roles_are_content_aware() -> None:
             platform=Platform.SWIGGY,
             category=OrderCategory.FOOD,
             filename="opaque.pdf",
-            text="TAX INVOICE\nInvoice From: Swiggy Limited\nPlatform fee for Order (123456789012345)",
+            text=(
+                "TAX INVOICE\nInvoice From: Swiggy Limited\n"
+                "Platform fee for Order (123456789012345)"
+            ),
         )
         is DocumentRole.SWIGGY_PLATFORM_FEE_INVOICE
     )
@@ -227,3 +241,40 @@ def test_inventory_combines_pdf_backed_and_mail_only_orders(
     assert inventory.summary.orders.resolved_orders == 2
     assert inventory.summary.orders.provisional_orders == 0
     assert inventory.summary.orders.total_orders == 2
+
+    output_root = tmp_path / "processed"
+    summary_path = write_source_inventory(inventory, output_root)
+    inventory_root = summary_path.parent
+    first_write = {path.name: path.read_bytes() for path in sorted(inventory_root.iterdir())}
+
+    write_source_inventory(inventory, output_root)
+
+    assert {
+        path.name: path.read_bytes() for path in sorted(inventory_root.iterdir())
+    } == first_write
+    assert all(S_IMODE(path.stat().st_mode) == 0o600 for path in inventory_root.iterdir())
+
+
+def test_mbox_html_body_without_attachment_remains_mail_only(tmp_path: Path) -> None:
+    mbox_path = tmp_path / "takeout" / "Takeout" / "Mail" / "orders.mbox"
+    mbox_path.parent.mkdir(parents=True)
+    message = EmailMessage()
+    message["From"] = "receipts@zomato.com"
+    message["To"] = "customer@example.com"
+    message["Date"] = "Mon, 03 Aug 2026 12:00:00 +0000"
+    message["Subject"] = "Synthetic mail-only order"
+    message.set_content("<p>Order ID: 1234567890</p>", subtype="html")
+    box = mailbox.mbox(mbox_path, create=True)
+    try:
+        box.add(message)
+        box.flush()
+    finally:
+        box.close()
+
+    inventory = build_source_inventory(tmp_path)
+
+    assert inventory.summary.relevant_messages == 1
+    assert inventory.summary.unique_pdf_documents == 0
+    assert inventory.summary.mail_only_order_messages == 1
+    assert inventory.summary.orders.resolved_orders == 1
+    assert inventory.summary.orders.total_orders == 1
