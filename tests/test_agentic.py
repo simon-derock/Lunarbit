@@ -8,14 +8,15 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from lunarbit.agentic import (
     CLOUDFLARE_MODEL,
+    AgenticBatch,
     AgenticBatchPolicy,
     AgenticEvidenceBundle,
     CloudflareWorkersAIClient,
     TransportResponse,
     plan_agentic_batches,
     render_agentic_user_prompt,
+    validate_agentic_response,
 )
-
 from lunarbit.models import (
     BoundingBox,
     ChunkType,
@@ -191,6 +192,31 @@ def test_table_parent_and_rows_stay_in_one_batch_when_the_table_fits() -> None:
     )
 
 
+def test_final_mail_singleton_is_rebalanced_without_a_one_chunk_call() -> None:
+    bundles = tuple(
+        _bundle(
+            f"mail-{index}",
+            (_chunk(index, source_number=index, text=f"complete mail order {index}"),),
+            mail_only=True,
+        )
+        for index in range(1, 8)
+    )
+
+    plan = plan_agentic_batches(
+        bundles,
+        policy=AgenticBatchPolicy(
+            target_prompt_characters=20_000,
+            max_prompt_characters=30_000,
+            max_chunks=6,
+            max_bundles=6,
+            minimum_chunks=2,
+        ),
+    )
+
+    assert plan.quarantined_chunk_ids == ()
+    assert tuple(len(batch.chunks) for batch in plan.batches) == (5, 2)
+
+
 class _FakeTransport:
     def __init__(self, response: TransportResponse) -> None:
         self.response = response
@@ -215,7 +241,7 @@ class _FakeTransport:
         return self.response
 
 
-def _one_batch() -> tuple[object, tuple[UUID, UUID]]:
+def _one_batch() -> tuple[AgenticBatch, tuple[UUID, UUID]]:
     bundle = _bundle(
         "order-client",
         (
@@ -235,13 +261,15 @@ def _one_batch() -> tuple[object, tuple[UUID, UUID]]:
         ),
     )
     batch = plan.batches[0]
-    return batch, tuple(item.chunk_id for item in batch.chunks)  # type: ignore[return-value]
+    chunk_ids = tuple(item.chunk_id for item in batch.chunks)
+    assert len(chunk_ids) == 2
+    return batch, (chunk_ids[0], chunk_ids[1])
 
 
 def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -> None:
     batch, chunk_ids = _one_batch()
     model_output = {
-        "batch_id": str(batch.batch_id),  # type: ignore[attr-defined]
+        "batch_id": str(batch.batch_id),
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
@@ -286,7 +314,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
         transport=transport,
     )
 
-    result = client.propose(batch)  # type: ignore[arg-type]
+    result = client.propose(batch)
 
     assert result.validation_status is ValidationStatus.ACCEPTED
     assert len(result.regions) == 1
@@ -303,7 +331,11 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert payload["stream"] is False
     assert payload["temperature"] == 0
     assert payload["seed"] == 42
-    assert payload["messages"][1]["content"] == render_agentic_user_prompt(batch)  # type: ignore[index]
+    messages = payload["messages"]
+    assert isinstance(messages, list)
+    second_message = messages[1]
+    assert isinstance(second_message, dict)
+    assert second_message["content"] == render_agentic_user_prompt(batch)
     assert "response_format" not in payload
     assert "private-token" not in repr(client)
 
@@ -311,7 +343,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
 def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None:
     batch, chunk_ids = _one_batch()
     incomplete_output = {
-        "batch_id": str(batch.batch_id),  # type: ignore[attr-defined]
+        "batch_id": str(batch.batch_id),
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_ids[0])],
@@ -338,8 +370,55 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
         transport=transport,
     )
 
-    result = client.propose(batch)  # type: ignore[arg-type]
+    result = client.propose(batch)
 
     assert result.validation_status is ValidationStatus.QUARANTINED
     assert result.regions == ()
     assert result.quarantine_reasons == ("incomplete_batch_coverage",)
+
+
+def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
+    bundles = (
+        _bundle(
+            "mail-one",
+            (_chunk(1, source_number=1, text="Order ID: 1234567890"),),
+            mail_only=True,
+        ),
+        _bundle(
+            "mail-two",
+            (_chunk(2, source_number=2, text="Order ID: 9876543210"),),
+            mail_only=True,
+        ),
+    )
+    plan = plan_agentic_batches(
+        bundles,
+        policy=AgenticBatchPolicy(
+            target_prompt_characters=4_000,
+            max_prompt_characters=6_000,
+            max_chunks=4,
+            max_bundles=4,
+            minimum_chunks=2,
+        ),
+    )
+    batch = plan.batches[0]
+    response = {
+        "batch_id": str(batch.batch_id),
+        "regions": [
+            {
+                "source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
+                "chunk_type": "ORDER_HEADER",
+                "semantic_role": "order_identity",
+                "financial_role": "none",
+                "semantic_summary_private": "Two orders incorrectly merged.",
+                "embedding_text_private": "Two unrelated order identifiers.",
+                "entity_candidates": [],
+                "relation_candidates": [],
+            }
+        ],
+    }
+
+    result = validate_agentic_response(batch, json.dumps(response))
+
+    assert result.validation_status is ValidationStatus.QUARANTINED
+    assert result.regions == ()
+    assert result.quarantine_reasons == ("cross_bundle_region",)
