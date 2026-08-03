@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-03
-- Active phase: Phase 2A deterministic rich-chunk baseline complete; Phase 2B model-assisted benchmark next.
+- Active phase: Phase 2B Cloudflare adapter and complete medium-batch plan implemented; live model benchmark pending credentials.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `234c6b3` (`feat(chunking): build provenance-linked evidence archive`).
-- Last passing checks: Ruff lint/format, strict mypy, 28 pytest tests, two byte-identical chunk builds, and the complete chunking benchmark.
+- Last verified implementation commit: `64687fe` (`feat(chunking): add validated Cloudflare batch enrichment`).
+- Last passing checks: Ruff lint/format, strict mypy, 34 pytest tests, the complete deterministic chunking benchmark, and the full-corpus agentic dry run.
 
 ## Current state
 
@@ -33,9 +33,13 @@
   - Added an atomic validator boundary that quarantines malformed agentic proposals without partial acceptance.
   - Added reproducible chunk archive and benchmark scripts covering every document and message source.
   - Corrected historical labelled Swiggy order-ID extraction, resolving 26 previously provisional orders.
+  - Selected Cloudflare Workers AI `@cf/zai-org/glm-4.7-flash` for Phase 2B candidate enrichment.
+  - Added deterministic order-relevant batching with table preservation, mail-only cohort packing, hard prompt limits, and no one-chunk calls.
+  - Added typed model-response validation for complete coverage, exact-source entities and relations, and cross-order isolation.
+  - Added a sequential, opt-in runner that requires an explicit call cap and writes validated results privately with mode `0600`.
   - Recorded TDD progression as separate red-test and green-implementation commits.
-- In progress: None; the deterministic Phase 2 baseline is ready for model-assisted comparison.
-- Blocked: None.
+- In progress: None; the Phase 2B dry-run plan is ready for a small live pilot.
+- Pending external input: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` are not set, so no private evidence has been sent and no live model result exists yet.
 - Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
@@ -62,19 +66,36 @@
   - Mail-only evidence: 51 messages; 50 with order ID, 24 with explicit merchant, 31 with explicit money
   - Unsupported candidate rate: 0
   - Deterministic chunk-archive SHA-256: `71f9c919d6d71e677dc49dd30920a4dd0a356131ac97fa5560af3bbb98b60d4e`
+  - Agentic order-evidence bundles: 456
+  - Agentic input chunks covered: 24,675 of 24,675
+  - Planned medium model calls: 1,107
+  - Chunks per call: minimum 2, average 22.29, maximum 32
+  - User-prompt characters per call: minimum 2,722, average 16,368.58, maximum 30,008
+  - Agentic batching concurrency: 1
+  - Agentic input quarantines: 0
+  - Deterministic agentic plan SHA-256: `422cb28faf195ba9a6579984cad14732aeca9e149751dc4770ba36a1f162454d`
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Define versioned model/prompt contracts for benchmark-designated hard cases, conflicts, and future unknown templates.
-2. Add manually reviewed private golden expectations for the supplied PDFs and representative mail-only evidence.
-3. Compare model-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
-4. Keep model calls selective because all current templates route successfully and no source is quarantined.
+1. Set the two Cloudflare credentials locally and run a three-call live pilot with `--execute --max-calls 3`.
+2. Manually review pilot regions against the supplied PDFs and representative mail-only evidence before expanding the call cap.
+3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
+4. Compare model-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
 5. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-03 — Use bounded order-relevant GLM enrichment batches
+
+- Decision: Use Cloudflare Workers AI `@cf/zai-org/glm-4.7-flash` for Phase 2B. Send medium order-relevant batches sequentially: target 18,000 and cap 32,000 user-prompt characters, at most 32 chunks and six mail-only bundles, and never fewer than two chunks.
+- Rationale: One request per primitive loses order-level relationships, while a whole-corpus prompt dilutes evidence and weakens graph-oriented chunking. Message-plus-attachment bundles preserve order context; same-cohort packing handles otherwise singleton mail orders without cross-order merging.
+- Alternatives rejected: One API call per chunk; one full-corpus request; concurrent unbounded calls; arbitrary cross-order packing; trusting model JSON without deterministic validation.
+- Files/contracts affected: `src/lunarbit/agentic.py`, `scripts/run_agentic_chunking.py`, `.env.example`, and agentic contract tests.
+- Validation performed: Full-corpus dry run covers all 24,675 chunks in 1,107 batches with no singleton calls or quarantined inputs; 34 tests plus Ruff and strict mypy pass. No live call was made because credentials are absent.
+- Revisit trigger: Reviewed pilot results show poorer region quality, unacceptable validation failure rates, excessive output truncation, or a better model wins the same private benchmark.
 
 ### 2026-08-03 — Keep rich chunks candidate-only until deterministic resolution
 
@@ -156,6 +177,9 @@
 - Do not assume every Swiggy order ID has 15 digits; accept historical lengths only behind an explicit order label.
 - Do not promote chunk candidates directly into canonical identity, finance, or graph records.
 - Do not partially accept malformed model output; quarantine the complete proposal set for that source.
+- Do not send one deterministic chunk per model call or dump the full corpus into one context.
+- Do not allow shared mail-only calls to merge separately marked orders into one semantic region.
+- Do not run uncapped or concurrent private model calls; require `--max-calls` and concurrency `1`.
 - Do not flatten HTML block boundaries before mail-field extraction.
 - Use `python3` in this environment; the unversioned `python` command is unavailable.
 - Do not use LLM or floating-point arithmetic for canonical money.
@@ -179,5 +203,7 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev
 .venv/bin/python scripts/build_json.py --input data --output data/processed
 .venv/bin/python scripts/build_json.py --input data --output data/processed --inventory-only
 .venv/bin/python scripts/build_chunks.py --input data/processed
+.venv/bin/python scripts/run_agentic_chunking.py --input data/processed
+.venv/bin/python scripts/run_agentic_chunking.py --input data/processed --execute --max-calls 3
 .venv/bin/python scripts/run_evals.py --suite chunking --input data/processed
 ```
