@@ -14,6 +14,7 @@ from lunarbit.extract import (
     count_orders,
     document_id_from_bytes,
     extract_order_id_candidates,
+    html_to_text,
     message_id_from_bytes,
     write_source_inventory,
 )
@@ -48,6 +49,16 @@ def test_platform_classification_uses_sender_and_subject() -> None:
         )
         is None
     )
+
+
+def test_html_to_text_preserves_commercial_field_boundaries() -> None:
+    rendered = html_to_text(
+        "<html><head><title>Ignored</title></head><body>"
+        "<p>Restaurant: Test Kitchen</p><p>Total: INR 123.40</p>"
+        "</body></html>"
+    )
+
+    assert rendered == "Restaurant: Test Kitchen\nTotal: INR 123.40"
 
 
 def test_document_roles_are_content_aware() -> None:
@@ -91,12 +102,15 @@ def test_order_id_candidates_prefer_labelled_commerce_fields() -> None:
     )
     swiggy = extract_order_id_candidates(
         Platform.SWIGGY,
-        "Invoice No: 1234567890123456 Order ID: 123456789012345",
+        ("Invoice No: 1234567890123456 Order ID: 123456789012345 Order no:\n#12345678901"),
         source=OrderIdSource.PDF_LABEL,
     )
 
     assert [candidate.value_private for candidate in zomato] == ["1234567890"]
-    assert [candidate.value_private for candidate in swiggy] == ["123456789012345"]
+    assert [candidate.value_private for candidate in swiggy] == [
+        "12345678901",
+        "123456789012345",
+    ]
 
 
 def test_order_count_deduplicates_history_and_preserves_provisional_messages() -> None:

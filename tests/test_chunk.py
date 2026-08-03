@@ -7,13 +7,14 @@ from pathlib import Path
 from stat import S_IMODE
 
 import pytest
+
 from lunarbit.chunk import (
     chunk_document,
     chunk_message,
     route_document_strategy,
+    validate_chunk_proposals,
     write_chunk_result,
 )
-
 from lunarbit.models import (
     BoundingBox,
     CandidateFactType,
@@ -290,6 +291,34 @@ def test_mail_only_message_becomes_one_provenance_linked_order_chunk() -> None:
     assert "Mail Kitchen" not in repr(chunk)
 
 
+def test_legacy_mail_order_number_format_remains_id_resolved() -> None:
+    body = "Ordered from:\nLegacy Kitchen\nOrder no:\n#12345678901"
+    message = SourceMessage(
+        message_id=MESSAGE_ID,
+        raw_sha256="2" * 64,
+        platform=Platform.SWIGGY,
+        category=OrderCategory.FOOD,
+        source_locator_private="private/orders.mbox#message-1",
+        body_sha256=sha256(body.encode()).hexdigest(),
+        body_text_private=body,
+    )
+
+    result = chunk_message(message)
+
+    order_ids = [
+        candidate.raw_value_private
+        for candidate in result.chunks[0].candidate_assertions
+        if candidate.fact_type is CandidateFactType.ORDER_ID
+    ]
+    assert order_ids == ["12345678901"]
+    merchants = [
+        mention.raw_value_private
+        for mention in result.chunks[0].entity_mentions
+        if mention.entity_type is EntityType.MERCHANT
+    ]
+    assert merchants == ["Legacy Kitchen"]
+
+
 def test_unknown_template_is_quarantined_without_canonical_chunks() -> None:
     result = chunk_document(_processed_document(role=DocumentRole.UNKNOWN))
 
@@ -297,6 +326,23 @@ def test_unknown_template_is_quarantined_without_canonical_chunks() -> None:
     assert result.validation_status is ValidationStatus.QUARANTINED
     assert result.chunks == ()
     assert result.quarantine_reasons == ("unknown_document_role",)
+
+
+def test_invalid_agentic_proposal_is_quarantined_without_partial_acceptance() -> None:
+    baseline = chunk_document(_processed_document())
+    proposal = baseline.chunks[0].model_dump(mode="json")
+    proposal["candidate_assertions"][0]["source_span_end"] += 1
+
+    result = validate_chunk_proposals(
+        source_kind=EvidenceSourceKind.DOCUMENT,
+        source_id=DOCUMENT_ID,
+        strategy=ChunkStrategy.ORDER_COMPONENT,
+        proposals=(proposal,),
+    )
+
+    assert result.validation_status is ValidationStatus.QUARANTINED
+    assert result.chunks == ()
+    assert result.quarantine_reasons == ("invalid_chunk_proposal",)
 
 
 def test_chunk_artifacts_are_private_and_idempotent(tmp_path: Path) -> None:

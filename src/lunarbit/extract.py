@@ -51,8 +51,11 @@ _ZOMATO_ORDER_PATTERNS = (
     re.compile(r"\bOrder\s*(?:number|no\.?)\s*[:#-]?\s*(\d{10})\b", re.IGNORECASE),
 )
 _SWIGGY_ORDER_PATTERNS = (
-    re.compile(r"\bOrder\s*ID\s*:?\s*(\d{15})\b", re.IGNORECASE),
-    re.compile(r"\bOrder\s*(?:number|no\.?)\s*[:#-]?\s*(\d{15})\b", re.IGNORECASE),
+    re.compile(r"\bOrder\s*ID\s*:?\s*#?\s*(\d{11,15})\b", re.IGNORECASE),
+    re.compile(
+        r"\bOrder\s*(?:number|no\.?)?\s*[:#-]?\s*#?\s*(\d{11,15})\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\bfor\s+Order\s*\(\s*(\d{15})\s*\)", re.IGNORECASE),
     re.compile(
         r"\bagainst\s+Order\s+[Ii]d\s*\(?\s*(\d{15})\s*\)?",
@@ -183,6 +186,31 @@ def count_orders(evidence: Sequence[OrderEvidence]) -> OrderCountSummary:
 
 
 class _VisibleTextParser(HTMLParser):
+    _BLOCK_TAGS = frozenset(
+        {
+            "address",
+            "article",
+            "blockquote",
+            "br",
+            "div",
+            "footer",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "header",
+            "li",
+            "p",
+            "section",
+            "table",
+            "td",
+            "th",
+            "tr",
+        }
+    )
+
     def __init__(self) -> None:
         super().__init__()
         self._hidden_depth = 0
@@ -192,10 +220,14 @@ class _VisibleTextParser(HTMLParser):
         del attrs
         if tag in {"head", "script", "style"}:
             self._hidden_depth += 1
+        elif tag in self._BLOCK_TAGS and not self._hidden_depth:
+            self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         if tag in {"head", "script", "style"} and self._hidden_depth:
             self._hidden_depth -= 1
+        elif tag in self._BLOCK_TAGS and not self._hidden_depth:
+            self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
         if not self._hidden_depth:
@@ -205,7 +237,10 @@ class _VisibleTextParser(HTMLParser):
 def html_to_text(value: str) -> str:
     parser = _VisibleTextParser()
     parser.feed(value)
-    return " ".join(parser.parts)
+    rendered = " ".join(parser.parts)
+    return "\n".join(
+        normalized for line in rendered.splitlines() if (normalized := " ".join(line.split()))
+    )
 
 
 def extract_pdf_text(payload: bytes) -> str:
@@ -506,6 +541,7 @@ def _ingest_bundle_manifest(
         source_locator_private=str(email_path if email_path.is_file() else manifest_path),
         provider_message_id_private=str(email_metadata.get("messageIdHeader") or "") or None,
         body_sha256=_sha256(raw_body),
+        body_text_private=body_text,
         attachment_document_ids=tuple(document.document_id for document in documents),
         order_candidates=combined_candidates,
     )
@@ -609,6 +645,7 @@ def _ingest_mbox(mbox_path: Path, builder: _InventoryBuilder) -> None:
                 source_locator_private=f"{mbox_path}#message-{index}",
                 provider_message_id_private=str(email_message.get("Message-ID") or "") or None,
                 body_sha256=body_sha256,
+                body_text_private=body_text,
                 attachment_document_ids=tuple(document.document_id for document in documents),
                 order_candidates=combined_candidates,
             )

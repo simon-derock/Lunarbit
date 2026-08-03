@@ -41,6 +41,7 @@ def test_source_message_repr_hides_private_values() -> None:
         subject_private="Private restaurant and order subject",
         sender_private="customer@example.com",
         source_locator_private="data/private/message.eml",
+        body_text_private="Order from Private Restaurant for INR 123.40",
         attachment_document_ids=("doc_0123456789abcdef",),
     )
 
@@ -49,3 +50,4 @@ def test_source_message_repr_hides_private_values() -> None:
     assert "Private restaurant" not in rendered
     assert "customer@example.com" not in rendered
     assert "data/private" not in rendered
+    assert "INR 123.40" not in rendered
