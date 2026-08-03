@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-03
-- Active phase: Phase 1 deterministic PDF processing complete; Phase 2 agentic chunking next.
+- Active phase: Phase 2A deterministic rich-chunk baseline complete; Phase 2B model-assisted benchmark next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `cf081cc` (`feat(extraction): emit deterministic PDF artifacts`).
-- Last passing checks: Ruff lint/format, strict mypy, 15 pytest tests, and two byte-identical complete private-corpus artifact builds.
+- Last verified implementation commit: `234c6b3` (`feat(chunking): build provenance-linked evidence archive`).
+- Last passing checks: Ruff lint/format, strict mypy, 28 pytest tests, two byte-identical chunk builds, and the complete chunking benchmark.
 
 ## Current state
 
@@ -26,10 +26,17 @@
   - Implemented native text/layout extraction, table header links and merged-cell spans, image inspection, and deterministic reading order.
   - Added private per-document manifest/document JSON, page JSONL, Markdown previews, and lossless WebP page renders.
   - Added explicit OCR-required/quarantine routing for failed pages; every current page passed native extraction.
+  - Preserved private email body text with HTML block boundaries so attachmentless messages can produce semantic evidence.
+  - Added deterministic routing for order summaries, invoices, fee/tax documents, history tables, and email orders.
+  - Added UUID5 evidence chunks with source regions, table coordinates, raw/normalized/summary/embedding representations, and query-family routing.
+  - Added evidence-supported candidate facts, entity mentions, money components, and graph candidates without promoting them to canonical truth.
+  - Added an atomic validator boundary that quarantines malformed agentic proposals without partial acceptance.
+  - Added reproducible chunk archive and benchmark scripts covering every document and message source.
+  - Corrected historical labelled Swiggy order-ID extraction, resolving 26 previously provisional orders.
   - Recorded TDD progression as separate red-test and green-implementation commits.
-- In progress: None; Phase 2 is ready to begin.
+- In progress: None; the deterministic Phase 2 baseline is ready for model-assisted comparison.
 - Blocked: None.
-- Schema/model/index versions in use: Phase 1 extraction version `1.0.0`, package version `0.1.0`; graph/index versions remain design-only.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -46,19 +53,46 @@
   - OCR-required or quarantined documents: 0
   - Private artifact files: 3,913, all mode `0600`
   - Deterministic processed-archive SHA-256: `ff327694b2c831fbe530785904b59bae6515dc931d65292eac2371a7c196429c`
-  - Orders with recoverable unique IDs: 427
-  - Provisional one-message/one-order records: 27
+  - Chunk evidence sources: 1,219 accepted, 0 quarantined
+  - Rich evidence chunks: 24,675 valid, 0 invalid
+  - Candidate assertions: 4,096
+  - Candidate entity mentions: 1,231
+  - Candidate money components: 5,199
+  - Phase 1 tables preserved as table chunks: 620 of 620
+  - Mail-only evidence: 51 messages; 50 with order ID, 24 with explicit merchant, 31 with explicit money
+  - Unsupported candidate rate: 0
+  - Deterministic chunk-archive SHA-256: `71f9c919d6d71e677dc49dd30920a4dd0a356131ac97fa5560af3bbb98b60d4e`
+  - Orders with recoverable unique IDs: 453
+  - Provisional one-message/one-order records: 1
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Add failing tests for Phase 2 rich-chunk contracts, routing, source-region provenance, validation, and quarantine.
-2. Implement deterministic chunk-strategy routing over structured document JSON, never opaque PDFs.
-3. Add candidate facts and entity mentions while preserving document/page/block evidence links.
-4. Build the golden chunking benchmark and require complete financial/entity facts to remain source-linked.
-5. Replace provisional identities only where stronger evidence proves an order ID or duplicate relationship.
+1. Define versioned model/prompt contracts for benchmark-designated hard cases, conflicts, and future unknown templates.
+2. Add manually reviewed private golden expectations for the supplied PDFs and representative mail-only evidence.
+3. Compare model-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
+4. Keep model calls selective because all current templates route successfully and no source is quarantined.
+5. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-03 — Keep rich chunks candidate-only until deterministic resolution
+
+- Decision: Chunking may propose facts, entity mentions, money components, graph candidates, and retrieval text, but none becomes canonical identity, financial truth, or graph state until later deterministic resolution and reconciliation stages approve it.
+- Rationale: Rich semantic extraction is useful for retrieval and downstream reasoning, but candidate confidence does not prove identity, settlement, funding, or arithmetic correctness.
+- Alternatives rejected: Writing chunker output directly to the canonical graph; allowing partial acceptance of invalid model output; inventing persistent IDs in prompts.
+- Files/contracts affected: `src/lunarbit/chunk.py`, rich chunk Pydantic contracts, `scripts/build_chunks.py`, and `scripts/run_evals.py`.
+- Validation performed: Evaluated 1,219 sources and 24,675 chunks with zero invalid or unsupported candidates; malformed synthetic proposals quarantine atomically.
+- Revisit trigger: Phase 3 introduces reviewed resolution decisions or Phase 4 introduces reconciled financial components.
+
+### 2026-08-03 — Accept historical Swiggy IDs only from labelled evidence
+
+- Decision: Label-aware Swiggy extraction accepts 11–15 digit order IDs, including historical `Order no: #…` forms; unlabelled digit sequences and 16-digit invoice/attachment tokens remain ineligible as strong order IDs.
+- Rationale: The private corpus contains valid historical 11- and 12-digit Swiggy IDs as well as current 15-digit IDs. Restricting all Swiggy orders to 15 digits incorrectly left evidence-backed orders provisional.
+- Alternatives rejected: Keeping the 15-digit-only rule; accepting arbitrary nearby numbers; trusting the manifest's 16-digit field.
+- Files/contracts affected: ingestion order-ID patterns, message chunks, order evidence, and current metrics.
+- Validation performed: 453 ordinary evidence records now map to 453 unique platform IDs with no duplicates or ambiguous mail candidates; one message remains genuinely provisional and the total stays 454.
+- Revisit trigger: New labelled evidence demonstrates another historical format or contradicts an extracted ID.
 
 ### 2026-08-03 — Keep PDF processing deterministic and quarantine-first
 
@@ -119,6 +153,10 @@
 - Do not treat a MIME body part with no filename as `attachment.pdf`; require PDF MIME type, a real `.pdf` filename, or a PDF byte signature.
 - Do not infer merged-cell spans from consecutive missing grid slots; derive spans from detected cell geometry.
 - Do not accept a failed native page silently; mark it OCR-required and quarantine its document.
+- Do not assume every Swiggy order ID has 15 digits; accept historical lengths only behind an explicit order label.
+- Do not promote chunk candidates directly into canonical identity, finance, or graph records.
+- Do not partially accept malformed model output; quarantine the complete proposal set for that source.
+- Do not flatten HTML block boundaries before mail-field extraction.
 - Use `python3` in this environment; the unversioned `python` command is unavailable.
 - Do not use LLM or floating-point arithmetic for canonical money.
 - Do not vectorize IDs, dates, or standalone amounts.
@@ -127,7 +165,7 @@
 
 ## Open questions
 
-- Which deterministic fallback fingerprint should identify the 27 provisional orders until stronger evidence is available?
+- Which deterministic fallback fingerprint should identify the one remaining provisional order until stronger evidence is available?
 - Should reviewed public fixtures be synthetic, manually redacted, or a combination of both?
 
 ## Important commands
@@ -140,4 +178,6 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev
 .venv/bin/pytest -q
 .venv/bin/python scripts/build_json.py --input data --output data/processed
 .venv/bin/python scripts/build_json.py --input data --output data/processed --inventory-only
+.venv/bin/python scripts/build_chunks.py --input data/processed
+.venv/bin/python scripts/run_evals.py --suite chunking --input data/processed
 ```
