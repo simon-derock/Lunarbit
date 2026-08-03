@@ -231,7 +231,13 @@ def test_inventory_combines_pdf_backed_and_mail_only_orders(
     )
     monkeypatch.setattr("lunarbit.extract.pdf_page_count", lambda _: 1)
 
-    inventory = build_source_inventory(tmp_path)
+    handled_documents: list[tuple[str, bytes]] = []
+    inventory = build_source_inventory(
+        tmp_path,
+        document_handler=lambda document, payload: handled_documents.append(
+            (document.document_id, payload)
+        ),
+    )
 
     assert inventory.summary.relevant_messages == 2
     assert inventory.summary.unique_pdf_documents == 1
@@ -241,6 +247,7 @@ def test_inventory_combines_pdf_backed_and_mail_only_orders(
     assert inventory.summary.orders.resolved_orders == 2
     assert inventory.summary.orders.provisional_orders == 0
     assert inventory.summary.orders.total_orders == 2
+    assert handled_documents == [(inventory.documents[0].document_id, pdf_payload)]
 
     output_root = tmp_path / "processed"
     summary_path = write_source_inventory(inventory, output_root)

@@ -6,7 +6,6 @@ from pathlib import Path
 from stat import S_IMODE
 
 import pytest
-from lunarbit.pdf import extract_pdf_document, write_document_artifacts
 from pydantic import ValidationError
 
 from lunarbit.extract import document_id_from_bytes
@@ -21,9 +20,10 @@ from lunarbit.models import (
     SourceDocument,
     TableCell,
 )
+from lunarbit.pdf import extract_pdf_document, write_document_artifacts
 
 
-def _pdf_bytes(*, blank: bool = False) -> bytes:
+def _pdf_bytes(*, blank: bool = False, with_table: bool = False) -> bytes:
     fitz = pytest.importorskip("fitz")
     document = fitz.open()
     page = document.new_page(width=300, height=200)
@@ -31,12 +31,26 @@ def _pdf_bytes(*, blank: bool = False) -> bytes:
         page.insert_text((36, 36), "Synthetic invoice")
         page.insert_text((36, 60), "Order ID: 1234567890")
         page.insert_text((36, 84), "Total: 123.40")
+    if with_table:
+        for start, end in (
+            ((30, 110), (270, 110)),
+            ((30, 150), (270, 150)),
+            ((30, 190), (270, 190)),
+            ((30, 110), (30, 190)),
+            ((150, 110), (150, 190)),
+            ((270, 110), (270, 190)),
+        ):
+            page.draw_line(start, end)
+        page.insert_text((40, 135), "Item")
+        page.insert_text((160, 135), "Amount")
+        page.insert_text((40, 175), "Meal")
+        page.insert_text((160, 175), "123.40")
     payload = document.tobytes(garbage=4, deflate=True)
     document.close()
     return payload
 
 
-def _source_document(payload: bytes) -> SourceDocument:
+def _source_document(payload: bytes, *, native_text_available: bool = True) -> SourceDocument:
     return SourceDocument(
         document_id=document_id_from_bytes(payload),
         sha256=sha256(payload).hexdigest(),
@@ -49,8 +63,29 @@ def _source_document(payload: bytes) -> SourceDocument:
         mime_type="application/pdf",
         byte_count=len(payload),
         page_count=1,
-        native_text_available=not payload.startswith(b"blank"),
+        native_text_available=native_text_available,
     )
+
+
+def _merged_table_pdf_bytes() -> bytes:
+    fitz = pytest.importorskip("fitz")
+    document = fitz.open()
+    page = document.new_page(width=300, height=200)
+    for start, end in (
+        ((30, 30), (270, 30)),
+        ((30, 80), (270, 80)),
+        ((30, 130), (270, 130)),
+        ((30, 30), (30, 130)),
+        ((270, 30), (270, 130)),
+        ((150, 80), (150, 130)),
+    ):
+        page.draw_line(start, end)
+    page.insert_text((40, 60), "Order lines")
+    page.insert_text((40, 110), "Meal")
+    page.insert_text((160, 110), "123.40")
+    payload = document.tobytes(garbage=4, deflate=True)
+    document.close()
+    return payload
 
 
 def test_layout_contracts_preserve_source_values_and_reject_invalid_geometry() -> None:
@@ -105,11 +140,38 @@ def test_native_pdf_extraction_emits_ordered_page_layout() -> None:
     assert all(block.bbox.y1 <= page.height for block in page.text_blocks)
 
 
+def test_native_pdf_extraction_preserves_table_cells_and_header_links() -> None:
+    payload = _pdf_bytes(with_table=True)
+
+    processed = extract_pdf_document(_source_document(payload), payload)
+
+    table = processed.pages[0].tables[0]
+    cells = {(cell.row_index, cell.column_index): cell for cell in table.cells}
+    assert (table.row_count, table.column_count) == (2, 2)
+    assert cells[0, 0].raw_text_private == "Item"
+    assert cells[0, 1].raw_text_private == "Amount"
+    assert cells[1, 1].raw_text_private == "123.40"
+    assert cells[1, 1].header_cell_ids == (f"{table.table_id}_cell_0_1",)
+
+
+def test_native_pdf_extraction_preserves_merged_cell_spans() -> None:
+    payload = _merged_table_pdf_bytes()
+
+    table = extract_pdf_document(_source_document(payload), payload).pages[0].tables[0]
+    cells = {(cell.row_index, cell.column_index): cell for cell in table.cells}
+
+    assert len(cells) == 3
+    assert cells[0, 0].column_span == 2
+    assert cells[0, 0].raw_text_private == "Order lines"
+    assert cells[1, 0].header_cell_ids == (cells[0, 0].cell_id,)
+    assert cells[1, 1].header_cell_ids == (cells[0, 0].cell_id,)
+
+
 def test_blank_page_is_quarantined_and_artifacts_are_private_and_idempotent(
     tmp_path: Path,
 ) -> None:
     payload = _pdf_bytes(blank=True)
-    source = _source_document(payload)
+    source = _source_document(payload, native_text_available=False)
     processed = extract_pdf_document(source, payload)
 
     page = processed.pages[0]

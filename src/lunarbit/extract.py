@@ -5,7 +5,7 @@ import mailbox
 import os
 import re
 import tempfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from email import policy
@@ -376,20 +376,26 @@ def _strong_candidate_value(candidates: Iterable[OrderIdCandidate]) -> str | Non
 
 
 class _InventoryBuilder:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        document_handler: Callable[[SourceDocument, bytes], None] | None = None,
+    ) -> None:
         self.messages: dict[str, SourceMessage] = {}
         self.documents: dict[str, SourceDocument] = {}
         self.evidence: dict[str, OrderEvidence] = {}
+        self.document_handler = document_handler
         self.excluded_messages = 0
         self.duplicate_pdf_documents = 0
         self.pdf_backed_order_messages: set[str] = set()
         self.mail_only_order_messages: set[str] = set()
 
-    def add_document(self, document: SourceDocument) -> None:
+    def add_document(self, document: SourceDocument, payload: bytes) -> None:
         if document.document_id in self.documents:
             self.duplicate_pdf_documents += 1
             return
         self.documents[document.document_id] = document
+        if self.document_handler is not None:
+            self.document_handler(document, payload)
 
     def add_evidence(
         self,
@@ -482,7 +488,7 @@ def _ingest_bundle_manifest(
             mime_type=str(metadata.get("mimeType", "application/pdf")),
             payload=payload,
         )
-        builder.add_document(document)
+        builder.add_document(document, payload)
         documents.append(document)
         pdf_candidates.extend(document.order_candidates)
         if document.role is DocumentRole.SWIGGY_ORDER_HISTORY_REPORT:
@@ -585,7 +591,7 @@ def _ingest_mbox(mbox_path: Path, builder: _InventoryBuilder) -> None:
                     mime_type=part.get_content_type(),
                     payload=payload,
                 )
-                builder.add_document(document)
+                builder.add_document(document, payload)
                 documents.append(document)
                 pdf_candidates.extend(document.order_candidates)
                 if document.role is DocumentRole.SWIGGY_ORDER_HISTORY_REPORT:
@@ -636,9 +642,13 @@ def _ingest_mbox(mbox_path: Path, builder: _InventoryBuilder) -> None:
         box.close()
 
 
-def build_source_inventory(input_root: Path) -> SourceInventory:
+def build_source_inventory(
+    input_root: Path,
+    *,
+    document_handler: Callable[[SourceDocument, bytes], None] | None = None,
+) -> SourceInventory:
     root = input_root.resolve()
-    builder = _InventoryBuilder()
+    builder = _InventoryBuilder(document_handler=document_handler)
     for platform in (Platform.SWIGGY, Platform.ZOMATO):
         for manifest_path in sorted((root / platform.value).glob("*/manifest.json")):
             _ingest_bundle_manifest(manifest_path, builder)

@@ -349,7 +349,9 @@ name = "lunarbit"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "pillow" },
     { name = "pydantic" },
+    { name = "pymupdf" },
 ]
 
 [package.optional-dependencies]
@@ -361,7 +363,6 @@ dev = [
 ]
 extract = [
     { name = "pdfplumber" },
-    { name = "pymupdf" },
 ]
 
 [package.metadata]
@@ -369,8 +370,9 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.138,<7" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17,<2" },
     { name = "pdfplumber", marker = "extra == 'extract'", specifier = ">=0.11,<1" },
+    { name = "pillow", specifier = ">=12,<13" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "pymupdf", marker = "extra == 'extract'", specifier = ">=1.26,<2" },
+    { name = "pymupdf", specifier = ">=1.26,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9,<10" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12,<1" },
 ]
