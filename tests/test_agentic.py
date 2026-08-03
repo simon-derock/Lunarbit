@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from lunarbit.agentic import (
     CLOUDFLARE_MODEL,
+    GLM_CONTEXT_WINDOW_TOKENS,
     AgenticBatch,
     AgenticBatchPolicy,
     AgenticEvidenceBundle,
@@ -29,6 +30,13 @@ from lunarbit.models import (
     SemanticRole,
     ValidationStatus,
 )
+
+
+class _CharacterTokenCounter:
+    identifier = "test-character-counter"
+
+    def count_messages(self, *, system_prompt: str, user_prompt: str) -> int:
+        return len(system_prompt) + len(user_prompt)
 
 
 def _source_id(number: int) -> str:
@@ -110,15 +118,22 @@ def test_batch_plan_is_medium_sized_relevant_and_deterministic() -> None:
         mail_only=True,
     )
     policy = AgenticBatchPolicy(
-        target_prompt_characters=2_500,
-        max_prompt_characters=4_500,
+        target_input_tokens=2_500,
+        max_input_tokens=4_500,
+        max_completion_tokens=1_000,
+        context_window_tokens=8_000,
         max_chunks=4,
         max_bundles=4,
         minimum_chunks=2,
     )
 
-    first = plan_agentic_batches((attached, mail_one, mail_two), policy=policy)
-    second = plan_agentic_batches((attached, mail_one, mail_two), policy=policy)
+    token_counter = _CharacterTokenCounter()
+    first = plan_agentic_batches(
+        (attached, mail_one, mail_two), policy=policy, token_counter=token_counter
+    )
+    second = plan_agentic_batches(
+        (attached, mail_one, mail_two), policy=policy, token_counter=token_counter
+    )
 
     assert first == second
     assert first.quarantined_chunk_ids == ()
@@ -127,10 +142,7 @@ def test_batch_plan_is_medium_sized_relevant_and_deterministic() -> None:
     }
     chunk_counts = tuple(len(batch.chunks) for batch in first.batches)
     assert all(policy.minimum_chunks <= count <= policy.max_chunks for count in chunk_counts)
-    assert all(
-        len(render_agentic_user_prompt(batch)) <= policy.max_prompt_characters
-        for batch in first.batches
-    )
+    assert all(batch.estimated_input_tokens <= policy.max_input_tokens for batch in first.batches)
     assert all(
         batch.bundle_ids == ("order-attached",)
         for batch in first.batches
@@ -178,12 +190,15 @@ def test_table_parent_and_rows_stay_in_one_batch_when_the_table_fits() -> None:
     plan = plan_agentic_batches(
         (bundle,),
         policy=AgenticBatchPolicy(
-            target_prompt_characters=4_000,
-            max_prompt_characters=6_000,
+            target_input_tokens=4_000,
+            max_input_tokens=6_000,
+            max_completion_tokens=1_000,
+            context_window_tokens=8_000,
             max_chunks=8,
             max_bundles=1,
             minimum_chunks=2,
         ),
+        token_counter=_CharacterTokenCounter(),
     )
 
     assert len(plan.batches) == 1
@@ -205,12 +220,15 @@ def test_final_mail_singleton_is_rebalanced_without_a_one_chunk_call() -> None:
     plan = plan_agentic_batches(
         bundles,
         policy=AgenticBatchPolicy(
-            target_prompt_characters=20_000,
-            max_prompt_characters=30_000,
+            target_input_tokens=20_000,
+            max_input_tokens=30_000,
+            max_completion_tokens=5_000,
+            context_window_tokens=40_000,
             max_chunks=6,
             max_bundles=6,
             minimum_chunks=2,
         ),
+        token_counter=_CharacterTokenCounter(),
     )
 
     assert plan.quarantined_chunk_ids == ()
@@ -253,12 +271,15 @@ def _one_batch() -> tuple[AgenticBatch, tuple[UUID, UUID]]:
     plan = plan_agentic_batches(
         (bundle,),
         policy=AgenticBatchPolicy(
-            target_prompt_characters=4_000,
-            max_prompt_characters=6_000,
+            target_input_tokens=4_000,
+            max_input_tokens=6_000,
+            max_completion_tokens=1_000,
+            context_window_tokens=8_000,
             max_chunks=8,
             max_bundles=1,
             minimum_chunks=2,
         ),
+        token_counter=_CharacterTokenCounter(),
     )
     batch = plan.batches[0]
     chunk_ids = tuple(item.chunk_id for item in batch.chunks)
@@ -273,11 +294,18 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
+                "bundle_id": "order-client",
                 "chunk_type": "ORDER_HEADER",
                 "semantic_role": "order_identity",
                 "financial_role": "none",
+                "region_title_private": "Order identity",
                 "semantic_summary_private": "Order identity and merchant evidence.",
                 "embedding_text_private": "Order 1234567890 from Test Kitchen.",
+                "query_families": ["order_lookup", "evidence_replay"],
+                "candidate_facts": [],
+                "money_interpretations": [],
+                "conflict_flags": [],
+                "uncertainty_notes_private": [],
                 "entity_candidates": [
                     {
                         "entity_type": "merchant",
@@ -331,6 +359,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert payload["stream"] is False
     assert payload["temperature"] == 0
     assert payload["seed"] == 42
+    assert payload["max_completion_tokens"] == 24_000
     messages = payload["messages"]
     assert isinstance(messages, list)
     second_message = messages[1]
@@ -347,11 +376,18 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_ids[0])],
+                "bundle_id": "order-client",
                 "chunk_type": "ORDER_HEADER",
                 "semantic_role": "order_identity",
                 "financial_role": "none",
+                "region_title_private": "Incomplete order identity",
                 "semantic_summary_private": "Only one source was covered.",
                 "embedding_text_private": "Incomplete evidence.",
+                "query_families": ["order_lookup"],
+                "candidate_facts": [],
+                "money_interpretations": [],
+                "conflict_flags": [],
+                "uncertainty_notes_private": [],
                 "entity_candidates": [],
                 "relation_candidates": [],
             }
@@ -393,12 +429,15 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
     plan = plan_agentic_batches(
         bundles,
         policy=AgenticBatchPolicy(
-            target_prompt_characters=4_000,
-            max_prompt_characters=6_000,
+            target_input_tokens=4_000,
+            max_input_tokens=6_000,
+            max_completion_tokens=1_000,
+            context_window_tokens=8_000,
             max_chunks=4,
             max_bundles=4,
             minimum_chunks=2,
         ),
+        token_counter=_CharacterTokenCounter(),
     )
     batch = plan.batches[0]
     response = {
@@ -406,11 +445,18 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
         "regions": [
             {
                 "source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
+                "bundle_id": "mail-one",
                 "chunk_type": "ORDER_HEADER",
                 "semantic_role": "order_identity",
                 "financial_role": "none",
+                "region_title_private": "Invalid merged orders",
                 "semantic_summary_private": "Two orders incorrectly merged.",
                 "embedding_text_private": "Two unrelated order identifiers.",
+                "query_families": ["order_lookup"],
+                "candidate_facts": [],
+                "money_interpretations": [],
+                "conflict_flags": [],
+                "uncertainty_notes_private": [],
                 "entity_candidates": [],
                 "relation_candidates": [],
             }
@@ -422,3 +468,67 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
     assert result.validation_status is ValidationStatus.QUARANTINED
     assert result.regions == ()
     assert result.quarantine_reasons == ("cross_bundle_region",)
+
+
+def test_default_policy_uses_80k_input_tokens_and_reserves_context() -> None:
+    policy = AgenticBatchPolicy()
+
+    assert GLM_CONTEXT_WINDOW_TOKENS == 131_072
+    assert policy.target_input_tokens == 64_000
+    assert policy.max_input_tokens == 80_000
+    assert policy.max_completion_tokens == 24_000
+    assert policy.max_input_tokens + policy.max_completion_tokens < policy.context_window_tokens
+
+
+def test_compatible_pdf_orders_share_a_token_bounded_call() -> None:
+    first = _bundle(
+        "pdf-order-one",
+        (
+            _chunk(30, source_number=30, text="first order header"),
+            _chunk(31, source_number=30, text="first order total"),
+        ),
+        cohort="zomato:food:pdf-backed:order-summary+merchant-invoice",
+    )
+    second = _bundle(
+        "pdf-order-two",
+        (
+            _chunk(40, source_number=40, text="second order header"),
+            _chunk(41, source_number=40, text="second order total"),
+        ),
+        cohort="zomato:food:pdf-backed:order-summary+merchant-invoice",
+    )
+
+    plan = plan_agentic_batches(
+        (first, second),
+        policy=AgenticBatchPolicy(
+            target_input_tokens=20_000,
+            max_input_tokens=30_000,
+            max_completion_tokens=5_000,
+            context_window_tokens=40_000,
+            max_chunks=16,
+            max_bundles=6,
+            minimum_chunks=2,
+        ),
+        token_counter=_CharacterTokenCounter(),
+    )
+
+    assert len(plan.batches) == 1
+    assert plan.batches[0].bundle_ids == ("pdf-order-one", "pdf-order-two")
+    assert plan.batches[0].estimated_input_tokens <= 30_000
+
+
+def test_agent_input_contains_full_deterministic_metadata() -> None:
+    batch, _ = _one_batch()
+
+    prompt = render_agentic_user_prompt(batch)
+
+    for required_field in (
+        '"bounding_box"',
+        '"candidate_assertions"',
+        '"candidate_money_components"',
+        '"entity_mentions"',
+        '"extraction_confidence"',
+        '"query_families"',
+        '"chunk_completeness"',
+    ):
+        assert required_field in prompt
