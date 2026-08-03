@@ -29,6 +29,7 @@ def test_private_source_patterns_are_ignored_by_default() -> None:
     assert "*.mbox" in ignore_file
     assert "*.eml" in ignore_file
     assert "*.zip" in ignore_file
+    assert ".emv" in ignore_file
 
 
 def test_source_message_repr_hides_private_values() -> None:
