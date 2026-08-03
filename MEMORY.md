@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-03
-- Active phase: Phase 1A source normalization complete; Phase 1B page/layout extraction next.
+- Active phase: Phase 1 deterministic PDF processing complete; Phase 2 agentic chunking next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `66b8484` (`feat(ingestion): build deterministic source inventory`).
-- Last passing checks: Ruff lint/format, strict mypy, 10 pytest tests, and a complete private-corpus inventory rebuild.
+- Last verified implementation commit: `cf081cc` (`feat(extraction): emit deterministic PDF artifacts`).
+- Last passing checks: Ruff lint/format, strict mypy, 15 pytest tests, and two byte-identical complete private-corpus artifact builds.
 
 ## Current state
 
@@ -22,10 +22,14 @@
   - Implemented deterministic ingestion for acquisition manifests and Takeout mboxes, including mail-only order evidence.
   - Added content-addressed IDs, manifest integrity checks, content-aware document roles, labelled order-ID extraction, and history-row deduplication.
   - Added atomic, byte-stable private JSONL output with `0600` permissions under ignored `data/processed/_inventory/`.
+  - Added strict page, bounding-box, text-block, key-value, table, image, quality, document, and manifest contracts.
+  - Implemented native text/layout extraction, table header links and merged-cell spans, image inspection, and deterministic reading order.
+  - Added private per-document manifest/document JSON, page JSONL, Markdown previews, and lossless WebP page renders.
+  - Added explicit OCR-required/quarantine routing for failed pages; every current page passed native extraction.
   - Recorded TDD progression as separate red-test and green-implementation commits.
-- In progress: None; Phase 1B is ready to begin.
+- In progress: None; Phase 2 is ready to begin.
 - Blocked: None.
-- Schema/model/index versions in use: Phase 1A Pydantic contracts, package version `0.1.0`; graph/index versions remain design-only.
+- Schema/model/index versions in use: Phase 1 extraction version `1.0.0`, package version `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -35,19 +39,35 @@
   - Mail-only order messages: 51
   - History report documents: 2
   - History rows deduplicated against ordinary evidence: 73
+  - Native-quality complete documents: 763 of 763
+  - Extracted text characters: 1,236,136
+  - Detected tables: 620
+  - Detected images: 1,668
+  - OCR-required or quarantined documents: 0
+  - Private artifact files: 3,913, all mode `0600`
+  - Deterministic processed-archive SHA-256: `ff327694b2c831fbe530785904b59bae6515dc931d65292eac2371a7c196429c`
   - Orders with recoverable unique IDs: 427
   - Provisional one-message/one-order records: 27
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Add failing tests for Phase 1B page/layout records, structural quality profiles, deterministic document artifacts, and quarantine behavior.
-2. Implement native text blocks, coordinates, tables, reading order, and page-level JSON/JSONL export.
-3. Add OCR routing only for failed pages or regions; the current corpus does not require OCR by default.
-4. Produce document JSON and Markdown inspection previews, then validate the golden PDFs against rendered pages.
+1. Add failing tests for Phase 2 rich-chunk contracts, routing, source-region provenance, validation, and quarantine.
+2. Implement deterministic chunk-strategy routing over structured document JSON, never opaque PDFs.
+3. Add candidate facts and entity mentions while preserving document/page/block evidence links.
+4. Build the golden chunking benchmark and require complete financial/entity facts to remain source-linked.
 5. Replace provisional identities only where stronger evidence proves an order ID or duplicate relationship.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-03 — Keep PDF processing deterministic and quarantine-first
+
+- Decision: Canonical page and document artifacts are produced entirely by deterministic scripts. Native extraction is accepted only when text, table, and image inspection complete without structural issues; failed pages are marked OCR-required and the document is quarantined rather than silently accepted.
+- Rationale: Page coordinates, source precision, table alignment, and evidence provenance must be reproducible before any agentic interpretation begins.
+- Alternatives rejected: Direct LLM parsing of opaque PDFs; unconditional OCR; accepting partial extraction without a quality signal.
+- Files/contracts affected: `src/lunarbit/pdf.py`, Phase 1 Pydantic contracts, `scripts/build_json.py`, and private processed artifacts.
+- Validation performed: Processed all 763 PDFs and 857 pages twice with identical archive hashes; all 763 documents passed native quality checks, with 620 tables and 1,668 images recorded.
+- Revisit trigger: A future source page is quarantined, requiring a region/page-scoped OCR adapter and new golden regression.
 
 ### 2026-08-03 — Count mail-only evidence as provisional orders
 
@@ -97,6 +117,8 @@
 - Do not expose proprietor, customer, or delivery-person names publicly.
 - Do not classify a sender from its display name; parse and validate the actual sender domain.
 - Do not treat a MIME body part with no filename as `attachment.pdf`; require PDF MIME type, a real `.pdf` filename, or a PDF byte signature.
+- Do not infer merged-cell spans from consecutive missing grid slots; derive spans from detected cell geometry.
+- Do not accept a failed native page silently; mark it OCR-required and quarantine its document.
 - Use `python3` in this environment; the unversioned `python` command is unavailable.
 - Do not use LLM or floating-point arithmetic for canonical money.
 - Do not vectorize IDs, dates, or standalone amounts.
@@ -116,5 +138,6 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev
 .venv/bin/ruff format --check src scripts tests
 .venv/bin/mypy src scripts
 .venv/bin/pytest -q
-python3 scripts/build_json.py --input data --output data/processed
+.venv/bin/python scripts/build_json.py --input data --output data/processed
+.venv/bin/python scripts/build_json.py --input data --output data/processed --inventory-only
 ```
