@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-03
-- Active phase: Phase 1A deterministic source normalization.
+- Active phase: Phase 1A source normalization complete; Phase 1B page/layout extraction next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified commit: Initial governance commit pending.
-- Last passing test/eval command: None; executable project files have not been created yet.
+- Last verified implementation commit: `66b8484` (`feat(ingestion): build deterministic source inventory`).
+- Last passing checks: Ruff lint/format, strict mypy, 10 pytest tests, and a complete private-corpus inventory rebuild.
 
 ## Current state
 
@@ -18,23 +18,34 @@
   - Classified eight document roles and identified Swiggy manifest order-ID conflicts.
   - Established the current evidence-based total of 454 orders under the counting policy below.
   - Added a deny-by-default `.gitignore` for private commerce data and secrets.
-- In progress: Test-first contracts for source inventory and privacy boundaries.
+  - Added strict Pydantic source-message, source-document, candidate, evidence, and inventory contracts.
+  - Implemented deterministic ingestion for acquisition manifests and Takeout mboxes, including mail-only order evidence.
+  - Added content-addressed IDs, manifest integrity checks, content-aware document roles, labelled order-ID extraction, and history-row deduplication.
+  - Added atomic, byte-stable private JSONL output with `0600` permissions under ignored `data/processed/_inventory/`.
+  - Recorded TDD progression as separate red-test and green-implementation commits.
+- In progress: None; Phase 1B is ready to begin.
 - Blocked: None.
-- Schema/model/index versions in use: Design only; no executable schemas yet.
+- Schema/model/index versions in use: Phase 1A Pydantic contracts, package version `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
+  - Excluded unrelated emails: 1
   - Unique PDFs: 763
   - PDF pages: 857
+  - PDF-backed ordinary order messages: 403
+  - Mail-only order messages: 51
+  - History report documents: 2
+  - History rows deduplicated against ordinary evidence: 73
   - Orders with recoverable unique IDs: 427
   - Provisional one-message/one-order records: 27
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Add test-first contracts for source inventory, privacy exclusions, MIME parsing, document roles, and order-ID candidates.
-2. Implement deterministic source normalization for acquisition bundles and Takeout mboxes.
-3. Implement native PDF/HTML extraction and role-specific validation.
-4. Run the complete corpus through Phase 1 and replace provisional counts with resolved order identities where evidence permits.
+1. Add failing tests for Phase 1B page/layout records, structural quality profiles, deterministic document artifacts, and quarantine behavior.
+2. Implement native text blocks, coordinates, tables, reading order, and page-level JSON/JSONL export.
+3. Add OCR routing only for failed pages or regions; the current corpus does not require OCR by default.
+4. Produce document JSON and Markdown inspection previews, then validate the golden PDFs against rendered pages.
+5. Replace provisional identities only where stronger evidence proves an order ID or duplicate relationship.
 
 ## Decisions — append-only, newest first
 
@@ -84,6 +95,9 @@
 - Do not repeat the incorrect ₹59.16 discount residual; the supplied Zomato bundle yields ₹37.16.
 - Do not infer stable delivery identity from a repeated name alone.
 - Do not expose proprietor, customer, or delivery-person names publicly.
+- Do not classify a sender from its display name; parse and validate the actual sender domain.
+- Do not treat a MIME body part with no filename as `attachment.pdf`; require PDF MIME type, a real `.pdf` filename, or a PDF byte signature.
+- Use `python3` in this environment; the unversioned `python` command is unavailable.
 - Do not use LLM or floating-point arithmetic for canonical money.
 - Do not vectorize IDs, dates, or standalone amounts.
 - Do not implement custom BM25 using Neo4j dense vectors.
@@ -97,5 +111,10 @@
 ## Important commands
 
 ```bash
-# Commands will be added after project initialization and the first test suite exist.
+UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev
+.venv/bin/ruff check src scripts tests
+.venv/bin/ruff format --check src scripts tests
+.venv/bin/mypy src scripts
+.venv/bin/pytest -q
+python3 scripts/build_json.py --input data --output data/processed
 ```
