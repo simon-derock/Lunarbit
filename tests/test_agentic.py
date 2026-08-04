@@ -24,6 +24,7 @@ from lunarbit.agentic import (
     CloudflareWorkersAIClient,
     CloudflareWorkersAIError,
     StreamingTransportResponse,
+    _agentic_tool_definition,
     _decode_cloudflare_sse,
     execute_agentic_plan,
     plan_agentic_batches,
@@ -32,6 +33,8 @@ from lunarbit.agentic import (
 )
 from lunarbit.models import (
     BoundingBox,
+    CandidateMoneyComponent,
+    CandidateMoneyType,
     ChunkType,
     EntityMention,
     EntityType,
@@ -71,6 +74,7 @@ def _chunk(
     table_id: str | None = None,
     parent_region_id: str | None = None,
     entity_mentions: tuple[EntityMention, ...] = (),
+    candidate_money_components: tuple[CandidateMoneyComponent, ...] = (),
 ) -> EvidenceChunk:
     source_id = _source_id(source_number)
     return EvidenceChunk(
@@ -92,6 +96,7 @@ def _chunk(
         parent_region_id=parent_region_id,
         source_region_ids=(f"region_{number}",),
         entity_mentions=entity_mentions,
+        candidate_money_components=candidate_money_components,
         query_families=(QueryFamily.EVIDENCE_REPLAY,),
         source_hash=sha256(text.encode()).hexdigest(),
         extraction_method=ExtractionMethod.NATIVE,
@@ -336,6 +341,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     model_output = {
         "batch_id": str(batch.batch_id),
         "covered_source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
+        "covered_money_component_ids": [],
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
@@ -417,6 +423,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert parameters["required"] == [
         "batch_id",
         "covered_source_chunk_ids",
+        "covered_money_component_ids",
         "regions",
     ]
     properties = parameters["properties"]
@@ -427,6 +434,9 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     coverage_schema = properties["covered_source_chunk_ids"]
     assert isinstance(coverage_schema, dict)
     assert coverage_schema["const"] == [str(chunk.chunk_id) for chunk in batch.chunks]
+    money_coverage_schema = properties["covered_money_component_ids"]
+    assert isinstance(money_coverage_schema, dict)
+    assert money_coverage_schema["const"] == []
     regions_schema = properties["regions"]
     assert isinstance(regions_schema, dict)
     assert "allOf" not in regions_schema
@@ -497,6 +507,7 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
     incomplete_output = {
         "batch_id": str(batch.batch_id),
         "covered_source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
+        "covered_money_component_ids": [],
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_ids[0])],
@@ -539,6 +550,95 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
     assert result.validation_status is ValidationStatus.QUARANTINED
     assert result.regions == ()
     assert result.quarantine_reasons == ("incomplete_batch_coverage",)
+
+
+def test_model_must_interpret_every_deterministic_money_component() -> None:
+    money_text = "Invoice total: 120.00"
+    amount_start = money_text.index("120.00")
+    component_id = uuid5(NAMESPACE_URL, "test-money:invoice-total")
+    bundle = _bundle(
+        "money-order",
+        (
+            _chunk(
+                10,
+                source_number=10,
+                text=money_text,
+                chunk_type=ChunkType.SUBTOTAL,
+                semantic_role=SemanticRole.FINANCIAL_DETAIL,
+                financial_role=FinancialRole.TOTAL,
+                candidate_money_components=(
+                    CandidateMoneyComponent(
+                        component_id=component_id,
+                        component_type=CandidateMoneyType.INVOICE_TOTAL,
+                        amount=Decimal("120.00"),
+                        source_amount_string_private="120.00",
+                        source_precision=2,
+                        source_span_start=amount_start,
+                        source_span_end=amount_start + len("120.00"),
+                        confidence=Decimal("1"),
+                    ),
+                ),
+            ),
+            _chunk(11, source_number=10, text="Order ID: 1234567890"),
+        ),
+        cohort="zomato:food:pdf-backed",
+    )
+    plan = plan_agentic_batches(
+        (bundle,),
+        policy=AgenticBatchPolicy(
+            target_input_tokens=4_000,
+            max_input_tokens=6_000,
+            max_completion_tokens=1_000,
+            context_window_tokens=8_000,
+            max_chunks=4,
+            max_bundles=1,
+            minimum_chunks=2,
+        ),
+        token_counter=_CharacterTokenCounter(),
+    )
+    batch = plan.batches[0]
+    tool = _agentic_tool_definition(
+        batch_id=batch.batch_id,
+        bundle_ids=batch.bundle_ids,
+        chunks=batch.chunks,
+    )
+    parameters = tool["parameters"]
+    assert isinstance(parameters, dict)
+    money_definition = parameters["$defs"]["AgenticMoneyInterpretation"]
+    assert "anyOf" not in money_definition
+    money_properties = money_definition["properties"]
+    assert money_properties["source_component_id"]["enum"] == [str(component_id)]
+    assert money_properties["source_chunk_id"]["enum"] == [str(batch.chunks[0].chunk_id)]
+    response = {
+        "batch_id": str(batch.batch_id),
+        "covered_source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
+        "covered_money_component_ids": [str(component_id)],
+        "regions": [
+            {
+                "source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
+                "bundle_id": "money-order",
+                "chunk_type": "SUBTOTAL",
+                "semantic_role": "financial_detail",
+                "financial_role": "total",
+                "region_title_private": "Invoice total",
+                "semantic_summary_private": "Invoice total evidence.",
+                "embedding_text_private": "Invoice total 120.00.",
+                "query_families": ["financial_breakdown", "evidence_replay"],
+                "candidate_facts": [],
+                "entity_candidates": [],
+                "money_interpretations": [],
+                "relation_candidates": [],
+                "conflict_flags": [],
+                "uncertainty_notes_private": [],
+            }
+        ],
+    }
+
+    result = validate_agentic_response(batch, json.dumps(response))
+
+    assert result.validation_status is ValidationStatus.QUARANTINED
+    assert result.regions == ()
+    assert result.quarantine_reasons == ("incomplete_money_component_coverage",)
 
 
 def test_invalid_model_json_is_quarantined_with_a_safe_reason() -> None:
@@ -602,6 +702,7 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
     response = {
         "batch_id": str(batch.batch_id),
         "covered_source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
+        "covered_money_component_ids": [],
         "regions": [
             {
                 "source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
@@ -775,7 +876,7 @@ def test_execute_plan_persists_only_safe_transport_error_code(tmp_path: Path) ->
 def test_default_policy_uses_80k_input_tokens_and_reserves_context() -> None:
     policy = AgenticBatchPolicy()
 
-    assert AGENTIC_CONTRACT_VERSION == "1.3.0"
+    assert AGENTIC_CONTRACT_VERSION == "1.4.0"
     assert CLOUDFLARE_MODEL == "@cf/google/gemma-4-26b-a4b-it"
     assert CLOUDFLARE_CONTEXT_WINDOW_TOKENS == 256_000
     assert policy.target_input_tokens == 64_000
