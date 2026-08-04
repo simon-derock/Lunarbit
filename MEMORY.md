@@ -2,12 +2,12 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-03
-- Active phase: Phase 2B tokenizer-verified 80k graph-enrichment plan implemented; live model benchmark pending correctly loaded credentials.
+- Last updated: 2026-08-04
+- Active phase: Phase 2B Gemma SSE transport implemented; live output-contract remediation is in progress.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `ca92096` (`feat(chunking): use 80k graph enrichment batches`).
-- Last passing checks: Ruff lint/format, strict mypy, 37 pytest tests, the complete deterministic chunking benchmark, the pinned-tokenizer full-corpus dry run, and exact full-prompt token verification.
+- Last verified remote commit: `dc8504f` (`docs(memory): record 80k enrichment plan`).
+- Last passing checks: Ruff lint/format, strict mypy, 40 pytest tests, the complete deterministic chunking benchmark, the pinned Gemma-tokenizer full-corpus dry run, and a live two-chunk SSE transport pilot.
 
 ## Current state
 
@@ -33,18 +33,20 @@
   - Added an atomic validator boundary that quarantines malformed agentic proposals without partial acceptance.
   - Added reproducible chunk archive and benchmark scripts covering every document and message source.
   - Corrected historical labelled Swiggy order-ID extraction, resolving 26 previously provisional orders.
-  - Selected Cloudflare Workers AI `@cf/zai-org/glm-4.7-flash` for Phase 2B candidate enrichment.
+  - Benchmarked Cloudflare Workers AI GLM-4.7-Flash, then selected `@cf/google/gemma-4-26b-a4b-it` after live comparison.
   - Added deterministic order-relevant batching with table preservation, mail-only cohort packing, hard prompt limits, and no one-chunk calls.
   - Added typed model-response validation for complete coverage, exact-source entities and relations, and cross-order isolation.
   - Added a sequential, opt-in runner that requires an explicit call cap and writes validated results privately with mode `0600`.
   - Expanded agent inputs to include deterministic text representations, coordinates, tables, facts, entities, money, graph candidates, confidence, completeness, validation, and privacy metadata.
   - Expanded proposals with bundle-scoped semantic regions, retrieval text, query families, exact facts/entities, money interpretations, governed relations, conflicts, and uncertainty.
-  - Pinned the official GLM-4.7-Flash tokenizer and replaced character caps with a verified 64k target and 80k input-token ceiling.
+  - Pinned Google's official Gemma 4 tokenizer and retained the verified 64k target and 80k input-token ceiling inside its 256k context.
   - Packed up to six template-compatible PDF or mail order bundles per call while deterministically rejecting all cross-bundle regions.
   - Added local `.env` loading and ignored the observed `.emv` typo without opening or tracking that credential-bearing file.
+  - Added Cloudflare's documented SSE transport, low-reasoning/no-thinking controls, complete-stream and truncation guards, and a 600-second socket/wall-clock deadline.
+  - Verified the SSE event shape with a non-private request and ran isolated private pilots; all private artifacts remain ignored and mode `0600`.
   - Recorded TDD progression as separate red-test and green-implementation commits.
-- In progress: None; the Phase 2B dry-run plan is ready for a small live pilot.
-- Pending external input: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` remain unavailable to the runner. The observed local file is named `.emv`; the runner deliberately loads only `.env`. No private evidence has been sent and no live model result exists yet.
+- In progress: Gemma returns a complete, non-truncated response for the two-chunk rich pilot, but the proposal still fails the strict model-output schema.
+- Pending external input: None. Cloudflare credentials load from the ignored `.env`; do not expose or commit them.
 - Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
@@ -73,13 +75,12 @@
   - Deterministic chunk-archive SHA-256: `71f9c919d6d71e677dc49dd30920a4dd0a356131ac97fa5560af3bbb98b60d4e`
   - Agentic order-evidence bundles: 456
   - Agentic input chunks covered: 24,675 of 24,675
-  - Planned rich model calls: 307
-  - Chunks per call: minimum 2, average 80.37, maximum 142
-  - Conservative planned input tokens: minimum 4,369, average 50,082.83, maximum 79,793
-  - Exact rendered input tokens: minimum 4,142, average 48,880.81, maximum 77,776
+  - Planned rich model calls: 324
+  - Chunks per call: minimum 2, average 76.16, maximum 112
+  - Exact rendered input tokens: minimum 5,197, average 59,412.68, maximum 79,282
   - Reserved completion tokens per call: 24,000
-  - Remaining context headroom at largest call: 29,296 tokens
-  - GLM tokenizer revision: `zai-org/GLM-4.7-Flash@2b2bd73e8a019580f1c363b62930577f9fae3639`
+  - Remaining context headroom at largest call: 152,718 tokens
+  - Gemma tokenizer revision: `google/gemma-4-26B-A4B-it@4d7ae4984b7db7de8f8457170b3f1a419ee76d52`
   - Agentic batching concurrency: 1
   - Agentic input quarantines: 0
   - Deterministic agentic plan SHA-256: `c1fdd021b8df4f1c2bd801845681f7b50b94a6b5b37cd19bc82b89fda060cf75`
@@ -89,13 +90,22 @@
 
 ## Next actions — ordered
 
-1. Rename the local `.emv` credential file to `.env`, or export both Cloudflare variables, then run a three-call live pilot with `--execute --max-calls 3`.
-2. Manually review pilot regions against the supplied PDFs and representative mail-only evidence before expanding the call cap.
-3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
-4. Compare model-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
+1. Add privacy-safe validation diagnostics that distinguish malformed JSON from typed schema violations without logging source content.
+2. Refine the Gemma output contract against a two-chunk pilot until one complete response passes atomic validation.
+3. Run a three-call live pilot and manually review regions against the supplied PDFs and representative mail-only evidence.
+4. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
 5. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-04 — Use Gemma 4 over Cloudflare SSE with bounded execution
+
+- Decision: Use `@cf/google/gemma-4-26b-a4b-it` through Cloudflare's REST SSE interface with `stream: true`, `reasoning_effort: low`, `chat_template_kwargs.enable_thinking: false`, a 600-second socket/wall-clock deadline, and strict complete-stream validation.
+- Rationale: GLM synchronous calls timed out or exhausted completion tokens in reasoning. Gemma exposes a 256,000-token context and streamed answer/reasoning deltas. Disabling thinking prevents reasoning from consuming the output budget, while SSE avoids waiting for a fully buffered response.
+- Alternatives rejected: Treating the endpoint as WebSocket; combining JSON Mode with streaming when Cloudflare documents that JSON Mode does not support streaming; accepting partial streams; retaining the GLM tokenizer after changing models; launching the full corpus before a pilot passes validation.
+- Files/contracts affected: `src/lunarbit/agentic.py`, `scripts/run_agentic_chunking.py`, `tests/test_agentic.py`, `PLAN.md`, and `MEMORY.md`.
+- Validation performed: Live SSE shape verified with `[DONE]`, answer and reasoning deltas, finish reason, and usage. Official Gemma tokenizer dry run covers all 24,675 chunks in 324 calls with zero input quarantine. A two-chunk no-thinking stream completed without truncation but remains quarantined for invalid model output. Forty tests, Ruff, and strict mypy pass.
+- Revisit trigger: A representative pilot still fails typed output validation after privacy-safe diagnostics and prompt/schema refinement, or Cloudflare changes Gemma's streaming contract.
 
 ### 2026-08-03 — Expand enrichment to an 80k tokenizer-verified input budget
 

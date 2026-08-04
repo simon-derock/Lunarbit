@@ -12,10 +12,11 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from lunarbit.agentic import (  # noqa: E402
     CLOUDFLARE_MODEL,
+    CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
     AgenticBatchPlan,
     AgenticBatchPolicy,
     CloudflareWorkersAIClient,
-    GLMTokenizerCounter,
+    GemmaTokenizerCounter,
     execute_agentic_plan,
     load_agentic_evidence_bundles,
     plan_agentic_batches,
@@ -50,6 +51,12 @@ def parse_args() -> Namespace:
     parser.add_argument("--max-completion-tokens", type=int, default=24_000)
     parser.add_argument("--max-chunks", type=int, default=512)
     parser.add_argument("--max-bundles", type=int, default=6)
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
+        help="Socket timeout for connecting to and reading the SSE stream",
+    )
     args = parser.parse_args()
     if args.execute and args.max_calls < 1:
         parser.error("--execute requires --max-calls of at least 1")
@@ -101,7 +108,7 @@ def main() -> int:
         max_bundles=args.max_bundles,
         minimum_chunks=2,
     )
-    token_counter = GLMTokenizerCounter.from_cache(args.input / "_agentic" / "_tokenizer")
+    token_counter = GemmaTokenizerCounter.from_cache(args.input / "_agentic" / "_tokenizer")
     plan = plan_agentic_batches(
         bundles,
         policy=policy,
@@ -112,7 +119,8 @@ def main() -> int:
         return 0
 
     client = CloudflareWorkersAIClient.from_environment(
-        max_completion_tokens=policy.max_completion_tokens
+        max_completion_tokens=policy.max_completion_tokens,
+        timeout_seconds=args.timeout_seconds,
     )
     summary = execute_agentic_plan(
         plan,

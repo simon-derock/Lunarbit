@@ -602,7 +602,7 @@ Do not persist both `prev_chunk_id` and `next_chunk_id` by default. Adjacent chu
 
 ### 8.7 Model-assisted batching contract
 
-Phase 2B uses Cloudflare Workers AI model `@cf/zai-org/glm-4.7-flash` as a candidate-only semantic enrichment layer over deterministic chunks.
+Phase 2B uses Cloudflare Workers AI model `@cf/google/gemma-4-26b-a4b-it` as a candidate-only semantic enrichment layer over deterministic chunks.
 
 Batching must preserve commercial context without saturating the model context window:
 
@@ -610,19 +610,20 @@ Batching must preserve commercial context without saturating the model context w
 - batch up to six order bundles only when platform, category, evidence kind, and document-role cohort match;
 - preserve explicit bundle boundaries and prevent model output from merging separate orders into one region;
 - keep table parents and rows together when they fit the hard limit;
-- count with the pinned official GLM-4.7-Flash tokenizer rather than a character heuristic;
+- count with the pinned official Google Gemma 4 tokenizer rather than a character heuristic;
 - target 64,000 input tokens and enforce an 80,000-token input ceiling;
-- reserve up to 24,000 completion tokens and at least 27,072 context tokens for additional headroom;
+- reserve up to 24,000 completion tokens inside Gemma's 256,000-token context window;
 - cap batches at 512 primitives and six bundles;
 - require at least two chunks per call;
-- execute sequentially with concurrency `1`;
+- execute sequentially with concurrency `1` over Cloudflare's documented HTTP Server-Sent Events interface;
+- require a complete `[DONE]` event, reject length-limited output, disable thinking through Gemma's chat-template setting, and enforce a 600-second socket and wall-clock deadline;
 - never send the entire corpus or make one request per deterministic chunk.
 
 Each input primitive includes all deterministic representations and graph-relevant metadata: raw and normalized text, semantic and embedding text, page and bounding-box provenance, reading order, table hierarchy, candidate facts, entity mentions, money candidates, query families, graph candidates, source hash, extraction method/confidence, completeness, validation, and privacy state.
 
 The model may propose coherent semantic regions, retrieval text, source-exact facts and entities, interpretations of existing money candidates, query families, governed graph relations, conflict flags, and uncertainty notes. A deterministic validator rejects unknown chunk IDs, partial or duplicate coverage, unsupported source spans, unsupported money references, unsupported exact-value candidates, cross-bundle regions, and malformed output. The model never creates persistent IDs or writes canonical graph state.
 
-The tokenizer-verified full-corpus dry run plans 307 calls for 24,675 chunks, averages 80.37 primitives and 48,880.81 actual input tokens per call, reaches 77,776 input tokens at maximum, reserves 24,000 completion tokens, and leaves 29,296 tokens of context headroom at the largest call. No input is skipped or quarantined. These are planning metrics, not evidence that model quality has passed the live benchmark.
+The Gemma-tokenizer-verified full-corpus dry run plans 324 calls for 24,675 chunks, averages 76.16 primitives and 59,412.68 input tokens per call, reaches 79,282 input tokens at maximum, reserves 24,000 completion tokens, and leaves 152,718 tokens of context headroom at the largest call. No input is skipped or quarantined. A two-chunk live SSE pilot completed without truncation after thinking was disabled, but its proposal failed the strict model-output contract. Full execution remains blocked until a representative pilot passes validation.
 
 ### 8.8 Metadata governance
 

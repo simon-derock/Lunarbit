@@ -5,8 +5,8 @@ import os
 import tempfile
 import time
 from collections import Counter, defaultdict
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 from hashlib import sha256
 from importlib import import_module
@@ -33,11 +33,13 @@ from lunarbit.models import (
     ValidationStatus,
 )
 
-CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash"
+CLOUDFLARE_MODEL = "@cf/google/gemma-4-26b-a4b-it"
 AGENTIC_CONTRACT_VERSION = "1.0.0"
-GLM_CONTEXT_WINDOW_TOKENS = 131_072
-GLM_TOKENIZER_REPOSITORY = "zai-org/GLM-4.7-Flash"
-GLM_TOKENIZER_REVISION = "2b2bd73e8a019580f1c363b62930577f9fae3639"
+CLOUDFLARE_CONTEXT_WINDOW_TOKENS = 256_000
+CLOUDFLARE_STREAM_TIMEOUT_SECONDS = 600.0
+CLOUDFLARE_REASONING_EFFORT = "low"
+GEMMA_TOKENIZER_REPOSITORY = "google/gemma-4-26B-A4B-it"
+GEMMA_TOKENIZER_REVISION = "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
 
 _SYSTEM_PROMPT = """You are the evidence architect for a provenance-first personal-commerce graph.
 
@@ -127,10 +129,10 @@ class TokenCounter(Protocol):
     def count_messages(self, *, system_prompt: str, user_prompt: str) -> int: ...
 
 
-class ApproximateGLMTokenCounter:
+class ApproximateGemmaTokenCounter:
     """Conservative local fallback; live runs use the pinned model tokenizer."""
 
-    identifier = "glm-4.7-flash-approximate-v1"
+    identifier = "gemma-4-26b-a4b-it-approximate-v1"
 
     def count_text(self, text: str) -> int:
         ascii_characters = sum(character.isascii() for character in text)
@@ -141,14 +143,14 @@ class ApproximateGLMTokenCounter:
         return self.count_text(system_prompt) + self.count_text(user_prompt) + 64
 
 
-class GLMTokenizerCounter:
+class GemmaTokenizerCounter:
     def __init__(self, tokenizer: Any) -> None:
         self._tokenizer = tokenizer
         self._token_cache: dict[str, int] = {}
-        self.identifier = f"{GLM_TOKENIZER_REPOSITORY}@{GLM_TOKENIZER_REVISION}:tokenizer-json"
+        self.identifier = f"{GEMMA_TOKENIZER_REPOSITORY}@{GEMMA_TOKENIZER_REVISION}:tokenizer-json"
 
     @classmethod
-    def from_cache(cls, cache_root: Path) -> GLMTokenizerCounter:
+    def from_cache(cls, cache_root: Path) -> GemmaTokenizerCounter:
         os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
         try:
             hub = import_module("huggingface_hub")
@@ -158,9 +160,9 @@ class GLMTokenizerCounter:
                 "Install the agent dependency group before exact token planning"
             ) from error
         tokenizer_path = hub.hf_hub_download(
-            repo_id=GLM_TOKENIZER_REPOSITORY,
+            repo_id=GEMMA_TOKENIZER_REPOSITORY,
             filename="tokenizer.json",
-            revision=GLM_TOKENIZER_REVISION,
+            revision=GEMMA_TOKENIZER_REVISION,
             cache_dir=cache_root,
         )
         return cls(tokenizers.Tokenizer.from_file(tokenizer_path))
@@ -234,7 +236,7 @@ class AgenticBatchPolicy(ContractModel):
     target_input_tokens: int = Field(default=64_000, ge=1_000)
     max_input_tokens: int = Field(default=80_000, ge=2_000)
     max_completion_tokens: int = Field(default=24_000, ge=1_000)
-    context_window_tokens: int = Field(default=GLM_CONTEXT_WINDOW_TOKENS, ge=4_000)
+    context_window_tokens: int = Field(default=CLOUDFLARE_CONTEXT_WINDOW_TOKENS, ge=4_000)
     max_chunks: int = Field(default=512, ge=2)
     max_bundles: int = Field(default=6, ge=1)
     minimum_chunks: int = Field(default=2, ge=2)
@@ -397,36 +399,114 @@ class AgenticRunSummary(ContractModel):
 
 
 @dataclass(frozen=True, slots=True)
-class TransportResponse:
+class StreamingTransportResponse:
     status_code: int
     headers: Mapping[str, str]
-    body: Mapping[str, object]
+    content: str = field(repr=False)
+    finish_reason: str | None
+    usage: Mapping[str, object]
+    completed: bool
 
 
-class JsonTransport(Protocol):
-    def post_json(
+class StreamingTransport(Protocol):
+    def post_sse(
         self,
         *,
         url: str,
         headers: dict[str, str],
         payload: dict[str, object],
         timeout_seconds: float,
-    ) -> TransportResponse: ...
+    ) -> StreamingTransportResponse: ...
 
 
 class CloudflareWorkersAIError(RuntimeError):
     """Safe operational error that never includes private request or response content."""
 
 
-class UrllibJsonTransport:
-    def post_json(
+def _decode_cloudflare_sse(
+    lines: Iterable[bytes],
+    *,
+    deadline_monotonic: float | None = None,
+) -> tuple[str, str | None, Mapping[str, object], bool]:
+    content_parts: list[str] = []
+    finish_reason: str | None = None
+    usage: Mapping[str, object] = {}
+    completed = False
+    data_lines: list[str] = []
+
+    def consume_event(data: str) -> None:
+        nonlocal completed, finish_reason, usage
+        if data == "[DONE]":
+            completed = True
+            return
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError as error:
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI returned an invalid SSE event"
+            ) from error
+        if not isinstance(event, dict):
+            raise CloudflareWorkersAIError("Cloudflare Workers AI returned an invalid SSE event")
+        if event.get("success") is False or event.get("error") or event.get("errors"):
+            raise CloudflareWorkersAIError("Cloudflare Workers AI rejected the stream")
+        event_usage = event.get("usage")
+        if isinstance(event_usage, Mapping):
+            usage = cast(Mapping[str, object], event_usage)
+        choices = event.get("choices")
+        if not isinstance(choices, Sequence) or isinstance(choices, (str, bytes)):
+            return
+        for choice in choices:
+            if not isinstance(choice, Mapping):
+                continue
+            reason = choice.get("finish_reason")
+            if isinstance(reason, str):
+                finish_reason = reason
+            delta = choice.get("delta")
+            if not isinstance(delta, Mapping):
+                continue
+            content = delta.get("content")
+            if content is None:
+                continue
+            if not isinstance(content, str):
+                raise CloudflareWorkersAIError(
+                    "Cloudflare Workers AI returned invalid streamed content"
+                )
+            content_parts.append(content)
+
+    for raw_line in lines:
+        if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
+            raise CloudflareWorkersAIError("Cloudflare Workers AI stream exceeded its deadline")
+        try:
+            line = raw_line.decode("utf-8").rstrip("\r\n")
+        except UnicodeDecodeError as error:
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI returned invalid SSE encoding"
+            ) from error
+        if not line:
+            if data_lines:
+                consume_event("\n".join(data_lines))
+                data_lines.clear()
+            continue
+        if line.startswith(":"):
+            continue
+        if line == "data":
+            data_lines.append("")
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip(" "))
+    if data_lines:
+        consume_event("\n".join(data_lines))
+    return "".join(content_parts), finish_reason, usage, completed
+
+
+class UrllibSseTransport:
+    def post_sse(
         self,
         *,
         url: str,
         headers: dict[str, str],
         payload: dict[str, object],
         timeout_seconds: float,
-    ) -> TransportResponse:
+    ) -> StreamingTransportResponse:
         request = Request(
             url,
             data=json.dumps(payload, separators=(",", ":")).encode(),
@@ -434,30 +514,39 @@ class UrllibJsonTransport:
             method="POST",
         )
         try:
+            deadline_monotonic = time.monotonic() + timeout_seconds
             with urlopen(request, timeout=timeout_seconds) as response:
-                raw_body = response.read()
                 status_code = response.status
                 response_headers = dict(response.headers.items())
+                content_type = response.headers.get("Content-Type", "")
+                if not content_type.lower().startswith("text/event-stream"):
+                    raise CloudflareWorkersAIError(
+                        "Cloudflare Workers AI returned an unexpected content type"
+                    )
+                content, finish_reason, usage, completed = _decode_cloudflare_sse(
+                    response,
+                    deadline_monotonic=deadline_monotonic,
+                )
         except HTTPError as error:
-            return TransportResponse(
+            return StreamingTransportResponse(
                 status_code=error.code,
                 headers=dict(error.headers.items()) if error.headers is not None else {},
-                body={},
+                content="",
+                finish_reason=None,
+                usage={},
+                completed=False,
             )
-        except URLError as error:
+        except (TimeoutError, URLError) as error:
             raise CloudflareWorkersAIError(
                 "Cloudflare Workers AI network request failed"
             ) from error
-        try:
-            decoded = json.loads(raw_body)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise CloudflareWorkersAIError("Cloudflare Workers AI returned invalid JSON") from error
-        if not isinstance(decoded, dict):
-            raise CloudflareWorkersAIError("Cloudflare Workers AI returned an invalid envelope")
-        return TransportResponse(
+        return StreamingTransportResponse(
             status_code=status_code,
             headers=response_headers,
-            body=cast(dict[str, object], decoded),
+            content=content,
+            finish_reason=finish_reason,
+            usage=usage,
+            completed=completed,
         )
 
 
@@ -737,7 +826,7 @@ def plan_agentic_batches(
     token_counter: TokenCounter | None = None,
 ) -> AgenticBatchPlan:
     selected_policy = policy or AgenticBatchPolicy()
-    selected_token_counter = token_counter or ApproximateGLMTokenCounter()
+    selected_token_counter = token_counter or ApproximateGemmaTokenCounter()
     ordered_bundles = tuple(sorted(bundles, key=lambda bundle: bundle.bundle_id))
     all_chunk_ids = tuple(chunk.chunk_id for bundle in ordered_bundles for chunk in bundle.chunks)
     if len(all_chunk_ids) != len(set(all_chunk_ids)):
@@ -905,8 +994,8 @@ class CloudflareWorkersAIClient:
         *,
         account_id: str,
         auth_token: str,
-        transport: JsonTransport | None = None,
-        timeout_seconds: float = 120,
+        transport: StreamingTransport | None = None,
+        timeout_seconds: float = CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
         max_attempts: int = 3,
         max_completion_tokens: int = 24_000,
     ) -> None:
@@ -914,9 +1003,11 @@ class CloudflareWorkersAIClient:
             raise ValueError("Cloudflare account ID and auth token are required")
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
         self._account_id = account_id.strip()
         self._auth_token = auth_token.strip()
-        self._transport = transport or UrllibJsonTransport()
+        self._transport = transport or UrllibSseTransport()
         self._timeout_seconds = timeout_seconds
         self._max_attempts = max_attempts
         self._max_completion_tokens = max_completion_tokens
@@ -926,6 +1017,7 @@ class CloudflareWorkersAIClient:
         cls,
         *,
         max_completion_tokens: int = 24_000,
+        timeout_seconds: float = CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
     ) -> CloudflareWorkersAIClient:
         account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
         auth_token = os.environ.get("CLOUDFLARE_AUTH_TOKEN", "")
@@ -937,6 +1029,7 @@ class CloudflareWorkersAIClient:
             account_id=account_id,
             auth_token=auth_token,
             max_completion_tokens=max_completion_tokens,
+            timeout_seconds=timeout_seconds,
         )
 
     def __repr__(self) -> str:
@@ -945,7 +1038,7 @@ class CloudflareWorkersAIClient:
             f"timeout_seconds={self._timeout_seconds!r})"
         )
 
-    def _request(self, batch: AgenticBatch) -> str:
+    def _request(self, batch: AgenticBatch) -> StreamingTransportResponse:
         url = (
             "https://api.cloudflare.com/client/v4/accounts/"
             f"{self._account_id}/ai/run/{CLOUDFLARE_MODEL}"
@@ -953,6 +1046,7 @@ class CloudflareWorkersAIClient:
         headers = {
             "Authorization": f"Bearer {self._auth_token}",
             "Content-Type": "application/json",
+            "Accept": "text/event-stream",
         }
         payload: dict[str, object] = {
             "messages": [
@@ -963,11 +1057,13 @@ class CloudflareWorkersAIClient:
             "temperature": 0,
             "seed": 42,
             "store": False,
-            "stream": False,
+            "stream": True,
+            "reasoning_effort": CLOUDFLARE_REASONING_EFFORT,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
-        response: TransportResponse | None = None
+        response: StreamingTransportResponse | None = None
         for attempt in range(1, self._max_attempts + 1):
-            response = self._transport.post_json(
+            response = self._transport.post_sse(
                 url=url,
                 headers=headers,
                 payload=payload,
@@ -985,43 +1081,21 @@ class CloudflareWorkersAIClient:
             raise CloudflareWorkersAIError(
                 f"Cloudflare Workers AI request failed (status={status}, request_id={request_id})"
             )
-        if response.body.get("success") is False:
-            request_id = response.headers.get("cf-ray", "unavailable")
-            raise CloudflareWorkersAIError(
-                f"Cloudflare Workers AI rejected the request (request_id={request_id})"
-            )
-        result = response.body.get("result")
-        content: object | None = None
-        if isinstance(result, Mapping):
-            content = result.get("response")
-            if content is None:
-                content = _choice_content(result.get("choices"))
-        elif isinstance(result, str):
-            content = result
-        if content is None:
-            content = response.body.get("response")
-        if content is None:
-            content = _choice_content(response.body.get("choices"))
-        if isinstance(content, Mapping):
-            return json.dumps(content, ensure_ascii=False, separators=(",", ":"))
-        if not isinstance(content, str) or not content.strip():
+        if (
+            response.completed
+            and response.finish_reason != "length"
+            and not response.content.strip()
+        ):
             raise CloudflareWorkersAIError("Cloudflare Workers AI returned no model response")
-        return content
+        return response
 
     def propose(self, batch: AgenticBatch) -> AgenticBatchResult:
-        return validate_agentic_response(batch, self._request(batch))
-
-
-def _choice_content(choices: object) -> object | None:
-    if not isinstance(choices, Sequence) or isinstance(choices, (str, bytes)) or not choices:
-        return None
-    first = choices[0]
-    if not isinstance(first, Mapping):
-        return None
-    message = first.get("message")
-    if isinstance(message, Mapping):
-        return message.get("content")
-    return first.get("text")
+        response = self._request(batch)
+        if not response.completed:
+            return _quarantined_result(batch, "incomplete_model_stream")
+        if response.finish_reason == "length":
+            return _quarantined_result(batch, "model_output_truncated")
+        return validate_agentic_response(batch, response.content)
 
 
 def _read_chunk_file(path: Path) -> tuple[EvidenceChunk, ...]:
