@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-03
-- Active phase: Phase 2B Cloudflare adapter and complete medium-batch plan implemented; live model benchmark pending credentials.
+- Active phase: Phase 2B tokenizer-verified 80k graph-enrichment plan implemented; live model benchmark pending correctly loaded credentials.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `64687fe` (`feat(chunking): add validated Cloudflare batch enrichment`).
-- Last passing checks: Ruff lint/format, strict mypy, 34 pytest tests, the complete deterministic chunking benchmark, and the full-corpus agentic dry run.
+- Last verified implementation commit: `ca92096` (`feat(chunking): use 80k graph enrichment batches`).
+- Last passing checks: Ruff lint/format, strict mypy, 37 pytest tests, the complete deterministic chunking benchmark, the pinned-tokenizer full-corpus dry run, and exact full-prompt token verification.
 
 ## Current state
 
@@ -37,9 +37,14 @@
   - Added deterministic order-relevant batching with table preservation, mail-only cohort packing, hard prompt limits, and no one-chunk calls.
   - Added typed model-response validation for complete coverage, exact-source entities and relations, and cross-order isolation.
   - Added a sequential, opt-in runner that requires an explicit call cap and writes validated results privately with mode `0600`.
+  - Expanded agent inputs to include deterministic text representations, coordinates, tables, facts, entities, money, graph candidates, confidence, completeness, validation, and privacy metadata.
+  - Expanded proposals with bundle-scoped semantic regions, retrieval text, query families, exact facts/entities, money interpretations, governed relations, conflicts, and uncertainty.
+  - Pinned the official GLM-4.7-Flash tokenizer and replaced character caps with a verified 64k target and 80k input-token ceiling.
+  - Packed up to six template-compatible PDF or mail order bundles per call while deterministically rejecting all cross-bundle regions.
+  - Added local `.env` loading and ignored the observed `.emv` typo without opening or tracking that credential-bearing file.
   - Recorded TDD progression as separate red-test and green-implementation commits.
 - In progress: None; the Phase 2B dry-run plan is ready for a small live pilot.
-- Pending external input: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` are not set, so no private evidence has been sent and no live model result exists yet.
+- Pending external input: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` remain unavailable to the runner. The observed local file is named `.emv`; the runner deliberately loads only `.env`. No private evidence has been sent and no live model result exists yet.
 - Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
@@ -68,25 +73,38 @@
   - Deterministic chunk-archive SHA-256: `71f9c919d6d71e677dc49dd30920a4dd0a356131ac97fa5560af3bbb98b60d4e`
   - Agentic order-evidence bundles: 456
   - Agentic input chunks covered: 24,675 of 24,675
-  - Planned medium model calls: 1,107
-  - Chunks per call: minimum 2, average 22.29, maximum 32
-  - User-prompt characters per call: minimum 2,722, average 16,368.58, maximum 30,008
+  - Planned rich model calls: 307
+  - Chunks per call: minimum 2, average 80.37, maximum 142
+  - Conservative planned input tokens: minimum 4,369, average 50,082.83, maximum 79,793
+  - Exact rendered input tokens: minimum 4,142, average 48,880.81, maximum 77,776
+  - Reserved completion tokens per call: 24,000
+  - Remaining context headroom at largest call: 29,296 tokens
+  - GLM tokenizer revision: `zai-org/GLM-4.7-Flash@2b2bd73e8a019580f1c363b62930577f9fae3639`
   - Agentic batching concurrency: 1
   - Agentic input quarantines: 0
-  - Deterministic agentic plan SHA-256: `422cb28faf195ba9a6579984cad14732aeca9e149751dc4770ba36a1f162454d`
+  - Deterministic agentic plan SHA-256: `c1fdd021b8df4f1c2bd801845681f7b50b94a6b5b37cd19bc82b89fda060cf75`
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Set the two Cloudflare credentials locally and run a three-call live pilot with `--execute --max-calls 3`.
+1. Rename the local `.emv` credential file to `.env`, or export both Cloudflare variables, then run a three-call live pilot with `--execute --max-calls 3`.
 2. Manually review pilot regions against the supplied PDFs and representative mail-only evidence before expanding the call cap.
 3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
 4. Compare model-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
 5. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-03 — Expand enrichment to an 80k tokenizer-verified input budget
+
+- Decision: Target 64,000 and cap 80,000 GLM input tokens using the pinned official tokenizer. Reserve 24,000 completion tokens and pack up to six template-compatible order bundles per sequential call with deterministic bundle isolation.
+- Rationale: The earlier 32-chunk/32k-character profile underused a 131,072-token reasoning model and required 1,107 calls. Larger compatible cohorts give the model full order, invoice, table, fact, money, and provenance context while retaining 29,296 tokens of headroom at the largest current request.
+- Alternatives rejected: Keeping the 1,107-call character profile; estimating tokens only from characters; filling the entire context window; mixing incompatible document-role cohorts; dropping metadata to reduce input size; permitting model output to merge orders.
+- Files/contracts affected: `src/lunarbit/agentic.py`, `scripts/run_agentic_chunking.py`, agent dependencies, and agentic contract tests.
+- Validation performed: The pinned tokenizer plans 307 calls covering all 24,675 chunks with zero quarantine. Exact rendered prompts peak at 77,776 input tokens; 37 tests plus Ruff and strict mypy pass. No live inference was made because the environment variables remain unavailable.
+- Revisit trigger: The live pilot shows truncation, cross-bundle confusion, weak graph regions, high validation failure, or actual Cloudflare usage materially differs from pinned-tokenizer estimates.
 
 ### 2026-08-03 — Use bounded order-relevant GLM enrichment batches
 
@@ -196,6 +214,7 @@
 
 ```bash
 UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev
+UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 .venv/bin/ruff check src scripts tests
 .venv/bin/ruff format --check src scripts tests
 .venv/bin/mypy src scripts
