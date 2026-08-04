@@ -6,6 +6,7 @@ import tempfile
 import time
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from functools import cache
@@ -35,7 +36,7 @@ from lunarbit.models import (
 )
 
 CLOUDFLARE_MODEL = "@cf/google/gemma-4-26b-a4b-it"
-AGENTIC_CONTRACT_VERSION = "1.1.0"
+AGENTIC_CONTRACT_VERSION = "1.3.0"
 CLOUDFLARE_CONTEXT_WINDOW_TOKENS = 256_000
 CLOUDFLARE_STREAM_TIMEOUT_SECONDS = 600.0
 CLOUDFLARE_REASONING_EFFORT = "low"
@@ -56,6 +57,10 @@ meaning. Never perform financial arithmetic. Never resolve two names into one id
 that an invoice settlement statement is bank-confirmed. Exact resolution, reconciliation, public
 privacy transformation, persistent IDs, and canonical graph writes remain deterministic downstream
 work.
+
+Be concise without dropping evidence. Do not repeat a fact, entity, money component, relationship,
+uncertainty, or narrative phrase. Use the shortest source-grounded wording that remains useful for
+retrieval and graph construction.
 
 Use source-exact values for candidate facts, entities, money references, and relationship endpoints.
 When evidence is incomplete or conflicting, retain both claims, add a governed conflict flag, and
@@ -112,8 +117,25 @@ For any concept that does not fit an allowed type exactly, preserve it in suppor
 evidence when useful and use an empty array instead of inventing an enum value. Apply this same rule
 to every enumerated field: use one listed value exactly or omit the optional candidate.
 
+Only emit entity_candidates that occur in the supplied deterministic entity_mentions. Copy the
+entity_type, raw_value_private, and source_chunk_id combination exactly as supplied. The tool schema
+restricts this field to those evidence-backed combinations.
+
+For each entity candidate, copy raw_value_private byte-for-byte from the cited source chunk. The
+source_chunk_id must identify the chunk whose raw_text_private contains that exact value. Do not
+normalize whitespace, punctuation, spelling, casing, or legal suffixes in raw_value_private.
+Omit the candidate when an exact cited substring is unavailable.
+
+Perform this coverage checklist before calling the tool:
+- The union of source_chunk_ids equals the complete input chunk set exactly.
+- Every input source_chunk_id occurs once and only once across all regions.
+- Copy every input source_chunk_id into covered_source_chunk_ids in the supplied order.
+- Every mail-only bundle must produce at least one region, even when its evidence is sparse.
+- No region may contain source chunks from different bundles.
+
 Submit this shape as the submit_agentic_regions tool arguments:
-{"batch_id":"UUID","regions":[{"bundle_id":"exact supplied bundle ID",
+{"batch_id":"UUID","covered_source_chunk_ids":["every input UUID in supplied order"],
+"regions":[{"bundle_id":"exact supplied bundle ID",
 "source_chunk_ids":["UUID"],"chunk_type":"...","semantic_role":"...",
 "financial_role":"...","region_title_private":"...","semantic_summary_private":"...",
 "embedding_text_private":"...","query_families":["..."],
@@ -327,14 +349,14 @@ class AgenticBatchPlan(ContractModel):
 
 class AgenticEntityCandidate(ContractModel):
     entity_type: EntityType
-    raw_value_private: str = Field(repr=False, min_length=1)
+    raw_value_private: str = Field(repr=False, min_length=1, max_length=512)
     source_chunk_id: UUID
 
 
 class AgenticFactCandidate(ContractModel):
     fact_type: CandidateFactType
-    raw_value_private: str = Field(repr=False, min_length=1)
-    normalized_value_private: str = Field(repr=False, min_length=1)
+    raw_value_private: str = Field(repr=False, min_length=1, max_length=512)
+    normalized_value_private: str = Field(repr=False, min_length=1, max_length=512)
     source_chunk_id: UUID
     source_span_start: int = Field(ge=0)
     source_span_end: int = Field(gt=0)
@@ -351,14 +373,14 @@ class AgenticMoneyInterpretation(ContractModel):
     source_chunk_id: UUID
     money_scope: AgenticMoneyScope
     money_meaning: AgenticMoneyMeaning
-    interpretation_private: str = Field(repr=False, min_length=1)
+    interpretation_private: str = Field(repr=False, min_length=1, max_length=800)
 
 
 class AgenticRelationCandidate(ContractModel):
     relation_type: AgenticRelationType
-    subject_private: str = Field(repr=False, min_length=1)
-    object_private: str = Field(repr=False, min_length=1)
-    evidence_chunk_ids: tuple[UUID, ...] = Field(min_length=1)
+    subject_private: str = Field(repr=False, min_length=1, max_length=512)
+    object_private: str = Field(repr=False, min_length=1, max_length=512)
+    evidence_chunk_ids: tuple[UUID, ...] = Field(min_length=1, max_length=64)
 
 
 class AgenticRegionProposal(ContractModel):
@@ -367,38 +389,106 @@ class AgenticRegionProposal(ContractModel):
     chunk_type: ChunkType
     semantic_role: SemanticRole
     financial_role: FinancialRole
-    region_title_private: str = Field(repr=False, min_length=1)
-    semantic_summary_private: str = Field(repr=False, min_length=1)
-    embedding_text_private: str = Field(repr=False, min_length=1)
-    query_families: tuple[QueryFamily, ...] = Field(min_length=1)
-    candidate_facts: tuple[AgenticFactCandidate, ...] = ()
-    entity_candidates: tuple[AgenticEntityCandidate, ...] = ()
-    money_interpretations: tuple[AgenticMoneyInterpretation, ...] = ()
-    relation_candidates: tuple[AgenticRelationCandidate, ...] = ()
-    conflict_flags: tuple[AgenticConflictFlag, ...] = ()
-    uncertainty_notes_private: tuple[str, ...] = Field(default=(), repr=False)
+    region_title_private: str = Field(repr=False, min_length=1, max_length=160)
+    semantic_summary_private: str = Field(repr=False, min_length=1, max_length=1_200)
+    embedding_text_private: str = Field(repr=False, min_length=1, max_length=1_600)
+    query_families: tuple[QueryFamily, ...] = Field(min_length=1, max_length=8)
+    candidate_facts: tuple[AgenticFactCandidate, ...] = Field(default=(), max_length=64)
+    entity_candidates: tuple[AgenticEntityCandidate, ...] = Field(default=(), max_length=32)
+    money_interpretations: tuple[AgenticMoneyInterpretation, ...] = Field(default=(), max_length=64)
+    relation_candidates: tuple[AgenticRelationCandidate, ...] = Field(default=(), max_length=32)
+    conflict_flags: tuple[AgenticConflictFlag, ...] = Field(default=(), max_length=6)
+    uncertainty_notes_private: tuple[str, ...] = Field(default=(), repr=False, max_length=8)
 
 
 class AgenticModelResponse(ContractModel):
     batch_id: UUID
+    covered_source_chunk_ids: tuple[UUID, ...] = Field(min_length=1)
     regions: tuple[AgenticRegionProposal, ...] = Field(min_length=1)
 
 
 @cache
-def _agentic_tool_definition() -> dict[str, object]:
+def _base_agentic_tool_parameters() -> dict[str, Any]:
+    return AgenticModelResponse.model_json_schema()
+
+
+def _agentic_tool_definition(
+    *,
+    batch_id: UUID,
+    bundle_ids: Sequence[str],
+    chunks: Sequence[EvidenceChunk],
+) -> dict[str, object]:
+    chunk_ids = tuple(chunk.chunk_id for chunk in chunks)
+    parameters = deepcopy(_base_agentic_tool_parameters())
+    properties = parameters["properties"]
+    properties["batch_id"]["const"] = str(batch_id)
+    properties["covered_source_chunk_ids"]["const"] = [str(chunk_id) for chunk_id in chunk_ids]
+    properties["regions"]["maxItems"] = len(chunk_ids)
+    region_properties = parameters["$defs"]["AgenticRegionProposal"]["properties"]
+    region_properties["bundle_id"]["enum"] = list(bundle_ids)
+    source_ids_schema = region_properties["source_chunk_ids"]
+    source_ids_schema["uniqueItems"] = True
+    source_ids_schema["maxItems"] = len(chunk_ids)
+    source_ids_schema["items"]["enum"] = [str(chunk_id) for chunk_id in chunk_ids]
+    allowed_entities = tuple(
+        dict.fromkeys(
+            (
+                mention.entity_type.value,
+                mention.raw_value_private,
+                str(chunk.chunk_id),
+            )
+            for chunk in chunks
+            for mention in chunk.entity_mentions
+        )
+    )
+    entity_candidates_schema = region_properties["entity_candidates"]
+    if allowed_entities:
+        entity_definition = parameters["$defs"]["AgenticEntityCandidate"]
+        entity_definition["anyOf"] = [
+            {
+                "properties": {
+                    "entity_type": {"const": entity_type},
+                    "raw_value_private": {"const": raw_value},
+                    "source_chunk_id": {"const": source_chunk_id},
+                },
+                "required": ["entity_type", "raw_value_private", "source_chunk_id"],
+            }
+            for entity_type, raw_value, source_chunk_id in allowed_entities
+        ]
+    else:
+        entity_candidates_schema["maxItems"] = 0
     return {
         "name": AGENTIC_TOOL_NAME,
         "description": (
             "Submit the complete bundle-isolated, graph-ready semantic region proposal."
         ),
-        "parameters": AgenticModelResponse.model_json_schema(),
+        "parameters": parameters,
     }
 
 
-@cache
-def _serialized_agentic_tool_definition() -> str:
+def _serialized_agentic_tool_definition(assignments: Sequence[_ChunkAssignment]) -> str:
     return json.dumps(
-        _agentic_tool_definition(),
+        _agentic_tool_definition(
+            batch_id=_batch_identity(assignments),
+            bundle_ids=tuple(dict.fromkeys(item.bundle_id for item in assignments)),
+            chunks=tuple(item.chunk for item in assignments),
+        ),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+@cache
+def _serialized_base_agentic_tool_definition() -> str:
+    return json.dumps(
+        {
+            "name": AGENTIC_TOOL_NAME,
+            "description": (
+                "Submit the complete bundle-isolated, graph-ready semantic region proposal."
+            ),
+            "parameters": _base_agentic_tool_parameters(),
+        },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -456,6 +546,35 @@ class StreamingTransport(Protocol):
 class CloudflareWorkersAIError(RuntimeError):
     """Safe operational error that never includes private request or response content."""
 
+    def __init__(self, message: str, *, code: str = "unknown") -> None:
+        super().__init__(message)
+        normalized_code = code.strip().lower()
+        self.code = (
+            normalized_code
+            if normalized_code
+            and all(character.isalnum() or character == "_" for character in normalized_code)
+            else "unknown"
+        )
+
+
+def _numeric_provider_error_code(event: Mapping[str, object]) -> str | None:
+    candidates: list[object] = [event]
+    for key in ("error", "errors"):
+        value = event.get(key)
+        if isinstance(value, Mapping):
+            candidates.append(value)
+        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            candidates.extend(value)
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            continue
+        raw_code = candidate.get("code")
+        if isinstance(raw_code, int) and not isinstance(raw_code, bool):
+            return str(raw_code)
+        if isinstance(raw_code, str) and raw_code.isascii() and raw_code.isdigit():
+            return raw_code[:12]
+    return None
+
 
 def _decode_cloudflare_sse(
     lines: Iterable[bytes],
@@ -479,12 +598,24 @@ def _decode_cloudflare_sse(
             event = json.loads(data)
         except json.JSONDecodeError as error:
             raise CloudflareWorkersAIError(
-                "Cloudflare Workers AI returned an invalid SSE event"
+                "Cloudflare Workers AI returned an invalid SSE event",
+                code="invalid_sse_event",
             ) from error
         if not isinstance(event, dict):
-            raise CloudflareWorkersAIError("Cloudflare Workers AI returned an invalid SSE event")
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI returned an invalid SSE event",
+                code="invalid_sse_event",
+            )
         if event.get("success") is False or event.get("error") or event.get("errors"):
-            raise CloudflareWorkersAIError("Cloudflare Workers AI rejected the stream")
+            provider_code = _numeric_provider_error_code(event)
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI rejected the stream",
+                code=(
+                    f"stream_rejected_cf_{provider_code}"
+                    if provider_code is not None
+                    else "stream_rejected"
+                ),
+            )
         event_usage = event.get("usage")
         if isinstance(event_usage, Mapping):
             usage = cast(Mapping[str, object], event_usage)
@@ -518,7 +649,8 @@ def _decode_cloudflare_sse(
                         continue
                     if not isinstance(arguments, str):
                         raise CloudflareWorkersAIError(
-                            "Cloudflare Workers AI returned invalid tool arguments"
+                            "Cloudflare Workers AI returned invalid tool arguments",
+                            code="invalid_tool_arguments",
                         )
                     tool_argument_parts[index].append(arguments)
             content = delta.get("content")
@@ -526,18 +658,23 @@ def _decode_cloudflare_sse(
                 continue
             if not isinstance(content, str):
                 raise CloudflareWorkersAIError(
-                    "Cloudflare Workers AI returned invalid streamed content"
+                    "Cloudflare Workers AI returned invalid streamed content",
+                    code="invalid_stream_content",
                 )
             content_parts.append(content)
 
     for raw_line in lines:
         if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
-            raise CloudflareWorkersAIError("Cloudflare Workers AI stream exceeded its deadline")
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI stream exceeded its deadline",
+                code="stream_deadline_exceeded",
+            )
         try:
             line = raw_line.decode("utf-8").rstrip("\r\n")
         except UnicodeDecodeError as error:
             raise CloudflareWorkersAIError(
-                "Cloudflare Workers AI returned invalid SSE encoding"
+                "Cloudflare Workers AI returned invalid SSE encoding",
+                code="invalid_sse_encoding",
             ) from error
         if not line:
             if data_lines:
@@ -555,10 +692,14 @@ def _decode_cloudflare_sse(
     answer_content = "".join(content_parts)
     if tool_argument_parts:
         if len(tool_argument_parts) != 1:
-            raise CloudflareWorkersAIError("Cloudflare Workers AI returned multiple tool calls")
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI returned multiple tool calls",
+                code="multiple_tool_calls",
+            )
         if answer_content.strip():
             raise CloudflareWorkersAIError(
-                "Cloudflare Workers AI mixed content with a required tool call"
+                "Cloudflare Workers AI mixed content with a required tool call",
+                code="mixed_content_tool_call",
             )
         tool_index = next(iter(tool_argument_parts))
         return (
@@ -594,7 +735,8 @@ class UrllibSseTransport:
                 content_type = response.headers.get("Content-Type", "")
                 if not content_type.lower().startswith("text/event-stream"):
                     raise CloudflareWorkersAIError(
-                        "Cloudflare Workers AI returned an unexpected content type"
+                        "Cloudflare Workers AI returned an unexpected content type",
+                        code="unexpected_content_type",
                     )
                 content, finish_reason, usage, completed, tool_name = _decode_cloudflare_sse(
                     response,
@@ -610,9 +752,15 @@ class UrllibSseTransport:
                 completed=False,
                 tool_name=None,
             )
-        except (TimeoutError, URLError) as error:
+        except TimeoutError as error:
             raise CloudflareWorkersAIError(
-                "Cloudflare Workers AI network request failed"
+                "Cloudflare Workers AI network request timed out",
+                code="network_timeout",
+            ) from error
+        except URLError as error:
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI network request failed",
+                code="network_request_failed",
             ) from error
         return StreamingTransportResponse(
             status_code=status_code,
@@ -697,6 +845,7 @@ def _count_input_tokens(
     assignments: Sequence[_ChunkAssignment],
     *,
     token_counter: TokenCounter,
+    exact_tool_schema: bool = False,
 ) -> int:
     record_tokens = sum(
         token_counter.count_text(
@@ -710,10 +859,19 @@ def _count_input_tokens(
         for assignment in assignments
     )
     bundle_count = len({assignment.bundle_id for assignment in assignments})
+    if exact_tool_schema:
+        tool_tokens = token_counter.count_text(_serialized_agentic_tool_definition(assignments))
+    else:
+        tool_tokens = (
+            token_counter.count_text(_serialized_base_agentic_tool_definition())
+            + len(assignments) * 96
+            + bundle_count * 64
+            + 192
+        )
     return (
         token_counter.count_text(_SYSTEM_PROMPT)
         + token_counter.count_text(_USER_INSTRUCTIONS)
-        + token_counter.count_text(_serialized_agentic_tool_definition())
+        + tool_tokens
         + record_tokens
         + len(assignments) * 12
         + bundle_count * 64
@@ -740,6 +898,7 @@ def _make_batch(
         estimated_input_tokens=_count_input_tokens(
             assignment_tuple,
             token_counter=token_counter,
+            exact_tool_schema=True,
         ),
         token_counter_id=token_counter.identifier,
     )
@@ -1021,6 +1180,8 @@ def validate_agentic_response(batch: AgenticBatch, raw_response: str) -> Agentic
         return _quarantined_result(batch, "batch_id_mismatch")
 
     expected_ids = tuple(chunk.chunk_id for chunk in batch.chunks)
+    if response.covered_source_chunk_ids != expected_ids:
+        return _quarantined_result(batch, "coverage_manifest_mismatch")
     proposed_ids = tuple(
         chunk_id for region in response.regions for chunk_id in region.source_chunk_ids
     )
@@ -1123,7 +1284,8 @@ class CloudflareWorkersAIClient:
         auth_token = os.environ.get("CLOUDFLARE_AUTH_TOKEN", "")
         if not account_id or not auth_token:
             raise CloudflareWorkersAIError(
-                "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN before live execution"
+                "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN before live execution",
+                code="missing_credentials",
             )
         return cls(
             account_id=account_id,
@@ -1160,7 +1322,13 @@ class CloudflareWorkersAIClient:
             "stream": True,
             "reasoning_effort": CLOUDFLARE_REASONING_EFFORT,
             "chat_template_kwargs": {"enable_thinking": False},
-            "tools": [_agentic_tool_definition()],
+            "tools": [
+                _agentic_tool_definition(
+                    batch_id=batch.batch_id,
+                    bundle_ids=batch.bundle_ids,
+                    chunks=batch.chunks,
+                )
+            ],
             "tool_choice": "required",
             "parallel_tool_calls": False,
         }
@@ -1182,14 +1350,18 @@ class CloudflareWorkersAIClient:
                 response.headers.get("cf-ray", "unavailable") if response else "unavailable"
             )
             raise CloudflareWorkersAIError(
-                f"Cloudflare Workers AI request failed (status={status}, request_id={request_id})"
+                f"Cloudflare Workers AI request failed (status={status}, request_id={request_id})",
+                code=f"http_{status}" if isinstance(status, int) else "http_unknown",
             )
         if (
             response.completed
             and response.finish_reason != "length"
             and not response.content.strip()
         ):
-            raise CloudflareWorkersAIError("Cloudflare Workers AI returned no model response")
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI returned no model response",
+                code="empty_model_response",
+            )
         return response
 
     def propose(self, batch: AgenticBatch) -> AgenticBatchResult:
@@ -1301,8 +1473,8 @@ def execute_agentic_plan(
     for batch in selected:
         try:
             result = client.propose(batch)
-        except CloudflareWorkersAIError:
-            result = _quarantined_result(batch, "api_request_failed")
+        except CloudflareWorkersAIError as error:
+            result = _quarantined_result(batch, f"api_request_failed:{error.code}")
         write_agentic_result(result, output_root)
         results.append(result)
     accepted = sum(result.validation_status is ValidationStatus.ACCEPTED for result in results)

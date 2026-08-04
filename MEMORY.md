@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-04
-- Active phase: Phase 2B Gemma SSE transport and typed tool-output contract implemented; three-call quality pilot is next.
+- Active phase: Phase 2B bounded Gemma tool-output contract implemented; a bounded financial quality pilot is next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified remote commit: `52d98c5` (`feat(agentic): add bounded Gemma SSE enrichment transport`).
-- Last passing checks: Ruff lint/format, strict mypy, 44 pytest tests, the complete deterministic chunking benchmark, the tool-schema-aware Gemma-tokenizer full-corpus dry run, and an accepted live two-chunk SSE tool-call pilot.
+- Last verified remote commit: `e75e83d` (`feat(agentic): require typed Gemma tool-call responses`).
+- Last passing checks: Ruff lint, strict mypy, 46 pytest tests, the complete deterministic chunking benchmark, the dynamic-tool-schema-aware Gemma-tokenizer full-corpus dry run, an accepted live two-chunk SSE tool-call pilot, and an accepted representative mail-only pilot.
 
 ## Current state
 
@@ -45,11 +45,14 @@
   - Added Cloudflare's documented SSE transport, low-reasoning/no-thinking controls, complete-stream and truncation guards, and a 600-second socket/wall-clock deadline.
   - Added privacy-safe JSON/schema diagnostics that retain only validation error types and field locations.
   - Replaced unstable free-form JSON with one required `submit_agentic_regions` function call generated from the Pydantic response schema.
+  - Added an exact ordered coverage manifest, evidence-constrained batch/bundle/chunk identifiers, and deterministic entity-candidate tuples.
+  - Added explicit region, narrative, and candidate-array bounds after money-dense pilots demonstrated that unconstrained rich output could exhaust 24,000 completion tokens.
+  - Added privacy-safe transport categories and numeric-only Cloudflare error codes without retaining provider messages or private partial responses.
   - Verified the SSE event shape with a non-private request and ran isolated private pilots; all private artifacts remain ignored and mode `0600`.
   - Recorded TDD progression as separate red-test and green-implementation commits.
-- In progress: None. A two-chunk Gemma tool-call pilot is accepted; a three-call quality pilot is ready.
+- In progress: The latest bounded-output contract passes local validation but still requires a live money-dense pilot before any corpus-scale execution.
 - Pending external input: None. Cloudflare credentials load from the ignored `.env`; do not expose or commit them.
-- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.1.0`, package `0.1.0`; graph/index versions remain design-only.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.3.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -77,28 +80,38 @@
   - Deterministic chunk-archive SHA-256: `71f9c919d6d71e677dc49dd30920a4dd0a356131ac97fa5560af3bbb98b60d4e`
   - Agentic order-evidence bundles: 456
   - Agentic input chunks covered: 24,675 of 24,675
-  - Planned rich model calls: 330
-  - Chunks per call: minimum 2, average 74.77, maximum 112
-  - Exact rendered input tokens including tool schema: minimum 7,019, average 60,180.85, maximum 79,422
+  - Planned rich model calls: 419
+  - Chunks per call: minimum 2, average 58.89, maximum 95
+  - Exact rendered input tokens including dynamic tool schema: minimum 7,878, average 52,862.27, maximum 77,881
   - Reserved completion tokens per call: 24,000
-  - Remaining context headroom at largest call: 152,578 tokens
+  - Remaining context headroom at largest call: 154,119 tokens
   - Gemma tokenizer revision: `google/gemma-4-26B-A4B-it@4d7ae4984b7db7de8f8457170b3f1a419ee76d52`
   - Agentic batching concurrency: 1
   - Agentic input quarantines: 0
-  - Deterministic agentic plan SHA-256: `c1fdd021b8df4f1c2bd801845681f7b50b94a6b5b37cd19bc82b89fda060cf75`
+  - Deterministic agentic plan SHA-256: `1aa7235d144b7929b543d2e638b37024e415e66918d146676ab8ba3b335805f1`
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Run a three-call live pilot and manually review regions against the supplied PDFs and representative mail-only evidence.
-2. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
-3. Compare tool-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
-4. Confirm production-sized batches do not regress completeness or relationship precision before increasing the call cap.
-5. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
+1. Run one bounded money-dense live pilot and require complete typed acceptance before increasing the call cap.
+2. Manually review accepted financial and mail-only regions against the supplied source evidence.
+3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
+4. Compare tool-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
+5. Confirm production-sized batches do not regress completeness or relationship precision before increasing the call cap.
+6. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-04 — Bound rich output and constrain model evidence choices
+
+- Decision: Require an exact ordered coverage manifest; constrain batch, bundle, chunk, and entity-candidate values to deterministic batch evidence; cap regions at the input chunk count; and bound narrative and candidate-array sizes.
+- Rationale: Repeated eight-chunk money pilots showed that a 15k-token input could still exhaust a 24k completion budget. A compact coverage manifest removed the pathological repeated `allOf` schema, while a later completed response proved that prompt-only exact-entity guidance was insufficient. Machine constraints preserve graph richness while preventing repetition and normalized citations from crossing the validator boundary.
+- Alternatives rejected: Raising completion limits indefinitely; accepting partial tool arguments; weakening exact-source validation; making one call per chunk; launching the 419-call plan before a bounded financial pilot passes.
+- Files/contracts affected: `src/lunarbit/agentic.py`, `tests/test_agentic.py`, `PLAN.md`, and `MEMORY.md`.
+- Validation performed: Forty-six tests, Ruff, and strict mypy pass. A non-private compact-schema probe completed with HTTP 200 and a typed tool call. The full dry run covers 24,675 chunks in 419 calls with zero input quarantine and a 77,881-token maximum. Private truncations and unsupported candidates were quarantined atomically; the bounded contract awaits its next live financial pilot.
+- Revisit trigger: The bounded financial pilot still truncates, violates a deterministic candidate constraint, or produces graph regions that do not outperform the deterministic baseline.
 
 ### 2026-08-04 — Use Gemma 4 over Cloudflare SSE with bounded execution
 
