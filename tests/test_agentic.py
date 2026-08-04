@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from hashlib import sha256
+from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -17,12 +18,14 @@ from lunarbit.agentic import (
     CLOUDFLARE_REASONING_EFFORT,
     CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
     AgenticBatch,
+    AgenticBatchPlan,
     AgenticBatchPolicy,
     AgenticEvidenceBundle,
     CloudflareWorkersAIClient,
     CloudflareWorkersAIError,
     StreamingTransportResponse,
     _decode_cloudflare_sse,
+    execute_agentic_plan,
     plan_agentic_batches,
     render_agentic_user_prompt,
     validate_agentic_response,
@@ -30,6 +33,8 @@ from lunarbit.agentic import (
 from lunarbit.models import (
     BoundingBox,
     ChunkType,
+    EntityMention,
+    EntityType,
     EvidenceChunk,
     EvidenceSourceKind,
     ExtractionMethod,
@@ -65,6 +70,7 @@ def _chunk(
     financial_role: FinancialRole = FinancialRole.NONE,
     table_id: str | None = None,
     parent_region_id: str | None = None,
+    entity_mentions: tuple[EntityMention, ...] = (),
 ) -> EvidenceChunk:
     source_id = _source_id(source_number)
     return EvidenceChunk(
@@ -85,6 +91,7 @@ def _chunk(
         table_id=table_id,
         parent_region_id=parent_region_id,
         source_region_ids=(f"region_{number}",),
+        entity_mentions=entity_mentions,
         query_families=(QueryFamily.EVIDENCE_REPLAY,),
         source_hash=sha256(text.encode()).hexdigest(),
         extraction_method=ExtractionMethod.NATIVE,
@@ -280,11 +287,28 @@ class _FakeTransport:
 
 
 def _one_batch() -> tuple[AgenticBatch, tuple[UUID, UUID]]:
+    merchant_text = "Restaurant: Test Kitchen"
+    merchant_start = merchant_text.index("Test Kitchen")
     bundle = _bundle(
         "order-client",
         (
             _chunk(1, source_number=1, text="Order ID: 1234567890"),
-            _chunk(2, source_number=1, text="Restaurant: Test Kitchen"),
+            _chunk(
+                2,
+                source_number=1,
+                text=merchant_text,
+                entity_mentions=(
+                    EntityMention(
+                        mention_id=uuid5(NAMESPACE_URL, "test-mention:merchant"),
+                        entity_type=EntityType.MERCHANT,
+                        raw_value_private="Test Kitchen",
+                        normalized_value_private="test kitchen",
+                        source_span_start=merchant_start,
+                        source_span_end=merchant_start + len("Test Kitchen"),
+                        confidence=Decimal("1"),
+                    ),
+                ),
+            ),
         ),
         cohort="zomato:food:pdf-backed",
     )
@@ -311,6 +335,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     batch, chunk_ids = _one_batch()
     model_output = {
         "batch_id": str(batch.batch_id),
+        "covered_source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
@@ -389,7 +414,57 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert tool["name"] == AGENTIC_TOOL_NAME
     parameters = tool["parameters"]
     assert isinstance(parameters, dict)
-    assert parameters["required"] == ["batch_id", "regions"]
+    assert parameters["required"] == [
+        "batch_id",
+        "covered_source_chunk_ids",
+        "regions",
+    ]
+    properties = parameters["properties"]
+    assert isinstance(properties, dict)
+    batch_id_schema = properties["batch_id"]
+    assert isinstance(batch_id_schema, dict)
+    assert batch_id_schema["const"] == str(batch.batch_id)
+    coverage_schema = properties["covered_source_chunk_ids"]
+    assert isinstance(coverage_schema, dict)
+    assert coverage_schema["const"] == [str(chunk.chunk_id) for chunk in batch.chunks]
+    regions_schema = properties["regions"]
+    assert isinstance(regions_schema, dict)
+    assert "allOf" not in regions_schema
+    assert regions_schema["maxItems"] == len(batch.chunks)
+    definitions = parameters["$defs"]
+    assert isinstance(definitions, dict)
+    region_definition = definitions["AgenticRegionProposal"]
+    assert isinstance(region_definition, dict)
+    region_properties = region_definition["properties"]
+    assert isinstance(region_properties, dict)
+    assert region_properties["region_title_private"]["maxLength"] == 160
+    assert region_properties["semantic_summary_private"]["maxLength"] == 1_200
+    assert region_properties["embedding_text_private"]["maxLength"] == 1_600
+    assert region_properties["relation_candidates"]["maxItems"] == 32
+    assert region_properties["uncertainty_notes_private"]["maxItems"] == 8
+    bundle_schema = region_properties["bundle_id"]
+    source_ids_schema = region_properties["source_chunk_ids"]
+    assert isinstance(bundle_schema, dict)
+    assert isinstance(source_ids_schema, dict)
+    assert bundle_schema["enum"] == ["order-client"]
+    assert source_ids_schema["uniqueItems"] is True
+    source_id_items = source_ids_schema["items"]
+    assert isinstance(source_id_items, dict)
+    assert set(source_id_items["enum"]) == {str(chunk.chunk_id) for chunk in batch.chunks}
+    entity_definition = definitions["AgenticEntityCandidate"]
+    assert isinstance(entity_definition, dict)
+    entity_constraints = entity_definition["anyOf"]
+    assert isinstance(entity_constraints, list)
+    assert entity_constraints == [
+        {
+            "properties": {
+                "entity_type": {"const": "merchant"},
+                "raw_value_private": {"const": "Test Kitchen"},
+                "source_chunk_id": {"const": str(batch.chunks[1].chunk_id)},
+            },
+            "required": ["entity_type", "raw_value_private", "source_chunk_id"],
+        }
+    ]
     assert payload["temperature"] == 0
     assert payload["seed"] == 42
     assert payload["max_completion_tokens"] == 24_000
@@ -412,12 +487,16 @@ def test_agentic_prompt_enforces_closed_entity_vocabulary() -> None:
     assert "restaurant, store, or vendor as merchant" in prompt
     assert "Never emit customer, person, item, address, order, or payment method" in prompt
     assert "use an empty array instead of inventing an enum value" in prompt
+    assert "raw_value_private byte-for-byte from the cited source chunk" in prompt
+    assert "union of source_chunk_ids equals the complete input chunk set exactly" in prompt
+    assert "Every mail-only bundle must produce at least one region" in prompt
 
 
 def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None:
     batch, chunk_ids = _one_batch()
     incomplete_output = {
         "batch_id": str(batch.batch_id),
+        "covered_source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
         "regions": [
             {
                 "source_chunk_ids": [str(chunk_ids[0])],
@@ -522,6 +601,7 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
     batch = plan.batches[0]
     response = {
         "batch_id": str(batch.batch_id),
+        "covered_source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
         "regions": [
             {
                 "source_chunk_ids": [str(chunk.chunk_id) for chunk in batch.chunks],
@@ -609,6 +689,27 @@ def test_cloudflare_sse_decoder_enforces_wall_clock_deadline(
         )
 
 
+def test_cloudflare_sse_decoder_exposes_only_numeric_provider_error_code() -> None:
+    private_message = "PRIVATE_PROVIDER_MESSAGE_MUST_NOT_ESCAPE"
+    events = (
+        b"data: "
+        + json.dumps(
+            {
+                "success": False,
+                "errors": [{"code": 7000, "message": private_message}],
+            }
+        ).encode()
+        + b"\n",
+        b"\n",
+    )
+
+    with pytest.raises(CloudflareWorkersAIError) as raised:
+        _decode_cloudflare_sse(events)
+
+    assert raised.value.code == "stream_rejected_cf_7000"
+    assert private_message not in str(raised.value)
+
+
 def test_cloudflare_client_quarantines_length_limited_stream() -> None:
     batch, _ = _one_batch()
     transport = _FakeTransport(
@@ -634,10 +735,47 @@ def test_cloudflare_client_quarantines_length_limited_stream() -> None:
     assert result.quarantine_reasons == ("model_output_truncated",)
 
 
+def test_execute_plan_persists_only_safe_transport_error_code(tmp_path: Path) -> None:
+    batch, _ = _one_batch()
+    plan = AgenticBatchPlan(
+        policy=AgenticBatchPolicy(
+            target_input_tokens=4_000,
+            max_input_tokens=6_000,
+            max_completion_tokens=1_000,
+            context_window_tokens=8_000,
+            max_chunks=8,
+            max_bundles=1,
+            minimum_chunks=2,
+        ),
+        bundles=1,
+        input_chunks=len(batch.chunks),
+        batches=(batch,),
+    )
+
+    class _FailingClient:
+        def propose(self, _: AgenticBatch) -> Any:
+            raise CloudflareWorkersAIError(
+                "safe message without response content",
+                code="mixed_content_tool_call",
+            )
+
+    summary = execute_agentic_plan(
+        plan,
+        client=_FailingClient(),  # type: ignore[arg-type]
+        output_root=tmp_path,
+        max_calls=1,
+    )
+    persisted = json.loads((tmp_path / f"{batch.batch_id}.json").read_text())
+
+    assert summary.quarantined_batches == 1
+    assert persisted["quarantine_reasons"] == ["api_request_failed:mixed_content_tool_call"]
+    assert "safe message" not in json.dumps(persisted)
+
+
 def test_default_policy_uses_80k_input_tokens_and_reserves_context() -> None:
     policy = AgenticBatchPolicy()
 
-    assert AGENTIC_CONTRACT_VERSION == "1.1.0"
+    assert AGENTIC_CONTRACT_VERSION == "1.3.0"
     assert CLOUDFLARE_MODEL == "@cf/google/gemma-4-26b-a4b-it"
     assert CLOUDFLARE_CONTEXT_WINDOW_TOKENS == 256_000
     assert policy.target_input_tokens == 64_000
