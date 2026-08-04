@@ -6,14 +6,21 @@ from hashlib import sha256
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+import pytest
+
+import lunarbit.agentic as agentic_module
 from lunarbit.agentic import (
+    CLOUDFLARE_CONTEXT_WINDOW_TOKENS,
     CLOUDFLARE_MODEL,
-    GLM_CONTEXT_WINDOW_TOKENS,
+    CLOUDFLARE_REASONING_EFFORT,
+    CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
     AgenticBatch,
     AgenticBatchPolicy,
     AgenticEvidenceBundle,
     CloudflareWorkersAIClient,
-    TransportResponse,
+    CloudflareWorkersAIError,
+    StreamingTransportResponse,
+    _decode_cloudflare_sse,
     plan_agentic_batches,
     render_agentic_user_prompt,
     validate_agentic_response,
@@ -247,18 +254,18 @@ def test_final_mail_singleton_is_rebalanced_without_a_one_chunk_call() -> None:
 
 
 class _FakeTransport:
-    def __init__(self, response: TransportResponse) -> None:
+    def __init__(self, response: StreamingTransportResponse) -> None:
         self.response = response
         self.calls: list[dict[str, Any]] = []
 
-    def post_json(
+    def post_sse(
         self,
         *,
         url: str,
         headers: dict[str, str],
         payload: dict[str, object],
         timeout_seconds: float,
-    ) -> TransportResponse:
+    ) -> StreamingTransportResponse:
         self.calls.append(
             {
                 "url": url,
@@ -336,15 +343,13 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
         ],
     }
     transport = _FakeTransport(
-        TransportResponse(
+        StreamingTransportResponse(
             status_code=200,
             headers={"cf-ray": "safe-request-id"},
-            body={
-                "success": True,
-                "result": {"response": f"```json\n{json.dumps(model_output)}\n```"},
-                "errors": [],
-                "messages": [],
-            },
+            content=f"```json\n{json.dumps(model_output)}\n```",
+            finish_reason="stop",
+            usage={"prompt_tokens": 100, "completion_tokens": 200},
+            completed=True,
         )
     )
     client = CloudflareWorkersAIClient(
@@ -364,13 +369,17 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert call["headers"] == {
         "Authorization": "Bearer private-token",
         "Content-Type": "application/json",
+        "Accept": "text/event-stream",
     }
     payload = call["payload"]
     assert payload["store"] is False
-    assert payload["stream"] is False
+    assert payload["stream"] is True
+    assert payload["reasoning_effort"] == CLOUDFLARE_REASONING_EFFORT
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
     assert payload["temperature"] == 0
     assert payload["seed"] == 42
     assert payload["max_completion_tokens"] == 24_000
+    assert call["timeout_seconds"] == CLOUDFLARE_STREAM_TIMEOUT_SECONDS
     messages = payload["messages"]
     assert isinstance(messages, list)
     second_message = messages[1]
@@ -405,10 +414,13 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
         ],
     }
     transport = _FakeTransport(
-        TransportResponse(
+        StreamingTransportResponse(
             status_code=200,
             headers={},
-            body={"success": True, "result": {"response": json.dumps(incomplete_output)}},
+            content=json.dumps(incomplete_output),
+            finish_reason="stop",
+            usage={},
+            completed=True,
         )
     )
     client = CloudflareWorkersAIClient(
@@ -481,10 +493,72 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
     assert result.quarantine_reasons == ("cross_bundle_region",)
 
 
+def test_cloudflare_sse_decoder_assembles_only_answer_content() -> None:
+    events = (
+        b'data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n',
+        b"\n",
+        b'data: {"choices":[{"delta":{"reasoning_content":"private reasoning"},'
+        b'"finish_reason":null}]}\n',
+        b"\n",
+        b'data: {"choices":[{"delta":{"content":"{\\"batch_id\\":"},"finish_reason":null}]}\n',
+        b"\n",
+        b'data: {"choices":[{"delta":{"content":"\\"value\\"}"},'
+        b'"finish_reason":"stop"}],"usage":{"completion_tokens":12}}\n',
+        b"\n",
+        b"data: [DONE]\n",
+        b"\n",
+    )
+
+    content, finish_reason, usage, completed = _decode_cloudflare_sse(events)
+
+    assert content == '{"batch_id":"value"}'
+    assert "private reasoning" not in content
+    assert finish_reason == "stop"
+    assert usage == {"completion_tokens": 12}
+    assert completed is True
+
+
+def test_cloudflare_sse_decoder_enforces_wall_clock_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(agentic_module.time, "monotonic", lambda: 11.0)
+
+    with pytest.raises(CloudflareWorkersAIError, match="exceeded its deadline"):
+        _decode_cloudflare_sse(
+            (b"data: [DONE]\n",),
+            deadline_monotonic=10.0,
+        )
+
+
+def test_cloudflare_client_quarantines_length_limited_stream() -> None:
+    batch, _ = _one_batch()
+    transport = _FakeTransport(
+        StreamingTransportResponse(
+            status_code=200,
+            headers={},
+            content='{"batch_id":',
+            finish_reason="length",
+            usage={"completion_tokens": 24_000},
+            completed=True,
+        )
+    )
+    client = CloudflareWorkersAIClient(
+        account_id="0123456789abcdef0123456789abcdef",
+        auth_token="private-token",
+        transport=transport,
+    )
+
+    result = client.propose(batch)
+
+    assert result.validation_status is ValidationStatus.QUARANTINED
+    assert result.quarantine_reasons == ("model_output_truncated",)
+
+
 def test_default_policy_uses_80k_input_tokens_and_reserves_context() -> None:
     policy = AgenticBatchPolicy()
 
-    assert GLM_CONTEXT_WINDOW_TOKENS == 131_072
+    assert CLOUDFLARE_MODEL == "@cf/google/gemma-4-26b-a4b-it"
+    assert CLOUDFLARE_CONTEXT_WINDOW_TOKENS == 256_000
     assert policy.target_input_tokens == 64_000
     assert policy.max_input_tokens == 80_000
     assert policy.max_completion_tokens == 24_000
