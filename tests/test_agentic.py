@@ -35,8 +35,11 @@ from lunarbit.models import (
 class _CharacterTokenCounter:
     identifier = "test-character-counter"
 
+    def count_text(self, text: str) -> int:
+        return (len(text) + 3) // 4
+
     def count_messages(self, *, system_prompt: str, user_prompt: str) -> int:
-        return len(system_prompt) + len(user_prompt)
+        return self.count_text(system_prompt) + self.count_text(user_prompt)
 
 
 def _source_id(number: int) -> str:
@@ -143,6 +146,14 @@ def test_batch_plan_is_medium_sized_relevant_and_deterministic() -> None:
     chunk_counts = tuple(len(batch.chunks) for batch in first.batches)
     assert all(policy.minimum_chunks <= count <= policy.max_chunks for count in chunk_counts)
     assert all(batch.estimated_input_tokens <= policy.max_input_tokens for batch in first.batches)
+    assert all(
+        batch.estimated_input_tokens
+        >= token_counter.count_messages(
+            system_prompt="",
+            user_prompt=render_agentic_user_prompt(batch),
+        )
+        for batch in first.batches
+    )
     assert all(
         batch.bundle_ids == ("order-attached",)
         for batch in first.batches

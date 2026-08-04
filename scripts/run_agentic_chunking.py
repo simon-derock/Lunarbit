@@ -5,6 +5,8 @@ import sys
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
@@ -13,10 +15,10 @@ from lunarbit.agentic import (  # noqa: E402
     AgenticBatchPlan,
     AgenticBatchPolicy,
     CloudflareWorkersAIClient,
+    GLMTokenizerCounter,
     execute_agentic_plan,
     load_agentic_evidence_bundles,
     plan_agentic_batches,
-    render_agentic_user_prompt,
 )
 
 
@@ -43,9 +45,10 @@ def parse_args() -> Namespace:
         default=0,
         help="Maximum sequential API calls; required with --execute",
     )
-    parser.add_argument("--target-characters", type=int, default=18_000)
-    parser.add_argument("--max-characters", type=int, default=32_000)
-    parser.add_argument("--max-chunks", type=int, default=32)
+    parser.add_argument("--target-input-tokens", type=int, default=64_000)
+    parser.add_argument("--max-input-tokens", type=int, default=80_000)
+    parser.add_argument("--max-completion-tokens", type=int, default=24_000)
+    parser.add_argument("--max-chunks", type=int, default=512)
     parser.add_argument("--max-bundles", type=int, default=6)
     args = parser.parse_args()
     if args.execute and args.max_calls < 1:
@@ -57,7 +60,7 @@ def parse_args() -> Namespace:
 
 def _plan_summary(plan: AgenticBatchPlan) -> dict[str, object]:
     chunk_counts = tuple(len(batch.chunks) for batch in plan.batches)
-    prompt_sizes = tuple(len(render_agentic_user_prompt(batch)) for batch in plan.batches)
+    input_token_counts = tuple(batch.estimated_input_tokens for batch in plan.batches)
     planned_chunks = sum(chunk_counts)
     return {
         "model": CLOUDFLARE_MODEL,
@@ -72,31 +75,45 @@ def _plan_summary(plan: AgenticBatchPlan) -> dict[str, object]:
             "average": round(planned_chunks / len(chunk_counts), 2) if chunk_counts else 0,
             "maximum": max(chunk_counts, default=0),
         },
-        "prompt_characters": {
-            "minimum": min(prompt_sizes, default=0),
-            "average": round(sum(prompt_sizes) / len(prompt_sizes), 2) if prompt_sizes else 0,
-            "maximum": max(prompt_sizes, default=0),
+        "estimated_input_tokens": {
+            "counter": plan.batches[0].token_counter_id if plan.batches else None,
+            "minimum": min(input_token_counts, default=0),
+            "average": (
+                round(sum(input_token_counts) / len(input_token_counts), 2)
+                if input_token_counts
+                else 0
+            ),
+            "maximum": max(input_token_counts, default=0),
         },
         "concurrency": 1,
     }
 
 
 def main() -> int:
+    load_dotenv(REPOSITORY_ROOT / ".env", override=False)
     args = parse_args()
     bundles = load_agentic_evidence_bundles(args.input)
     policy = AgenticBatchPolicy(
-        target_prompt_characters=args.target_characters,
-        max_prompt_characters=args.max_characters,
+        target_input_tokens=args.target_input_tokens,
+        max_input_tokens=args.max_input_tokens,
+        max_completion_tokens=args.max_completion_tokens,
         max_chunks=args.max_chunks,
         max_bundles=args.max_bundles,
         minimum_chunks=2,
     )
-    plan = plan_agentic_batches(bundles, policy=policy)
+    token_counter = GLMTokenizerCounter.from_cache(args.input / "_agentic" / "_tokenizer")
+    plan = plan_agentic_batches(
+        bundles,
+        policy=policy,
+        token_counter=token_counter,
+    )
     if not args.execute:
         print(json.dumps(_plan_summary(plan), indent=2))
         return 0
 
-    client = CloudflareWorkersAIClient.from_environment()
+    client = CloudflareWorkersAIClient.from_environment(
+        max_completion_tokens=policy.max_completion_tokens
+    )
     summary = execute_agentic_plan(
         plan,
         client=client,

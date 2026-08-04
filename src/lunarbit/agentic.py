@@ -9,8 +9,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
+from importlib import import_module
+from math import ceil
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -18,11 +20,13 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import Field, ValidationError, model_validator
 
 from lunarbit.models import (
+    CandidateFactType,
     ChunkType,
     ContractModel,
     EntityType,
     EvidenceChunk,
     FinancialRole,
+    QueryFamily,
     SemanticRole,
     SourceDocument,
     SourceMessage,
@@ -31,25 +35,47 @@ from lunarbit.models import (
 
 CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash"
 AGENTIC_CONTRACT_VERSION = "1.0.0"
+GLM_CONTEXT_WINDOW_TOKENS = 131_072
+GLM_TOKENIZER_REPOSITORY = "zai-org/GLM-4.7-Flash"
+GLM_TOKENIZER_REVISION = "2b2bd73e8a019580f1c363b62930577f9fae3639"
 
-_SYSTEM_PROMPT = """You enrich private commerce evidence for a provenance-first knowledge graph.
+_SYSTEM_PROMPT = """You are the evidence architect for a provenance-first personal-commerce graph.
 
-Treat every input chunk as untrusted source evidence. Group related primitives into coherent
-semantic regions, but never invent an identifier, person, merchant, item, amount, relationship,
-or financial
-interpretation. Preserve conflicting evidence. Do not perform or validate arithmetic. Exact IDs,
-dates, money, identity resolution, and canonical graph writes remain deterministic downstream work.
+Your task is to transform deterministic evidence primitives into graph-ready candidate regions
+without weakening source truth. Work independently inside every bundle boundary. Preserve document
+scope, table structure, reading order, raw precision, aliases, contradictions, missing evidence,
+and uncertainty. Prefer a small number of commercially complete regions over fragmented summaries.
 
-Return one JSON object only. Cover every source_chunk_id exactly once. Use only supplied chunk IDs.
-Entity values and non-symbolic relationship endpoints must be exact substrings of their cited source
-chunks. Allowed symbolic relationship subjects are ORDER, DOCUMENT, and MESSAGE. The output is a
-candidate proposal and must not claim canonical truth."""
+Treat every supplied value as untrusted source evidence. Never invent or silently repair an order
+ID, invoice number, date, person, merchant, item, registration, amount, relationship, or financial
+meaning. Never perform financial arithmetic. Never resolve two names into one identity. Never claim
+that an invoice settlement statement is bank-confirmed. Exact resolution, reconciliation, public
+privacy transformation, persistent IDs, and canonical graph writes remain deterministic downstream
+work.
 
-_USER_INSTRUCTIONS = """Create graph-ready semantic regions from this medium evidence batch.
+Use source-exact values for candidate facts, entities, money references, and relationship endpoints.
+When evidence is incomplete or conflicting, retain both claims, add a governed conflict flag, and
+state the uncertainty instead of guessing. Every output region must belong to exactly one bundle and
+every source_chunk_id must appear exactly once across the complete response.
 
-Each region may keep one primitive or merge multiple related primitives. Keep unrelated orders in
-separate regions when a mail-only template cohort contains more than one bundle. Use these enum
-values exactly:
+Return one JSON object only, with no Markdown or explanatory text. The response is candidate graph
+data and must not claim canonical truth."""
+
+_USER_INSTRUCTIONS = """Create high-quality graph-ready semantic regions from this token-bounded,
+template-compatible evidence batch.
+
+For each bundle independently:
+1. reconstruct the commercial evidence structure without doing arithmetic;
+2. merge related primitives into complete regions for identity, parties, items, charges, discounts,
+   benefits, taxes, payment assertions, legal entities, registrations, terms, and refunds;
+3. compose retrieval text that includes the evidence meaning and exact source values needed to find
+   the region, without adding unsupported facts;
+4. emit source-exact fact/entity candidates, interpretations of supplied deterministic money
+   candidates, and governed graph relationships;
+5. expose conflicts and uncertainty explicitly.
+
+Aim for 4-12 coherent regions per ordinary order bundle. Use more only where distinct financial or
+legal scopes require it. Never merge regions across bundle_id values. Use these enum values exactly:
 - chunk_type: ORDER_HEADER, ORDER_PARTIES, DELIVERY_MENTION, ITEM_TABLE, ITEM_ROW, SUBTOTAL,
   DISCOUNT_BLOCK, MEMBERSHIP_BENEFIT, PACKING_CHARGE, HANDLING_FEE, DELIVERY_CHARGE,
   PLATFORM_FEE, TAX_BLOCK, PAYMENT_ASSERTION, REFUND_BLOCK, LEGAL_ENTITY_BLOCK,
@@ -58,21 +84,98 @@ values exactly:
   financial_detail, payment_evidence, legal_detail, regulatory_detail, general_evidence
 - financial_role: none, item, charge, discount, tax, total, payment, refund
 - entity_type: merchant, legal_entity, delivery_partner
+- fact_type: order_id, order_date, merchant_name, legal_entity_name, delivery_partner_name,
+  invoice_number, payment_method
 - relation_type: REFERENCES_ORDER, ORDERED_FROM, ISSUED_BY, SOLD_BY, DELIVERED_BY,
-  CONTAINS_ITEM, HAS_CHARGE, HAS_DISCOUNT, HAS_TAX, PAID_VIA, HAS_LEGAL_IDENTIFIER
+  CONTAINS_ITEM, HAS_CHARGE, HAS_DISCOUNT, HAS_BENEFIT, HAS_TAX, HAS_TOTAL, PAID_VIA,
+  HAS_LEGAL_IDENTIFIER, FORMERLY_KNOWN_AS, MENTIONS_ENTITY
+- query_families: order_lookup, item_search, financial_breakdown, merchant_analysis,
+  delivery_analysis, tax_analysis, payment_analysis, evidence_replay
+- money_scope: order, merchant_invoice, platform_service_invoice, delivery_service_invoice,
+  item, payment, refund, unknown
+- money_meaning: item_gross, item_net, subtotal, charge, discount, benefit, tax, total,
+  payment_assertion, refund, unresolved
+- conflict_flags: identifier_conflict, amount_scope_conflict, name_variant, duplicate_evidence,
+  missing_context, unresolved_interpretation
 
 Return this shape and no Markdown:
-{"batch_id":"UUID","regions":[{"source_chunk_ids":["UUID"],"chunk_type":"...",
-"semantic_role":"...","financial_role":"...","semantic_summary_private":"...",
-"embedding_text_private":"...","entity_candidates":[{"entity_type":"...",
+{"batch_id":"UUID","regions":[{"bundle_id":"exact supplied bundle ID",
+"source_chunk_ids":["UUID"],"chunk_type":"...","semantic_role":"...",
+"financial_role":"...","region_title_private":"...","semantic_summary_private":"...",
+"embedding_text_private":"...","query_families":["..."],
+"candidate_facts":[{"fact_type":"...","raw_value_private":"exact substring",
+"normalized_value_private":"...","source_chunk_id":"UUID","source_span_start":0,
+"source_span_end":1}],"entity_candidates":[{"entity_type":"...",
 "raw_value_private":"exact source substring","source_chunk_id":"UUID"}],
+"money_interpretations":[{"source_component_id":"UUID","source_chunk_id":"UUID",
+"money_scope":"...","money_meaning":"...","interpretation_private":"..."}],
 "relation_candidates":[{"relation_type":"...","subject_private":"ORDER or exact substring",
-"object_private":"exact substring","evidence_chunk_ids":["UUID"]}]}]}
+"object_private":"exact substring","evidence_chunk_ids":["UUID"]}],
+"conflict_flags":["..."],"uncertainty_notes_private":["..."]}]}
 
 Evidence batch:
 """
 
 _SYMBOLIC_RELATION_ENDPOINTS = frozenset({"ORDER", "DOCUMENT", "MESSAGE"})
+
+
+class TokenCounter(Protocol):
+    identifier: str
+
+    def count_text(self, text: str) -> int: ...
+
+    def count_messages(self, *, system_prompt: str, user_prompt: str) -> int: ...
+
+
+class ApproximateGLMTokenCounter:
+    """Conservative local fallback; live runs use the pinned model tokenizer."""
+
+    identifier = "glm-4.7-flash-approximate-v1"
+
+    def count_text(self, text: str) -> int:
+        ascii_characters = sum(character.isascii() for character in text)
+        non_ascii_bytes = len(text.encode()) - ascii_characters
+        return ceil(ascii_characters / 3) + non_ascii_bytes
+
+    def count_messages(self, *, system_prompt: str, user_prompt: str) -> int:
+        return self.count_text(system_prompt) + self.count_text(user_prompt) + 64
+
+
+class GLMTokenizerCounter:
+    def __init__(self, tokenizer: Any) -> None:
+        self._tokenizer = tokenizer
+        self._token_cache: dict[str, int] = {}
+        self.identifier = f"{GLM_TOKENIZER_REPOSITORY}@{GLM_TOKENIZER_REVISION}:tokenizer-json"
+
+    @classmethod
+    def from_cache(cls, cache_root: Path) -> GLMTokenizerCounter:
+        os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+        try:
+            hub = import_module("huggingface_hub")
+            tokenizers = import_module("tokenizers")
+        except ModuleNotFoundError as error:
+            raise RuntimeError(
+                "Install the agent dependency group before exact token planning"
+            ) from error
+        tokenizer_path = hub.hf_hub_download(
+            repo_id=GLM_TOKENIZER_REPOSITORY,
+            filename="tokenizer.json",
+            revision=GLM_TOKENIZER_REVISION,
+            cache_dir=cache_root,
+        )
+        return cls(tokenizers.Tokenizer.from_file(tokenizer_path))
+
+    def count_text(self, text: str) -> int:
+        cache_key = sha256(text.encode()).hexdigest()
+        cached = self._token_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        token_count = len(self._tokenizer.encode(text, add_special_tokens=False).ids)
+        self._token_cache[cache_key] = token_count
+        return token_count
+
+    def count_messages(self, *, system_prompt: str, user_prompt: str) -> int:
+        return self.count_text(system_prompt) + self.count_text(user_prompt) + 64
 
 
 class AgenticRelationType(StrEnum):
@@ -84,22 +187,64 @@ class AgenticRelationType(StrEnum):
     CONTAINS_ITEM = "CONTAINS_ITEM"
     HAS_CHARGE = "HAS_CHARGE"
     HAS_DISCOUNT = "HAS_DISCOUNT"
+    HAS_BENEFIT = "HAS_BENEFIT"
     HAS_TAX = "HAS_TAX"
+    HAS_TOTAL = "HAS_TOTAL"
     PAID_VIA = "PAID_VIA"
     HAS_LEGAL_IDENTIFIER = "HAS_LEGAL_IDENTIFIER"
+    FORMERLY_KNOWN_AS = "FORMERLY_KNOWN_AS"
+    MENTIONS_ENTITY = "MENTIONS_ENTITY"
+
+
+class AgenticMoneyScope(StrEnum):
+    ORDER = "order"
+    MERCHANT_INVOICE = "merchant_invoice"
+    PLATFORM_SERVICE_INVOICE = "platform_service_invoice"
+    DELIVERY_SERVICE_INVOICE = "delivery_service_invoice"
+    ITEM = "item"
+    PAYMENT = "payment"
+    REFUND = "refund"
+    UNKNOWN = "unknown"
+
+
+class AgenticMoneyMeaning(StrEnum):
+    ITEM_GROSS = "item_gross"
+    ITEM_NET = "item_net"
+    SUBTOTAL = "subtotal"
+    CHARGE = "charge"
+    DISCOUNT = "discount"
+    BENEFIT = "benefit"
+    TAX = "tax"
+    TOTAL = "total"
+    PAYMENT_ASSERTION = "payment_assertion"
+    REFUND = "refund"
+    UNRESOLVED = "unresolved"
+
+
+class AgenticConflictFlag(StrEnum):
+    IDENTIFIER_CONFLICT = "identifier_conflict"
+    AMOUNT_SCOPE_CONFLICT = "amount_scope_conflict"
+    NAME_VARIANT = "name_variant"
+    DUPLICATE_EVIDENCE = "duplicate_evidence"
+    MISSING_CONTEXT = "missing_context"
+    UNRESOLVED_INTERPRETATION = "unresolved_interpretation"
 
 
 class AgenticBatchPolicy(ContractModel):
-    target_prompt_characters: int = Field(default=18_000, ge=1_000)
-    max_prompt_characters: int = Field(default=32_000, ge=2_000)
-    max_chunks: int = Field(default=32, ge=2)
+    target_input_tokens: int = Field(default=64_000, ge=1_000)
+    max_input_tokens: int = Field(default=80_000, ge=2_000)
+    max_completion_tokens: int = Field(default=24_000, ge=1_000)
+    context_window_tokens: int = Field(default=GLM_CONTEXT_WINDOW_TOKENS, ge=4_000)
+    max_chunks: int = Field(default=512, ge=2)
     max_bundles: int = Field(default=6, ge=1)
     minimum_chunks: int = Field(default=2, ge=2)
 
     @model_validator(mode="after")
     def targets_fit_hard_limits(self) -> AgenticBatchPolicy:
-        if self.target_prompt_characters > self.max_prompt_characters:
-            raise ValueError("target_prompt_characters cannot exceed max_prompt_characters")
+        if self.target_input_tokens > self.max_input_tokens:
+            raise ValueError("target_input_tokens cannot exceed max_input_tokens")
+        if self.max_input_tokens + self.max_completion_tokens >= self.context_window_tokens:
+            raise ValueError("input and completion budgets must leave context-window headroom")
         if self.minimum_chunks > self.max_chunks:
             raise ValueError("minimum_chunks cannot exceed max_chunks")
         return self
@@ -129,6 +274,8 @@ class AgenticBatch(ContractModel):
     chunk_bundle_ids: tuple[str, ...] = Field(min_length=2)
     chunks: tuple[EvidenceChunk, ...] = Field(min_length=2)
     input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    estimated_input_tokens: int = Field(ge=1)
+    token_counter_id: str = Field(min_length=1)
 
     @model_validator(mode="after")
     def batch_members_are_aligned(self) -> AgenticBatch:
@@ -170,6 +317,29 @@ class AgenticEntityCandidate(ContractModel):
     source_chunk_id: UUID
 
 
+class AgenticFactCandidate(ContractModel):
+    fact_type: CandidateFactType
+    raw_value_private: str = Field(repr=False, min_length=1)
+    normalized_value_private: str = Field(repr=False, min_length=1)
+    source_chunk_id: UUID
+    source_span_start: int = Field(ge=0)
+    source_span_end: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def source_span_is_ordered(self) -> AgenticFactCandidate:
+        if self.source_span_end <= self.source_span_start:
+            raise ValueError("source_span_end must exceed source_span_start")
+        return self
+
+
+class AgenticMoneyInterpretation(ContractModel):
+    source_component_id: UUID
+    source_chunk_id: UUID
+    money_scope: AgenticMoneyScope
+    money_meaning: AgenticMoneyMeaning
+    interpretation_private: str = Field(repr=False, min_length=1)
+
+
 class AgenticRelationCandidate(ContractModel):
     relation_type: AgenticRelationType
     subject_private: str = Field(repr=False, min_length=1)
@@ -178,14 +348,21 @@ class AgenticRelationCandidate(ContractModel):
 
 
 class AgenticRegionProposal(ContractModel):
+    bundle_id: str = Field(min_length=1)
     source_chunk_ids: tuple[UUID, ...] = Field(min_length=1)
     chunk_type: ChunkType
     semantic_role: SemanticRole
     financial_role: FinancialRole
+    region_title_private: str = Field(repr=False, min_length=1)
     semantic_summary_private: str = Field(repr=False, min_length=1)
     embedding_text_private: str = Field(repr=False, min_length=1)
+    query_families: tuple[QueryFamily, ...] = Field(min_length=1)
+    candidate_facts: tuple[AgenticFactCandidate, ...] = ()
     entity_candidates: tuple[AgenticEntityCandidate, ...] = ()
+    money_interpretations: tuple[AgenticMoneyInterpretation, ...] = ()
     relation_candidates: tuple[AgenticRelationCandidate, ...] = ()
+    conflict_flags: tuple[AgenticConflictFlag, ...] = ()
+    uncertainty_notes_private: tuple[str, ...] = Field(default=(), repr=False)
 
 
 class AgenticModelResponse(ContractModel):
@@ -298,24 +475,9 @@ class _PackingUnit:
 
 def _chunk_prompt_record(assignment: _ChunkAssignment) -> dict[str, object]:
     chunk = assignment.chunk
-    return {
-        "bundle_id": assignment.bundle_id,
-        "chunk_id": str(chunk.chunk_id),
-        "source_id": chunk.source_id,
-        "source_kind": chunk.source_kind.value,
-        "page_number": chunk.page_number,
-        "reading_order": chunk.reading_order,
-        "chunk_type": chunk.chunk_type.value,
-        "semantic_role": chunk.semantic_role.value,
-        "financial_role": chunk.financial_role.value,
-        "table_id": chunk.table_id,
-        "row_index": chunk.row_index,
-        "column_headers_private": chunk.column_headers_private,
-        "parent_region_id": chunk.parent_region_id,
-        "source_region_ids": chunk.source_region_ids,
-        "raw_text_private": chunk.raw_text_private,
-        "source_hash": chunk.source_hash,
-    }
+    record = cast(dict[str, object], chunk.model_dump(mode="json"))
+    record["bundle_id"] = assignment.bundle_id
+    return record
 
 
 def _batch_identity(assignments: Sequence[_ChunkAssignment]) -> UUID:
@@ -342,10 +504,22 @@ def _batch_input_hash(
 
 def _render_assignments(assignments: Sequence[_ChunkAssignment]) -> str:
     batch_id = _batch_identity(assignments)
+    bundle_ids = tuple(dict.fromkeys(assignment.bundle_id for assignment in assignments))
     evidence = {
         "batch_id": str(batch_id),
         "contract_version": AGENTIC_CONTRACT_VERSION,
-        "chunks": [_chunk_prompt_record(assignment) for assignment in assignments],
+        "cohort_key": assignments[0].cohort_key,
+        "bundles": [
+            {
+                "bundle_id": bundle_id,
+                "chunks": [
+                    _chunk_prompt_record(assignment)
+                    for assignment in assignments
+                    if assignment.bundle_id == bundle_id
+                ],
+            }
+            for bundle_id in bundle_ids
+        ],
     }
     return _USER_INSTRUCTIONS + json.dumps(
         evidence,
@@ -355,7 +529,38 @@ def _render_assignments(assignments: Sequence[_ChunkAssignment]) -> str:
     )
 
 
-def _make_batch(assignments: Sequence[_ChunkAssignment]) -> AgenticBatch:
+def _count_input_tokens(
+    assignments: Sequence[_ChunkAssignment],
+    *,
+    token_counter: TokenCounter,
+) -> int:
+    record_tokens = sum(
+        token_counter.count_text(
+            json.dumps(
+                _chunk_prompt_record(assignment),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        for assignment in assignments
+    )
+    bundle_count = len({assignment.bundle_id for assignment in assignments})
+    return (
+        token_counter.count_text(_SYSTEM_PROMPT)
+        + token_counter.count_text(_USER_INSTRUCTIONS)
+        + record_tokens
+        + len(assignments) * 12
+        + bundle_count * 64
+        + 256
+    )
+
+
+def _make_batch(
+    assignments: Sequence[_ChunkAssignment],
+    *,
+    token_counter: TokenCounter,
+) -> AgenticBatch:
     assignment_tuple = tuple(assignments)
     bundle_ids = tuple(dict.fromkeys(item.bundle_id for item in assignment_tuple))
     chunks = tuple(item.chunk for item in assignment_tuple)
@@ -367,6 +572,11 @@ def _make_batch(assignments: Sequence[_ChunkAssignment]) -> AgenticBatch:
         chunk_bundle_ids=chunk_bundle_ids,
         chunks=chunks,
         input_sha256=_batch_input_hash(chunk_bundle_ids, chunks),
+        estimated_input_tokens=_count_input_tokens(
+            assignment_tuple,
+            token_counter=token_counter,
+        ),
+        token_counter_id=token_counter.identifier,
     )
 
 
@@ -424,11 +634,12 @@ def _fits(
     assignments: Sequence[_ChunkAssignment],
     *,
     policy: AgenticBatchPolicy,
+    token_counter: TokenCounter,
 ) -> bool:
     return (
         len(assignments) <= policy.max_chunks
         and len({assignment.bundle_id for assignment in assignments}) <= policy.max_bundles
-        and len(_render_assignments(assignments)) <= policy.max_prompt_characters
+        and _count_input_tokens(assignments, token_counter=token_counter) <= policy.max_input_tokens
     )
 
 
@@ -436,14 +647,15 @@ def _split_oversized_unit(
     unit: _PackingUnit,
     *,
     policy: AgenticBatchPolicy,
+    token_counter: TokenCounter,
 ) -> tuple[_PackingUnit, ...]:
-    if _fits(unit.assignments, policy=policy):
+    if _fits(unit.assignments, policy=policy, token_counter=token_counter):
         return (unit,)
     split: list[_PackingUnit] = []
     current: list[_ChunkAssignment] = []
     for assignment in unit.assignments:
         candidate = (*current, assignment)
-        if current and not _fits(candidate, policy=policy):
+        if current and not _fits(candidate, policy=policy, token_counter=token_counter):
             split.append(_PackingUnit(assignments=tuple(current)))
             current = [assignment]
         else:
@@ -457,9 +669,16 @@ def _pack_units(
     units: Sequence[_PackingUnit],
     *,
     policy: AgenticBatchPolicy,
+    token_counter: TokenCounter,
 ) -> tuple[tuple[_ChunkAssignment, ...], ...]:
     expanded = tuple(
-        split_unit for unit in units for split_unit in _split_oversized_unit(unit, policy=policy)
+        split_unit
+        for unit in units
+        for split_unit in _split_oversized_unit(
+            unit,
+            policy=policy,
+            token_counter=token_counter,
+        )
     )
     packed: list[tuple[_ChunkAssignment, ...]] = []
     current: list[_ChunkAssignment] = []
@@ -467,9 +686,12 @@ def _pack_units(
         candidate = (*current, *unit.assignments)
         reached_target = (
             len(current) >= policy.minimum_chunks
-            and len(_render_assignments(current)) >= policy.target_prompt_characters
+            and _count_input_tokens(current, token_counter=token_counter)
+            >= policy.target_input_tokens
         )
-        if current and (reached_target or not _fits(candidate, policy=policy)):
+        if current and (
+            reached_target or not _fits(candidate, policy=policy, token_counter=token_counter)
+        ):
             packed.append(tuple(current))
             current = list(unit.assignments)
         else:
@@ -479,7 +701,7 @@ def _pack_units(
 
     if len(packed) >= 2 and len(packed[-1]) < policy.minimum_chunks:
         candidate = (*packed[-2], *packed[-1])
-        if _fits(candidate, policy=policy):
+        if _fits(candidate, policy=policy, token_counter=token_counter):
             packed[-2:] = [candidate]
         else:
             previous_bundle_counts = Counter(assignment.bundle_id for assignment in packed[-2])
@@ -493,8 +715,16 @@ def _pack_units(
             if (
                 transfers_are_complete_singletons
                 and len(rebalanced_previous) >= policy.minimum_chunks
-                and _fits(rebalanced_previous, policy=policy)
-                and _fits(rebalanced_last, policy=policy)
+                and _fits(
+                    rebalanced_previous,
+                    policy=policy,
+                    token_counter=token_counter,
+                )
+                and _fits(
+                    rebalanced_last,
+                    policy=policy,
+                    token_counter=token_counter,
+                )
             ):
                 packed[-2:] = [rebalanced_previous, rebalanced_last]
     return tuple(packed)
@@ -504,29 +734,43 @@ def plan_agentic_batches(
     bundles: Sequence[AgenticEvidenceBundle],
     *,
     policy: AgenticBatchPolicy | None = None,
+    token_counter: TokenCounter | None = None,
 ) -> AgenticBatchPlan:
     selected_policy = policy or AgenticBatchPolicy()
+    selected_token_counter = token_counter or ApproximateGLMTokenCounter()
     ordered_bundles = tuple(sorted(bundles, key=lambda bundle: bundle.bundle_id))
     all_chunk_ids = tuple(chunk.chunk_id for bundle in ordered_bundles for chunk in bundle.chunks)
     if len(all_chunk_ids) != len(set(all_chunk_ids)):
         raise ValueError("agentic bundles contain duplicate chunks")
 
-    regular = tuple(
-        bundle for bundle in ordered_bundles if not (bundle.mail_only and len(bundle.chunks) == 1)
-    )
-    singleton_mail = tuple(
-        bundle for bundle in ordered_bundles if bundle.mail_only and len(bundle.chunks) == 1
-    )
     packed: list[tuple[_ChunkAssignment, ...]] = []
-    for bundle in regular:
-        packed.extend(_pack_units(_bundle_units(bundle), policy=selected_policy))
-
-    mail_by_cohort: dict[str, list[AgenticEvidenceBundle]] = defaultdict(list)
-    for bundle in singleton_mail:
-        mail_by_cohort[bundle.cohort_key].append(bundle)
-    for cohort in sorted(mail_by_cohort):
-        units = tuple(_bundle_units(bundle)[0] for bundle in mail_by_cohort[cohort])
-        packed.extend(_pack_units(units, policy=selected_policy))
+    bundles_by_cohort: dict[str, list[AgenticEvidenceBundle]] = defaultdict(list)
+    for bundle in ordered_bundles:
+        bundles_by_cohort[bundle.cohort_key].append(bundle)
+    for cohort in sorted(bundles_by_cohort):
+        units: list[_PackingUnit] = []
+        for bundle in bundles_by_cohort[cohort]:
+            bundle_units = _bundle_units(bundle)
+            complete_bundle = _PackingUnit(
+                assignments=tuple(
+                    assignment for unit in bundle_units for assignment in unit.assignments
+                )
+            )
+            if _fits(
+                complete_bundle.assignments,
+                policy=selected_policy,
+                token_counter=selected_token_counter,
+            ):
+                units.append(complete_bundle)
+            else:
+                units.extend(bundle_units)
+        packed.extend(
+            _pack_units(
+                units,
+                policy=selected_policy,
+                token_counter=selected_token_counter,
+            )
+        )
 
     accepted_batches: list[AgenticBatch] = []
     quarantined: list[UUID] = []
@@ -534,10 +778,11 @@ def plan_agentic_batches(
         if len(assignments) < selected_policy.minimum_chunks or not _fits(
             assignments,
             policy=selected_policy,
+            token_counter=selected_token_counter,
         ):
             quarantined.extend(assignment.chunk.chunk_id for assignment in assignments)
             continue
-        accepted_batches.append(_make_batch(assignments))
+        accepted_batches.append(_make_batch(assignments, token_counter=selected_token_counter))
 
     return AgenticBatchPlan(
         policy=selected_policy,
@@ -597,8 +842,21 @@ def validate_agentic_response(batch: AgenticBatch, raw_response: str) -> Agentic
     bundles_by_chunk_id = dict(zip(expected_ids, batch.chunk_bundle_ids, strict=True))
     for region in response.regions:
         region_ids = set(region.source_chunk_ids)
-        if len({bundles_by_chunk_id[chunk_id] for chunk_id in region_ids}) != 1:
+        region_bundle_ids = {bundles_by_chunk_id[chunk_id] for chunk_id in region_ids}
+        if len(region_bundle_ids) != 1:
             return _quarantined_result(batch, "cross_bundle_region")
+        if region.bundle_id != next(iter(region_bundle_ids)):
+            return _quarantined_result(batch, "bundle_id_mismatch")
+        for fact in region.candidate_facts:
+            source = chunks_by_id.get(fact.source_chunk_id)
+            if (
+                source is None
+                or fact.source_chunk_id not in region_ids
+                or fact.source_span_end > len(source.raw_text_private)
+                or source.raw_text_private[fact.source_span_start : fact.source_span_end]
+                != fact.raw_value_private
+            ):
+                return _quarantined_result(batch, "unsupported_fact_candidate")
         for entity in region.entity_candidates:
             source = chunks_by_id.get(entity.source_chunk_id)
             if (
@@ -607,6 +865,15 @@ def validate_agentic_response(batch: AgenticBatch, raw_response: str) -> Agentic
                 or entity.raw_value_private not in source.raw_text_private
             ):
                 return _quarantined_result(batch, "unsupported_entity_candidate")
+        for interpretation in region.money_interpretations:
+            source = chunks_by_id.get(interpretation.source_chunk_id)
+            if (
+                source is None
+                or interpretation.source_chunk_id not in region_ids
+                or interpretation.source_component_id
+                not in {component.component_id for component in source.candidate_money_components}
+            ):
+                return _quarantined_result(batch, "unsupported_money_interpretation")
         for relation in region.relation_candidates:
             if not set(relation.evidence_chunk_ids) <= region_ids:
                 return _quarantined_result(batch, "unsupported_relation_candidate")
@@ -641,7 +908,7 @@ class CloudflareWorkersAIClient:
         transport: JsonTransport | None = None,
         timeout_seconds: float = 120,
         max_attempts: int = 3,
-        max_completion_tokens: int = 8_192,
+        max_completion_tokens: int = 24_000,
     ) -> None:
         if not account_id.strip() or not auth_token.strip():
             raise ValueError("Cloudflare account ID and auth token are required")
@@ -655,14 +922,22 @@ class CloudflareWorkersAIClient:
         self._max_completion_tokens = max_completion_tokens
 
     @classmethod
-    def from_environment(cls) -> CloudflareWorkersAIClient:
+    def from_environment(
+        cls,
+        *,
+        max_completion_tokens: int = 24_000,
+    ) -> CloudflareWorkersAIClient:
         account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
         auth_token = os.environ.get("CLOUDFLARE_AUTH_TOKEN", "")
         if not account_id or not auth_token:
             raise CloudflareWorkersAIError(
                 "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN before live execution"
             )
-        return cls(account_id=account_id, auth_token=auth_token)
+        return cls(
+            account_id=account_id,
+            auth_token=auth_token,
+            max_completion_tokens=max_completion_tokens,
+        )
 
     def __repr__(self) -> str:
         return (
@@ -719,10 +994,14 @@ class CloudflareWorkersAIClient:
         content: object | None = None
         if isinstance(result, Mapping):
             content = result.get("response")
+            if content is None:
+                content = _choice_content(result.get("choices"))
         elif isinstance(result, str):
             content = result
         if content is None:
             content = response.body.get("response")
+        if content is None:
+            content = _choice_content(response.body.get("choices"))
         if isinstance(content, Mapping):
             return json.dumps(content, ensure_ascii=False, separators=(",", ":"))
         if not isinstance(content, str) or not content.strip():
@@ -731,6 +1010,18 @@ class CloudflareWorkersAIClient:
 
     def propose(self, batch: AgenticBatch) -> AgenticBatchResult:
         return validate_agentic_response(batch, self._request(batch))
+
+
+def _choice_content(choices: object) -> object | None:
+    if not isinstance(choices, Sequence) or isinstance(choices, (str, bytes)) or not choices:
+        return None
+    first = choices[0]
+    if not isinstance(first, Mapping):
+        return None
+    message = first.get("message")
+    if isinstance(message, Mapping):
+        return message.get("content")
+    return first.get("text")
 
 
 def _read_chunk_file(path: Path) -> tuple[EvidenceChunk, ...]:
@@ -778,10 +1069,15 @@ def load_agentic_evidence_bundles(processed_root: Path) -> tuple[AgenticEvidence
         evidence_kind = "mail-only" if mail_only else "pdf-backed"
         if any("HISTORY_REPORT" in document.role.value for document in attached_documents):
             evidence_kind = "history-report"
+        role_key = (
+            "+".join(sorted({document.role.value for document in attached_documents})) or "message"
+        )
         bundles.append(
             AgenticEvidenceBundle(
                 bundle_id=message.message_id,
-                cohort_key=(f"{message.platform.value}:{message.category.value}:{evidence_kind}"),
+                cohort_key=(
+                    f"{message.platform.value}:{message.category.value}:{evidence_kind}:{role_key}"
+                ),
                 mail_only=mail_only,
                 chunks=(*message_chunks, *document_chunks),
             )
