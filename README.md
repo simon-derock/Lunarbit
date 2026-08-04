@@ -1,12 +1,12 @@
 # Lunarbit
 
-## Evidence-verifiable personal-commerce GraphRAG
+## Reconstructing trustworthy answers from messy commerce evidence
 
-Lunarbit reconstructs a private, multi-year history of Zomato and Swiggy food-delivery and grocery activity into a provenance-first data system. It is designed to answer questions about orders, merchants, fees, discounts, taxes, payments, delivery evidence, and spending patterns while preserving the chain from every answer back to source evidence.
+Lunarbit turns a multi-year archive of Zomato and Swiggy emails, order summaries, merchant invoices, platform-fee invoices, and delivery documents into a provenance-first personal-commerce intelligence system. It is designed to answer questions about orders, merchants, fees, discounts, taxes, payments, delivery evidence, and spending patterns while preserving the chain from every answer back to source evidence.
 
-This is not a PDF chatbot, a generic expense dashboard, or an unverified text-to-Cypher demo. Lunarbit is a portfolio-grade engineering project focused on the difficult parts of real-world AI systems: messy documents, layout-aware extraction, evidence alignment, deterministic financial logic, privacy boundaries, agentic enrichment, graph modeling, retrieval, evaluation, and public explainability.
+The hard problem is not generating a fluent summary. It is preserving document scope, layout, source precision, uncertainty, and financial truth while turning fragmented evidence into a graph that can be queried and audited. Lunarbit addresses that problem with deterministic contracts, guarded agentic enrichment, reversible decisions, and explicit proof gates.
 
-> **Project thesis:** trustworthy GraphRAG is not just retrieval plus an LLM. It is a system that separates source claims, normalized facts, deterministic calculations, identity decisions, unresolved uncertainty, and analytical findings—and makes each layer auditable.
+> **Project thesis:** trustworthy GraphRAG is not just retrieval plus an LLM. It separates source claims, normalized facts, deterministic calculations, identity decisions, unresolved uncertainty, and analytical findings—and makes each layer auditable.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-47%20passing-2ea44f)](tests/)
@@ -14,7 +14,7 @@ This is not a PDF chatbot, a generic expense dashboard, or an unverified text-to
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/source%20data-private%20by%20design-6f42c1)](#privacy-and-data-boundaries)
 
-## Why this project is interesting
+## The engineering problem
 
 Most personal-finance prototypes flatten documents into rows and ask a model to summarize them. That approach loses layout, source precision, document scope, contradictions, and the distinction between an invoice assertion and a confirmed payment.
 
@@ -27,7 +27,7 @@ Lunarbit treats the archive as an evidence reconstruction problem:
 - model output is candidate enrichment only and cannot write canonical identities, financial truth, or graph state directly;
 - public output is a reviewed projection with aliases and redacted evidence, never a view over the raw private archive.
 
-## Recruiter snapshot
+## Engineering highlights
 
 | Area | Demonstrated engineering signal |
 | --- | --- |
@@ -52,6 +52,16 @@ These are measurements from the local private corpus and deterministic pipeline.
 - 47 automated tests passing, plus Ruff lint/format and strict mypy checks.
 
 The agentic stage is intentionally gated. A structurally valid response is not considered high quality unless it covers every source chunk and every deterministic money component with source-linked interpretations. Corpus-scale inference will begin only after the bounded financial pilot passes that gate.
+
+### What is already proven
+
+- Deterministic ingestion handles both PDF-backed orders and mail-only orders.
+- Layout-aware extraction preserves page geometry, reading order, tables, and source spans.
+- Rich chunks carry facts, entities, money candidates, graph candidates, confidence, completeness, and privacy metadata.
+- The Gemma transport has been tested with streamed typed tool calls, truncation handling, safe error categories, and atomic quarantine.
+- The full dry-run planner covers every current chunk under the hard input budget without silently skipping evidence.
+
+The remaining work is deliberately visible: complete the bounded financial quality gate, then build deterministic resolution, reconciliation, graph loading, retrieval benchmarks, and the public evidence experience.
 
 ## Architecture
 
@@ -190,37 +200,37 @@ cypher/       # graph design assets and future migrations
 web/          # public application surface under construction
 ```
 
-## Roadmap to the public demo
+## Delivery roadmap and proof gates
 
-### Phase 1 — deterministic evidence foundation
+### Phase 1 — Evidence foundation
 
 Completed foundation: source ingestion, PDF and email extraction, layout-aware chunks, order-evidence bundles, strict contracts, privacy controls, and reproducible validation.
 
-### Phase 2 — rich agentic chunking
+### Phase 2 — Guarded semantic enrichment
 
 Current stage: complete the bounded financial pilot, validate golden entity and money cases, then run controlled enrichment over the corpus. Candidate output remains source-linked and quarantinable.
 
-### Phase 3 — order and entity resolution
+### Phase 3 — Reversible resolution
 
 Resolve document bundles, merchants, legal entities, delivery evidence, item hierarchies, aliases, and uncertainty through reversible deterministic decisions.
 
-### Phase 4 — financial and economic core
+### Phase 4 — Deterministic financial truth
 
 Compile exact money components, reconcile invoice scopes, expose unexplained residuals, and derive governed economic metrics without model arithmetic.
 
-### Phase 5 — Neo4j graph
+### Phase 5 — Temporal graph and indexes
 
 Load an idempotent temporal graph with constraints, exact indexes, full-text indexes, vector indexes, and invariant checks.
 
-### Phase 6 — Hybrid GraphRAG
+### Phase 6 — Hybrid GraphRAG retrieval
 
 Route questions across exact lookup, lexical retrieval, dense retrieval, graph expansion, reranking, and answer verification. Every showcased answer must expose its graph path and evidence.
 
-### Phase 7–8 — economic intelligence and public product
+### Phase 7–8 — Economic intelligence and public product
 
-Add price and fee indices, membership ROI, spending decomposition, a privacy-reviewed public projection, an evidence laboratory, benchmark pages, and the recruiter-facing live demo.
+Add price and fee indices, membership ROI, spending decomposition, a privacy-reviewed public projection, an evidence laboratory, benchmark pages, and the live evidence demo.
 
-## Resume-ready positioning
+## Professional positioning
 
 The final resume entry should use measured results rather than adjectives:
 
