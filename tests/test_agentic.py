@@ -10,6 +10,8 @@ import pytest
 
 import lunarbit.agentic as agentic_module
 from lunarbit.agentic import (
+    AGENTIC_CONTRACT_VERSION,
+    AGENTIC_TOOL_NAME,
     CLOUDFLARE_CONTEXT_WINDOW_TOKENS,
     CLOUDFLARE_MODEL,
     CLOUDFLARE_REASONING_EFFORT,
@@ -128,10 +130,10 @@ def test_batch_plan_is_medium_sized_relevant_and_deterministic() -> None:
         mail_only=True,
     )
     policy = AgenticBatchPolicy(
-        target_input_tokens=2_500,
-        max_input_tokens=4_500,
+        target_input_tokens=6_500,
+        max_input_tokens=9_000,
         max_completion_tokens=1_000,
-        context_window_tokens=8_000,
+        context_window_tokens=12_000,
         max_chunks=4,
         max_bundles=4,
         minimum_chunks=2,
@@ -350,6 +352,7 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
             finish_reason="stop",
             usage={"prompt_tokens": 100, "completion_tokens": 200},
             completed=True,
+            tool_name=AGENTIC_TOOL_NAME,
         )
     )
     client = CloudflareWorkersAIClient(
@@ -376,6 +379,17 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert payload["stream"] is True
     assert payload["reasoning_effort"] == CLOUDFLARE_REASONING_EFFORT
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+    assert payload["tool_choice"] == "required"
+    assert payload["parallel_tool_calls"] is False
+    tools = payload["tools"]
+    assert isinstance(tools, list)
+    assert len(tools) == 1
+    tool = tools[0]
+    assert isinstance(tool, dict)
+    assert tool["name"] == AGENTIC_TOOL_NAME
+    parameters = tool["parameters"]
+    assert isinstance(parameters, dict)
+    assert parameters["required"] == ["batch_id", "regions"]
     assert payload["temperature"] == 0
     assert payload["seed"] == 42
     assert payload["max_completion_tokens"] == 24_000
@@ -387,6 +401,17 @@ def test_cloudflare_client_uses_selected_model_and_validates_complete_output() -
     assert second_message["content"] == render_agentic_user_prompt(batch)
     assert "response_format" not in payload
     assert "private-token" not in repr(client)
+
+
+def test_agentic_prompt_enforces_closed_entity_vocabulary() -> None:
+    batch, _ = _one_batch()
+
+    prompt = render_agentic_user_prompt(batch)
+
+    assert "Entity candidates use a closed vocabulary" in prompt
+    assert "restaurant, store, or vendor as merchant" in prompt
+    assert "Never emit customer, person, item, address, order, or payment method" in prompt
+    assert "use an empty array instead of inventing an enum value" in prompt
 
 
 def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None:
@@ -421,6 +446,7 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
             finish_reason="stop",
             usage={},
             completed=True,
+            tool_name=AGENTIC_TOOL_NAME,
         )
     )
     client = CloudflareWorkersAIClient(
@@ -434,6 +460,37 @@ def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None
     assert result.validation_status is ValidationStatus.QUARANTINED
     assert result.regions == ()
     assert result.quarantine_reasons == ("incomplete_batch_coverage",)
+
+
+def test_invalid_model_json_is_quarantined_with_a_safe_reason() -> None:
+    batch, _ = _one_batch()
+
+    result = validate_agentic_response(batch, "not a JSON response")
+
+    assert result.validation_status is ValidationStatus.QUARANTINED
+    assert result.quarantine_reasons == ("invalid_model_json",)
+
+
+def test_invalid_model_schema_reports_only_type_and_field_location() -> None:
+    batch, _ = _one_batch()
+    private_sentinel = "PRIVATE_VALUE_MUST_NOT_APPEAR"
+    invalid_response = {
+        "batch_id": str(batch.batch_id),
+        "regions": [
+            {
+                "bundle_id": private_sentinel,
+                "source_chunk_ids": [str(batch.chunks[0].chunk_id)],
+            }
+        ],
+    }
+
+    result = validate_agentic_response(batch, json.dumps(invalid_response))
+
+    assert result.validation_status is ValidationStatus.QUARANTINED
+    assert len(result.quarantine_reasons) > 1
+    assert all(reason.startswith("invalid_model_schema:") for reason in result.quarantine_reasons)
+    assert any("regions.0" in reason for reason in result.quarantine_reasons)
+    assert all(private_sentinel not in reason for reason in result.quarantine_reasons)
 
 
 def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
@@ -509,13 +566,35 @@ def test_cloudflare_sse_decoder_assembles_only_answer_content() -> None:
         b"\n",
     )
 
-    content, finish_reason, usage, completed = _decode_cloudflare_sse(events)
+    content, finish_reason, usage, completed, tool_name = _decode_cloudflare_sse(events)
 
     assert content == '{"batch_id":"value"}'
     assert "private reasoning" not in content
     assert finish_reason == "stop"
     assert usage == {"completion_tokens": 12}
     assert completed is True
+    assert tool_name is None
+
+
+def test_cloudflare_sse_decoder_assembles_function_arguments() -> None:
+    events = (
+        b'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"type":"function",'
+        b'"function":{"name":"submit_agentic_regions","arguments":"{\\"batch_id\\":"}}]},'
+        b'"finish_reason":null}]}\n',
+        b"\n",
+        b'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":'
+        b'{"arguments":"\\"value\\"}"}}]},"finish_reason":"tool_calls"}]}\n',
+        b"\n",
+        b"data: [DONE]\n",
+        b"\n",
+    )
+
+    content, finish_reason, _, completed, tool_name = _decode_cloudflare_sse(events)
+
+    assert content == '{"batch_id":"value"}'
+    assert finish_reason == "tool_calls"
+    assert completed is True
+    assert tool_name == AGENTIC_TOOL_NAME
 
 
 def test_cloudflare_sse_decoder_enforces_wall_clock_deadline(
@@ -540,6 +619,7 @@ def test_cloudflare_client_quarantines_length_limited_stream() -> None:
             finish_reason="length",
             usage={"completion_tokens": 24_000},
             completed=True,
+            tool_name=AGENTIC_TOOL_NAME,
         )
     )
     client = CloudflareWorkersAIClient(
@@ -557,6 +637,7 @@ def test_cloudflare_client_quarantines_length_limited_stream() -> None:
 def test_default_policy_uses_80k_input_tokens_and_reserves_context() -> None:
     policy = AgenticBatchPolicy()
 
+    assert AGENTIC_CONTRACT_VERSION == "1.1.0"
     assert CLOUDFLARE_MODEL == "@cf/google/gemma-4-26b-a4b-it"
     assert CLOUDFLARE_CONTEXT_WINDOW_TOKENS == 256_000
     assert policy.target_input_tokens == 64_000
