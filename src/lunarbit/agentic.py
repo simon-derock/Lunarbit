@@ -8,6 +8,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from functools import cache
 from hashlib import sha256
 from importlib import import_module
 from math import ceil
@@ -34,10 +35,11 @@ from lunarbit.models import (
 )
 
 CLOUDFLARE_MODEL = "@cf/google/gemma-4-26b-a4b-it"
-AGENTIC_CONTRACT_VERSION = "1.0.0"
+AGENTIC_CONTRACT_VERSION = "1.1.0"
 CLOUDFLARE_CONTEXT_WINDOW_TOKENS = 256_000
 CLOUDFLARE_STREAM_TIMEOUT_SECONDS = 600.0
 CLOUDFLARE_REASONING_EFFORT = "low"
+AGENTIC_TOOL_NAME = "submit_agentic_regions"
 GEMMA_TOKENIZER_REPOSITORY = "google/gemma-4-26B-A4B-it"
 GEMMA_TOKENIZER_REVISION = "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
 
@@ -60,8 +62,9 @@ When evidence is incomplete or conflicting, retain both claims, add a governed c
 state the uncertainty instead of guessing. Every output region must belong to exactly one bundle and
 every source_chunk_id must appear exactly once across the complete response.
 
-Return one JSON object only, with no Markdown or explanatory text. The response is candidate graph
-data and must not claim canonical truth."""
+Call the submit_agentic_regions tool exactly once with the complete candidate graph data.
+Do not emit conversational content or Markdown.
+The tool arguments must not claim canonical truth."""
 
 _USER_INSTRUCTIONS = """Create high-quality graph-ready semantic regions from this token-bounded,
 template-compatible evidence batch.
@@ -100,7 +103,16 @@ legal scopes require it. Never merge regions across bundle_id values. Use these 
 - conflict_flags: identifier_conflict, amount_scope_conflict, name_variant, duplicate_evidence,
   missing_context, unresolved_interpretation
 
-Return this shape and no Markdown:
+Entity candidates use a closed vocabulary.
+- Classify a named restaurant, store, or vendor as merchant.
+- Classify a named invoice issuer or registered company as legal_entity.
+- Classify a named courier or delivery provider as delivery_partner.
+- Never emit customer, person, item, address, order, or payment method as an entity candidate.
+For any concept that does not fit an allowed type exactly, preserve it in supported narrative
+evidence when useful and use an empty array instead of inventing an enum value. Apply this same rule
+to every enumerated field: use one listed value exactly or omit the optional candidate.
+
+Submit this shape as the submit_agentic_regions tool arguments:
 {"batch_id":"UUID","regions":[{"bundle_id":"exact supplied bundle ID",
 "source_chunk_ids":["UUID"],"chunk_type":"...","semantic_role":"...",
 "financial_role":"...","region_title_private":"...","semantic_summary_private":"...",
@@ -372,6 +384,27 @@ class AgenticModelResponse(ContractModel):
     regions: tuple[AgenticRegionProposal, ...] = Field(min_length=1)
 
 
+@cache
+def _agentic_tool_definition() -> dict[str, object]:
+    return {
+        "name": AGENTIC_TOOL_NAME,
+        "description": (
+            "Submit the complete bundle-isolated, graph-ready semantic region proposal."
+        ),
+        "parameters": AgenticModelResponse.model_json_schema(),
+    }
+
+
+@cache
+def _serialized_agentic_tool_definition() -> str:
+    return json.dumps(
+        _agentic_tool_definition(),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
 class AgenticBatchResult(ContractModel):
     batch_id: UUID
     model: str = Field(min_length=1)
@@ -406,6 +439,7 @@ class StreamingTransportResponse:
     finish_reason: str | None
     usage: Mapping[str, object]
     completed: bool
+    tool_name: str | None = None
 
 
 class StreamingTransport(Protocol):
@@ -427,8 +461,10 @@ def _decode_cloudflare_sse(
     lines: Iterable[bytes],
     *,
     deadline_monotonic: float | None = None,
-) -> tuple[str, str | None, Mapping[str, object], bool]:
+) -> tuple[str, str | None, Mapping[str, object], bool, str | None]:
     content_parts: list[str] = []
+    tool_argument_parts: dict[int, list[str]] = defaultdict(list)
+    tool_names: dict[int, str] = {}
     finish_reason: str | None = None
     usage: Mapping[str, object] = {}
     completed = False
@@ -464,6 +500,27 @@ def _decode_cloudflare_sse(
             delta = choice.get("delta")
             if not isinstance(delta, Mapping):
                 continue
+            tool_calls = delta.get("tool_calls")
+            if isinstance(tool_calls, Sequence) and not isinstance(tool_calls, (str, bytes)):
+                for tool_call in tool_calls:
+                    if not isinstance(tool_call, Mapping):
+                        continue
+                    raw_index = tool_call.get("index", 0)
+                    index = raw_index if isinstance(raw_index, int) else 0
+                    function = tool_call.get("function")
+                    if not isinstance(function, Mapping):
+                        continue
+                    name = function.get("name")
+                    if isinstance(name, str) and name:
+                        tool_names[index] = name
+                    arguments = function.get("arguments")
+                    if arguments is None:
+                        continue
+                    if not isinstance(arguments, str):
+                        raise CloudflareWorkersAIError(
+                            "Cloudflare Workers AI returned invalid tool arguments"
+                        )
+                    tool_argument_parts[index].append(arguments)
             content = delta.get("content")
             if content is None:
                 continue
@@ -495,7 +552,23 @@ def _decode_cloudflare_sse(
             data_lines.append(line[5:].lstrip(" "))
     if data_lines:
         consume_event("\n".join(data_lines))
-    return "".join(content_parts), finish_reason, usage, completed
+    answer_content = "".join(content_parts)
+    if tool_argument_parts:
+        if len(tool_argument_parts) != 1:
+            raise CloudflareWorkersAIError("Cloudflare Workers AI returned multiple tool calls")
+        if answer_content.strip():
+            raise CloudflareWorkersAIError(
+                "Cloudflare Workers AI mixed content with a required tool call"
+            )
+        tool_index = next(iter(tool_argument_parts))
+        return (
+            "".join(tool_argument_parts[tool_index]),
+            finish_reason,
+            usage,
+            completed,
+            tool_names.get(tool_index),
+        )
+    return answer_content, finish_reason, usage, completed, None
 
 
 class UrllibSseTransport:
@@ -523,7 +596,7 @@ class UrllibSseTransport:
                     raise CloudflareWorkersAIError(
                         "Cloudflare Workers AI returned an unexpected content type"
                     )
-                content, finish_reason, usage, completed = _decode_cloudflare_sse(
+                content, finish_reason, usage, completed, tool_name = _decode_cloudflare_sse(
                     response,
                     deadline_monotonic=deadline_monotonic,
                 )
@@ -535,6 +608,7 @@ class UrllibSseTransport:
                 finish_reason=None,
                 usage={},
                 completed=False,
+                tool_name=None,
             )
         except (TimeoutError, URLError) as error:
             raise CloudflareWorkersAIError(
@@ -547,6 +621,7 @@ class UrllibSseTransport:
             finish_reason=finish_reason,
             usage=usage,
             completed=completed,
+            tool_name=tool_name,
         )
 
 
@@ -638,6 +713,7 @@ def _count_input_tokens(
     return (
         token_counter.count_text(_SYSTEM_PROMPT)
         + token_counter.count_text(_USER_INSTRUCTIONS)
+        + token_counter.count_text(_serialized_agentic_tool_definition())
         + record_tokens
         + len(assignments) * 12
         + bundle_count * 64
@@ -899,24 +975,48 @@ def _extract_json_object(raw_response: str) -> tuple[Mapping[str, object], str]:
     raise ValueError("model response does not contain the expected JSON object")
 
 
-def _quarantined_result(batch: AgenticBatch, reason: str) -> AgenticBatchResult:
+def _quarantined_result(
+    batch: AgenticBatch,
+    reason: str | Sequence[str],
+) -> AgenticBatchResult:
+    reasons = (reason,) if isinstance(reason, str) else tuple(reason)
     return AgenticBatchResult(
         batch_id=batch.batch_id,
         model=CLOUDFLARE_MODEL,
         regions=(),
         validation_status=ValidationStatus.QUARANTINED,
-        quarantine_reasons=(reason,),
+        quarantine_reasons=reasons,
     )
+
+
+def _safe_schema_failure_reasons(error: ValidationError) -> tuple[str, ...]:
+    failures = error.errors(include_url=False, include_context=False, include_input=False)
+    if not failures:
+        return ("invalid_model_schema",)
+    reasons: list[str] = []
+    for failure in failures:
+        failure_type = str(failure.get("type", "unknown")).replace(":", "_")
+        raw_location = failure.get("loc", ())
+        location = ".".join(str(part) for part in raw_location) or "root"
+        reason = f"invalid_model_schema:{failure_type}:{location}"
+        if reason not in reasons:
+            reasons.append(reason)
+        if len(reasons) == 20:
+            break
+    return tuple(reasons)
 
 
 def validate_agentic_response(batch: AgenticBatch, raw_response: str) -> AgenticBatchResult:
     try:
         candidate, canonical = _extract_json_object(raw_response)
+    except ValueError:
+        return _quarantined_result(batch, "invalid_model_json")
+    try:
         response = AgenticModelResponse.model_validate_json(
             json.dumps(candidate, ensure_ascii=False, separators=(",", ":"))
         )
-    except (ValueError, ValidationError):
-        return _quarantined_result(batch, "invalid_model_output")
+    except ValidationError as error:
+        return _quarantined_result(batch, _safe_schema_failure_reasons(error))
     if response.batch_id != batch.batch_id:
         return _quarantined_result(batch, "batch_id_mismatch")
 
@@ -1060,6 +1160,9 @@ class CloudflareWorkersAIClient:
             "stream": True,
             "reasoning_effort": CLOUDFLARE_REASONING_EFFORT,
             "chat_template_kwargs": {"enable_thinking": False},
+            "tools": [_agentic_tool_definition()],
+            "tool_choice": "required",
+            "parallel_tool_calls": False,
         }
         response: StreamingTransportResponse | None = None
         for attempt in range(1, self._max_attempts + 1):
@@ -1095,6 +1198,8 @@ class CloudflareWorkersAIClient:
             return _quarantined_result(batch, "incomplete_model_stream")
         if response.finish_reason == "length":
             return _quarantined_result(batch, "model_output_truncated")
+        if response.tool_name != AGENTIC_TOOL_NAME:
+            return _quarantined_result(batch, "missing_required_tool_call")
         return validate_agentic_response(batch, response.content)
 
 

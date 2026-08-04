@@ -617,13 +617,14 @@ Batching must preserve commercial context without saturating the model context w
 - require at least two chunks per call;
 - execute sequentially with concurrency `1` over Cloudflare's documented HTTP Server-Sent Events interface;
 - require a complete `[DONE]` event, reject length-limited output, disable thinking through Gemma's chat-template setting, and enforce a 600-second socket and wall-clock deadline;
+- require one `submit_agentic_regions` function call whose JSON Schema is generated from the typed response contract, and count that schema in every input budget;
 - never send the entire corpus or make one request per deterministic chunk.
 
 Each input primitive includes all deterministic representations and graph-relevant metadata: raw and normalized text, semantic and embedding text, page and bounding-box provenance, reading order, table hierarchy, candidate facts, entity mentions, money candidates, query families, graph candidates, source hash, extraction method/confidence, completeness, validation, and privacy state.
 
 The model may propose coherent semantic regions, retrieval text, source-exact facts and entities, interpretations of existing money candidates, query families, governed graph relations, conflict flags, and uncertainty notes. A deterministic validator rejects unknown chunk IDs, partial or duplicate coverage, unsupported source spans, unsupported money references, unsupported exact-value candidates, cross-bundle regions, and malformed output. The model never creates persistent IDs or writes canonical graph state.
 
-The Gemma-tokenizer-verified full-corpus dry run plans 324 calls for 24,675 chunks, averages 76.16 primitives and 59,412.68 input tokens per call, reaches 79,282 input tokens at maximum, reserves 24,000 completion tokens, and leaves 152,718 tokens of context headroom at the largest call. No input is skipped or quarantined. A two-chunk live SSE pilot completed without truncation after thinking was disabled, but its proposal failed the strict model-output contract. Full execution remains blocked until a representative pilot passes validation.
+The Gemma-tokenizer-verified full-corpus dry run plans 330 calls for 24,675 chunks, averages 74.77 primitives and 60,180.85 input tokens per call, reaches 79,422 input tokens at maximum, reserves 24,000 completion tokens, and leaves 152,578 tokens of context headroom at the largest call. No input is skipped or quarantined. The tool-schema overhead is included. A two-chunk live SSE pilot produced two regions and passed complete coverage, typed schema, provenance, money-reference, relation-evidence, and bundle-isolation validation.
 
 ### 8.8 Metadata governance
 
