@@ -45,14 +45,14 @@
   - Added Cloudflare's documented SSE transport, low-reasoning/no-thinking controls, complete-stream and truncation guards, and a 600-second socket/wall-clock deadline.
   - Added privacy-safe JSON/schema diagnostics that retain only validation error types and field locations.
   - Replaced unstable free-form JSON with one required `submit_agentic_regions` function call generated from the Pydantic response schema.
-  - Added an exact ordered coverage manifest, evidence-constrained batch/bundle/chunk identifiers, and deterministic entity-candidate tuples.
+  - Added exact ordered source and money-component coverage manifests, evidence-constrained batch/bundle/chunk identifiers, and deterministic entity-candidate tuples.
   - Added explicit region, narrative, and candidate-array bounds after money-dense pilots demonstrated that unconstrained rich output could exhaust 24,000 completion tokens.
   - Added privacy-safe transport categories and numeric-only Cloudflare error codes without retaining provider messages or private partial responses.
   - Verified the SSE event shape with a non-private request and ran isolated private pilots; all private artifacts remain ignored and mode `0600`.
   - Recorded TDD progression as separate red-test and green-implementation commits.
 - In progress: The latest bounded-output contract passes local validation but still requires a live money-dense pilot before any corpus-scale execution.
 - Pending external input: None. Cloudflare credentials load from the ignored `.env`; do not expose or commit them.
-- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.3.0`, package `0.1.0`; graph/index versions remain design-only.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.4.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -80,15 +80,15 @@
   - Deterministic chunk-archive SHA-256: `71f9c919d6d71e677dc49dd30920a4dd0a356131ac97fa5560af3bbb98b60d4e`
   - Agentic order-evidence bundles: 456
   - Agentic input chunks covered: 24,675 of 24,675
-  - Planned rich model calls: 419
-  - Chunks per call: minimum 2, average 58.89, maximum 95
-  - Exact rendered input tokens including dynamic tool schema: minimum 7,878, average 52,862.27, maximum 77,881
+  - Planned rich model calls: 423
+  - Chunks per call: minimum 2, average 58.33, maximum 95
+  - Exact rendered input tokens including dynamic tool schema: minimum 8,017, average 53,674.85, maximum 79,351
   - Reserved completion tokens per call: 24,000
-  - Remaining context headroom at largest call: 154,119 tokens
+  - Remaining context headroom at largest call: 152,649 tokens
   - Gemma tokenizer revision: `google/gemma-4-26B-A4B-it@4d7ae4984b7db7de8f8457170b3f1a419ee76d52`
   - Agentic batching concurrency: 1
   - Agentic input quarantines: 0
-  - Deterministic agentic plan SHA-256: `1aa7235d144b7929b543d2e638b37024e415e66918d146676ab8ba3b335805f1`
+  - Deterministic agentic plan SHA-256: `fe99da2d4996eb634f9f2abb81c940deb0300303f01666af3f4f7f36b3f6125e`
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
@@ -103,6 +103,15 @@
 6. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-05 — Require deterministic money-component coverage
+
+- Decision: Require exact ordered source and money-component manifests; constrain batch, bundle, chunk, entity, and money reference values to deterministic batch evidence; cap regions at the input chunk count; and bound narrative and candidate-array sizes.
+- Rationale: A structurally accepted four-chunk financial proposal covered every chunk but omitted all four money interpretations. The contract now makes that omission a quarantine, while provider-facing money fields use simple enums and the validator proves the exact component-to-chunk pairing.
+- Alternatives rejected: Treating structural acceptance as quality acceptance; raising completion limits indefinitely; accepting partial tool arguments; weakening exact-source validation; making one call per chunk; launching the 423-call plan before a bounded financial pilot passes.
+- Files/contracts affected: `src/lunarbit/agentic.py`, `tests/test_agentic.py`, `PLAN.md`, and `MEMORY.md`.
+- Validation performed: Forty-seven tests, Ruff, and strict mypy pass. A non-private money-schema probe completed with HTTP 200 and a typed tool call. The full dry run covers 24,675 chunks in 423 calls with zero input quarantine and a 79,351-token maximum. The prior financial omission is now rejected deterministically; the latest private contract run did not persist a result and remains unverified.
+- Revisit trigger: The bounded financial pilot still truncates, violates a deterministic candidate constraint, omits a money interpretation, or produces graph regions that do not outperform the deterministic baseline.
 
 ### 2026-08-04 — Bound rich output and constrain model evidence choices
 

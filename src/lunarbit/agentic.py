@@ -36,7 +36,7 @@ from lunarbit.models import (
 )
 
 CLOUDFLARE_MODEL = "@cf/google/gemma-4-26b-a4b-it"
-AGENTIC_CONTRACT_VERSION = "1.3.0"
+AGENTIC_CONTRACT_VERSION = "1.4.0"
 CLOUDFLARE_CONTEXT_WINDOW_TOKENS = 256_000
 CLOUDFLARE_STREAM_TIMEOUT_SECONDS = 600.0
 CLOUDFLARE_REASONING_EFFORT = "low"
@@ -126,15 +126,21 @@ source_chunk_id must identify the chunk whose raw_text_private contains that exa
 normalize whitespace, punctuation, spelling, casing, or legal suffixes in raw_value_private.
 Omit the candidate when an exact cited substring is unavailable.
 
+Interpret every supplied deterministic money component exactly once. Copy each source_component_id
+and its source_chunk_id pairing exactly as supplied, then classify its evidence scope and meaning.
+Do not omit, duplicate, combine, or arithmetically reconcile money components.
+
 Perform this coverage checklist before calling the tool:
 - The union of source_chunk_ids equals the complete input chunk set exactly.
 - Every input source_chunk_id occurs once and only once across all regions.
 - Copy every input source_chunk_id into covered_source_chunk_ids in the supplied order.
+- Copy every supplied money component ID into covered_money_component_ids in the supplied order.
 - Every mail-only bundle must produce at least one region, even when its evidence is sparse.
 - No region may contain source chunks from different bundles.
 
 Submit this shape as the submit_agentic_regions tool arguments:
 {"batch_id":"UUID","covered_source_chunk_ids":["every input UUID in supplied order"],
+"covered_money_component_ids":["every supplied money component UUID in supplied order"],
 "regions":[{"bundle_id":"exact supplied bundle ID",
 "source_chunk_ids":["UUID"],"chunk_type":"...","semantic_role":"...",
 "financial_role":"...","region_title_private":"...","semantic_summary_private":"...",
@@ -404,6 +410,7 @@ class AgenticRegionProposal(ContractModel):
 class AgenticModelResponse(ContractModel):
     batch_id: UUID
     covered_source_chunk_ids: tuple[UUID, ...] = Field(min_length=1)
+    covered_money_component_ids: tuple[UUID, ...]
     regions: tuple[AgenticRegionProposal, ...] = Field(min_length=1)
 
 
@@ -423,6 +430,14 @@ def _agentic_tool_definition(
     properties = parameters["properties"]
     properties["batch_id"]["const"] = str(batch_id)
     properties["covered_source_chunk_ids"]["const"] = [str(chunk_id) for chunk_id in chunk_ids]
+    money_components = tuple(
+        (component.component_id, chunk.chunk_id)
+        for chunk in chunks
+        for component in chunk.candidate_money_components
+    )
+    properties["covered_money_component_ids"]["const"] = [
+        str(component_id) for component_id, _ in money_components
+    ]
     properties["regions"]["maxItems"] = len(chunk_ids)
     region_properties = parameters["$defs"]["AgenticRegionProposal"]["properties"]
     region_properties["bundle_id"]["enum"] = list(bundle_ids)
@@ -457,6 +472,22 @@ def _agentic_tool_definition(
         ]
     else:
         entity_candidates_schema["maxItems"] = 0
+    money_interpretations_schema = region_properties["money_interpretations"]
+    if money_components:
+        money_interpretations_schema["maxItems"] = min(64, len(money_components))
+        money_definition = parameters["$defs"]["AgenticMoneyInterpretation"]
+        money_properties = money_definition["properties"]
+        money_properties["source_component_id"]["enum"] = [
+            str(component_id) for component_id, _ in money_components
+        ]
+        money_properties["source_chunk_id"]["enum"] = [
+            str(source_chunk_id)
+            for source_chunk_id in dict.fromkeys(
+                source_chunk_id for _, source_chunk_id in money_components
+            )
+        ]
+    else:
+        money_interpretations_schema["maxItems"] = 0
     return {
         "name": AGENTIC_TOOL_NAME,
         "description": (
@@ -866,7 +897,7 @@ def _count_input_tokens(
             token_counter.count_text(_serialized_base_agentic_tool_definition())
             + len(assignments) * 96
             + bundle_count * 64
-            + 192
+            + 512
         )
     return (
         token_counter.count_text(_SYSTEM_PROMPT)
@@ -1187,6 +1218,21 @@ def validate_agentic_response(batch: AgenticBatch, raw_response: str) -> Agentic
     )
     if Counter(proposed_ids) != Counter(expected_ids):
         return _quarantined_result(batch, "incomplete_batch_coverage")
+
+    expected_money_ids = tuple(
+        component.component_id
+        for chunk in batch.chunks
+        for component in chunk.candidate_money_components
+    )
+    if response.covered_money_component_ids != expected_money_ids:
+        return _quarantined_result(batch, "money_coverage_manifest_mismatch")
+    proposed_money_ids = tuple(
+        interpretation.source_component_id
+        for region in response.regions
+        for interpretation in region.money_interpretations
+    )
+    if Counter(proposed_money_ids) != Counter(expected_money_ids):
+        return _quarantined_result(batch, "incomplete_money_component_coverage")
 
     chunks_by_id = {chunk.chunk_id: chunk for chunk in batch.chunks}
     bundles_by_chunk_id = dict(zip(expected_ids, batch.chunk_bundle_ids, strict=True))
