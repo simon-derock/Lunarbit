@@ -280,6 +280,7 @@ class AgenticBatchPolicy(ContractModel):
     max_chunks: int = Field(default=512, ge=2)
     max_bundles: int = Field(default=6, ge=1)
     minimum_chunks: int = Field(default=2, ge=2)
+    max_estimated_output_tokens: int | None = Field(default=None, ge=1_000)
 
     @model_validator(mode="after")
     def targets_fit_hard_limits(self) -> AgenticBatchPolicy:
@@ -910,6 +911,19 @@ def _count_input_tokens(
     )
 
 
+def _estimate_output_tokens(assignments: Sequence[_ChunkAssignment]) -> int:
+    """Conservatively budget the typed graph payload before making a model call."""
+    return 1_200 + sum(
+        220
+        + len(assignment.chunk.candidate_assertions) * 180
+        + len(assignment.chunk.entity_mentions) * 180
+        + len(assignment.chunk.candidate_money_components) * 500
+        + len(assignment.chunk.graph_candidates) * 120
+        + len(assignment.chunk.query_families) * 50
+        for assignment in assignments
+    )
+
+
 def _make_batch(
     assignments: Sequence[_ChunkAssignment],
     *,
@@ -995,6 +1009,10 @@ def _fits(
         len(assignments) <= policy.max_chunks
         and len({assignment.bundle_id for assignment in assignments}) <= policy.max_bundles
         and _count_input_tokens(assignments, token_counter=token_counter) <= policy.max_input_tokens
+        and (
+            policy.max_estimated_output_tokens is None
+            or _estimate_output_tokens(assignments) <= policy.max_estimated_output_tokens
+        )
     )
 
 

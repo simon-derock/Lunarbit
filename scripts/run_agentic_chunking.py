@@ -49,6 +49,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--target-input-tokens", type=int, default=64_000)
     parser.add_argument("--max-input-tokens", type=int, default=80_000)
     parser.add_argument("--max-completion-tokens", type=int, default=24_000)
+    parser.add_argument("--max-estimated-output-tokens", type=int, default=18_000)
     parser.add_argument("--max-chunks", type=int, default=512)
     parser.add_argument("--max-bundles", type=int, default=6)
     parser.add_argument(
@@ -104,6 +105,7 @@ def main() -> int:
         target_input_tokens=args.target_input_tokens,
         max_input_tokens=args.max_input_tokens,
         max_completion_tokens=args.max_completion_tokens,
+        max_estimated_output_tokens=args.max_estimated_output_tokens,
         max_chunks=args.max_chunks,
         max_bundles=args.max_bundles,
         minimum_chunks=2,

@@ -26,6 +26,7 @@ from lunarbit.agentic import (
     StreamingTransportResponse,
     _agentic_tool_definition,
     _decode_cloudflare_sse,
+    _estimate_output_tokens,
     execute_agentic_plan,
     plan_agentic_batches,
     render_agentic_user_prompt,
@@ -265,6 +266,49 @@ def test_final_mail_singleton_is_rebalanced_without_a_one_chunk_call() -> None:
 
     assert plan.quarantined_chunk_ids == ()
     assert tuple(len(batch.chunks) for batch in plan.batches) == (5, 2)
+
+
+def test_output_budget_splits_large_payloads_before_model_execution() -> None:
+    bundle = _bundle(
+        "output-heavy",
+        tuple(
+            _chunk(index, source_number=1, text=f"rich evidence {index} " * 8)
+            for index in range(1, 11)
+        ),
+        cohort="zomato:food:pdf-backed",
+    )
+    policy = AgenticBatchPolicy(
+        target_input_tokens=50_000,
+        max_input_tokens=60_000,
+        max_completion_tokens=24_000,
+        max_estimated_output_tokens=2_500,
+        context_window_tokens=100_000,
+        max_chunks=10,
+        max_bundles=1,
+        minimum_chunks=2,
+    )
+
+    plan = plan_agentic_batches(
+        (bundle,),
+        policy=policy,
+        token_counter=_CharacterTokenCounter(),
+    )
+
+    assert len(plan.batches) > 1
+    assert all(
+        _estimate_output_tokens(
+            tuple(
+                agentic_module._ChunkAssignment(
+                    bundle_id=bundle_id,
+                    cohort_key=plan.batches[0].cohort_key,
+                    chunk=chunk,
+                )
+                for bundle_id, chunk in zip(batch.chunk_bundle_ids, batch.chunks, strict=True)
+            )
+        )
+        <= policy.max_estimated_output_tokens
+        for batch in plan.batches
+    )
 
 
 class _FakeTransport:
