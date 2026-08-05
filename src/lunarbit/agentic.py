@@ -121,6 +121,11 @@ Only emit entity_candidates that occur in the supplied deterministic entity_ment
 entity_type, raw_value_private, and source_chunk_id combination exactly as supplied. The tool schema
 restricts this field to those evidence-backed combinations.
 
+Only emit candidate_facts that occur in the supplied deterministic candidate_assertions. Copy the
+fact_type, source_chunk_id, and exact source span from those assertions; never infer a new fact from
+raw_text_private alone. If a deterministic assertion is not supplied, emit an empty candidate_facts
+array for that region.
+
 For each entity candidate, copy raw_value_private byte-for-byte from the cited source chunk. The
 source_chunk_id must identify the chunk whose raw_text_private contains that exact value. Do not
 normalize whitespace, punctuation, spelling, casing, or legal suffixes in raw_value_private.
