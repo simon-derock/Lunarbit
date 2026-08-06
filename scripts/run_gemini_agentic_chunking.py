@@ -133,6 +133,7 @@ def main() -> int:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--model", default="gemini-3.5-flash-lite")
     parser.add_argument("--max-calls", type=int, default=0)
+    parser.add_argument("--resume", action="store_true")
     parser.add_argument("--timeout-seconds", type=float, default=120)
     parser.add_argument("--max-output-tokens", type=int, default=24_000)
     args = parser.parse_args()
@@ -150,7 +151,14 @@ def main() -> int:
     limit = args.max_calls or len(plan.batches)
     accepted = 0
     attempted = 0
-    for batch in plan.batches[:limit]:
+    processed = 0
+    for batch in plan.batches:
+        result_path = args.input / "_agentic" / f"{batch.batch_id}.json"
+        if args.resume and result_path.exists():
+            continue
+        if processed >= limit:
+            break
+        processed += 1
         attempted += 1
         try:
             result = _propose(
