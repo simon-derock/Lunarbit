@@ -126,6 +126,10 @@ fact_type, source_chunk_id, and exact source span from those assertions; never i
 raw_text_private alone. If a deterministic assertion is not supplied, emit an empty candidate_facts
 array for that region.
 
+Only emit relation_candidates whose endpoints and evidence_chunk_ids are supported by the supplied
+deterministic graph_candidates. Do not invent a relationship from narrative context alone; use an
+empty relation_candidates array when no deterministic graph candidate supports it.
+
 For each entity candidate, copy raw_value_private byte-for-byte from the cited source chunk. The
 source_chunk_id must identify the chunk whose raw_text_private contains that exact value. Do not
 normalize whitespace, punctuation, spelling, casing, or legal suffixes in raw_value_private.
