@@ -66,6 +66,7 @@ def _gemini_tool(batch: AgenticBatch) -> dict[str, object]:
                     "pattern",
                     "minItems",
                     "maxItems",
+                    "anyOf",
                 }
             }
         if isinstance(value, list):
