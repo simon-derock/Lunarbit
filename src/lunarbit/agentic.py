@@ -1354,7 +1354,10 @@ class CloudflareWorkersAIClient:
         timeout_seconds: float = CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
     ) -> CloudflareWorkersAIClient:
         account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
-        auth_token = os.environ.get("CLOUDFLARE_AUTH_TOKEN", "")
+        auth_token = os.environ.get("CLOUDFLARE_AUTH_TOKEN") or os.environ.get(
+            "tryCLOUDFLARE_AUTH_TOKEN",  # noqa: SIM112
+            "",
+        )
         if not account_id or not auth_token:
             raise CloudflareWorkersAIError(
                 "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN before live execution",
@@ -1538,10 +1541,16 @@ def execute_agentic_plan(
     client: CloudflareWorkersAIClient,
     output_root: Path,
     max_calls: int,
+    resume: bool = False,
 ) -> AgenticRunSummary:
     if max_calls < 1:
         raise ValueError("max_calls must be positive for live execution")
-    selected = plan.batches[:max_calls]
+    candidates = tuple(
+        batch
+        for batch in plan.batches
+        if not resume or not (output_root / f"{batch.batch_id}.json").exists()
+    )
+    selected = candidates[:max_calls]
     results: list[AgenticBatchResult] = []
     for batch in selected:
         try:
@@ -1556,5 +1565,5 @@ def execute_agentic_plan(
         attempted_batches=len(results),
         accepted_batches=accepted,
         quarantined_batches=len(results) - accepted,
-        remaining_batches=len(plan.batches) - len(results),
+        remaining_batches=len(candidates) - len(results),
     )

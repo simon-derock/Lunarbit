@@ -46,6 +46,7 @@ def parse_args() -> Namespace:
         default=0,
         help="Maximum sequential API calls; required with --execute",
     )
+    parser.add_argument("--resume", action="store_true")
     parser.add_argument("--target-input-tokens", type=int, default=64_000)
     parser.add_argument("--max-input-tokens", type=int, default=80_000)
     parser.add_argument("--max-completion-tokens", type=int, default=24_000)
@@ -129,6 +130,7 @@ def main() -> int:
         client=client,
         output_root=args.input / "_agentic",
         max_calls=args.max_calls,
+        resume=args.resume,
     )
     output = summary.model_dump(mode="json")
     output.update({"model": CLOUDFLARE_MODEL, "concurrency": 1})
