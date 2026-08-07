@@ -52,6 +52,12 @@
   - Recorded TDD progression as separate red-test and green-implementation commits.
 - In progress: The latest bounded-output contract passes local validation but still requires a live money-dense pilot before any corpus-scale execution.
 - Pending external input: None. Cloudflare credentials load from the ignored `.env`; do not expose or commit them.
+- Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
+  graph navigation, and RaBitQ quantization as first-class planned production
+  capabilities. The design retains full-precision vectors for reranking and
+  evidence audits while compressed indexes provide scale-efficient candidate
+  search across future Neo4j, Zilliz/Milvus, LanceDB, and CockroachDB
+  projections.
 - Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.4.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
@@ -103,6 +109,51 @@
 6. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-07 — Make adaptive quantized retrieval a core Lunarbit capability
+
+- Decision: Build the dense retrieval layer around Cohere Embed v4 Matryoshka
+  dimensions, HNSW navigation, and RaBitQ quantization, followed by
+  full-precision reranking and evidence verification.
+- Rationale: Lunarbit's retrieval design should demonstrate production-grade
+  systems thinking: one embedding model supports multiple operating points,
+  HNSW supplies scalable graph navigation, and RaBitQ reduces vector memory and
+  distance-computation cost while retaining a correctness reference.
+- Scope: Benchmark 256/512/1024/1536 dimensions; HNSW `M`, construction,
+  search-expansion settings; provider-native and RaBitQ quantization; exact and
+  evidence-grounded retrieval quality; latency, build time, memory, and storage.
+- Architectural invariant: compressed vectors are an ANN representation only.
+  Canonical evidence, source provenance, deterministic values, and
+  full-precision reranking remain authoritative.
+- Revisit trigger: A backend lacks a production RaBitQ/HNSW implementation;
+  the retrieval contract then falls back to provider-native quantization or
+  full-vector HNSW without changing graph semantics.
+
+#### MRL — adaptive representation resolution
+
+- Cohere Embed v4 provides one embedding model with 256, 512, 1024, and 1536
+  dimensional operating points.
+- Lunarbit uses smaller representations for broad candidate search and larger
+  representations for precision reranking, selected by query-family benchmarks.
+- Arbitrary truncation of embeddings that were not trained for Matryoshka use is
+  not part of the design.
+
+#### HNSW — navigable dense retrieval graph
+
+- HNSW is the dense candidate-navigation layer for evidence, item, entity, and
+  finding indexes.
+- Graph degree, construction effort, and search expansion are explicit tuning
+  controls, recorded with each index build.
+- HNSW results are fused with exact, lexical, metadata, and graph retrieval;
+  evidence coverage remains the final answer gate.
+
+#### RaBitQ — compact quantized ANN search
+
+- RaBitQ is the vector-index compression and distance-estimation layer.
+- It reduces vector memory and distance-computation cost while preserving a
+  full-precision reranking path for correctness and auditability.
+- Backend adapters may use native RaBitQ/HNSW support or the nearest supported
+  quantized implementation without changing canonical graph semantics.
 
 ### 2026-08-05 — Require deterministic money-component coverage
 

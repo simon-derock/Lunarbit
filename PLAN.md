@@ -1808,18 +1808,72 @@ The code must expose one compatibility abstraction rather than spreading version
 
 ### 14.6 HNSW and quantization benchmark
 
-Start with provider defaults.
+Lunarbit's dense retrieval layer is a first-class systems component. It combines
+three independently valuable capabilities:
 
-Benchmark only if recall requires it:
+#### 14.6.1 MRL — adaptive representation resolution
+
+Use Cohere Embed v4's supported Matryoshka dimensions (`256`, `512`, `1024`,
+and `1536`) to expose multiple retrieval operating points from one embedding
+model. MRL allows cheap broad candidate generation and richer precision for
+reranking without maintaining separate embedding models.
+
+The dimension is selected by retrieval benchmark and query family. Arbitrary
+post-hoc truncation of a non-MRL embedding is not permitted.
+
+#### 14.6.2 HNSW — navigable dense retrieval graph
+
+Use HNSW as the dense candidate-navigation layer over evidence, item, entity,
+and finding vectors. Its hierarchical proximity graph enables fast approximate
+nearest-neighbor search with explicit controls for graph degree, construction
+quality, search expansion, memory, and latency.
+
+HNSW candidates are fused with exact IDs, Lucene/BM25, graph traversal, and
+metadata filters. Approximate retrieval never replaces evidence verification.
+
+#### 14.6.3 RaBitQ — compact, high-throughput vector search
+
+Use RaBitQ to encode vectors into compact quantized distance representations and
+accelerate ANN distance estimation. This provides a production path to lower
+vector memory, faster distance computation, and larger effective search
+capacity while preserving a full-precision reranking path.
+
+RaBitQ is an index representation, not canonical data. Full-precision vectors
+remain available for reranking, reproducibility, and quality audits.
+
+#### 14.6.4 Combined retrieval path
+
+```text
+Cohere Embed v4 MRL vector
+  → dimension-aware candidate index
+  → HNSW navigation
+  → RaBitQ-compressed distance estimation where supported
+  → full-precision reranking
+  → lexical/exact/graph fusion
+  → evidence coverage verification
+```
+
+The initial deployment uses provider-supported HNSW and quantization features;
+the adapter must also support a dedicated RaBitQ/HNSW implementation where the
+selected vector backend exposes it. This keeps the retrieval contract portable
+across Neo4j, Zilliz/Milvus, LanceDB, and CockroachDB-backed projections.
+
+Benchmark the complete retrieval stack:
 
 ```text
 vector.hnsw.m: 16, 32
 vector.hnsw.ef_construction: 100, 200
-quantization: scalar, none
+vector.hnsw.ef_search: 50, 100, 200
+embedding_dimension: 256, 512, 1024, 1536
+quantization: full, provider-native, RaBitQ
 search expansion factor: default, 1.5 where supported
 ```
 
-Choose settings by measured exact-neighbour recall, end-to-end answer accuracy, latency, and Aura memory constraints.
+Publish exact-neighbour recall, Hit@K, MRR/nDCG, evidence recall, answer
+grounding, p50/p95 latency, index build time, memory footprint, and storage
+bytes per vector. Retain the full-vector baseline as the correctness reference.
+
+Choose settings by measured end-to-end quality and operational efficiency.
 
 ---
 

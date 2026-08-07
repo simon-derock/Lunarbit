@@ -1,6 +1,10 @@
 # Lunarbit
 
-## Reconstructing trustworthy answers from messy commerce evidence
+## Evidence-Verifiable Personal Commerce GraphRAG
+
+### Reconstructing trustworthy answers from messy commerce evidence
+
+Lunarbit is designed as a public, privacy-safe, six-year personal-commerce intelligence system built from Zomato and Swiggy records.
 
 Lunarbit turns a multi-year archive of Zomato and Swiggy emails, order summaries, merchant invoices, platform-fee invoices, and delivery documents into a provenance-first personal-commerce intelligence system. It is designed to answer questions about orders, merchants, fees, discounts, taxes, payments, delivery evidence, and spending patterns while preserving the chain from every answer back to source evidence.
 
@@ -38,6 +42,16 @@ Lunarbit treats the archive as an evidence reconstruction problem:
 | Graph readiness | Order bundles, merchant/legal-entity/delivery evidence, temporal metadata, candidate relationships, query families, and reversible resolution decisions |
 | Production judgment | Sequential calls, hard token budgets, no private data in Git, `0600` private artifacts, TDD commits, and explicit quality gates before scaling |
 
+### Adaptive retrieval and vector systems
+
+Lunarbit treats retrieval as a systems-design problem, not a generic vector-store integration:
+
+- **MRL — adaptive representation resolution:** Cohere Embed v4 dimensions of 256, 512, 1024, and 1536 support cost-aware candidate search and precision reranking from one embedding model.
+- **HNSW — navigable dense retrieval graph:** hierarchical approximate-nearest-neighbor search provides tunable recall, latency, graph degree, and memory behavior across evidence, item, entity, and finding indexes.
+- **RaBitQ — compact quantized ANN search:** quantized distance estimation reduces vector-memory and distance-computation cost while retaining full-precision vectors for reranking and evidence audits.
+
+The retrieval path combines these capabilities with exact identifiers, Lucene/BM25, graph traversal, metadata filters, and evidence verification. Index parameters, embedding dimensions, quantization settings, recall, grounding, latency, and storage are benchmarked and versioned in the retrieval plan.
+
 ### Current verified corpus and quality metrics
 
 These are measurements from the local private corpus and deterministic pipeline. The source archive and generated private artifacts are intentionally excluded from GitHub.
@@ -62,6 +76,17 @@ The agentic stage is intentionally gated. A structurally valid response is not c
 - The full dry-run planner covers every current chunk under the hard input budget without silently skipping evidence.
 
 The remaining work is deliberately visible: complete the bounded financial quality gate, then build deterministic resolution, reconciliation, graph loading, retrieval benchmarks, and the public evidence experience.
+
+## What the finished system will demonstrate
+
+The public product described in the plan is designed around evidence-heavy questions rather than a generic chat interface:
+
+1. **Cross-document financial reconstruction** — combine an order summary, merchant invoice, platform invoice, and delivery evidence while preserving their different truth scopes.
+2. **Clickable evidence replay** — trace an answer through its calculation, graph path, evidence chunk, and privacy-reviewed page crop.
+3. **Privacy-safe identity analysis** — distinguish high-confidence identity clusters from possible same-name mentions and unresolved delivery evidence.
+4. **Query-adaptive GraphRAG** — route exact lookups, financial aggregation, lexical search, semantic discovery, evidence requests, and multi-hop economic questions through the appropriate retrieval strategy.
+5. **Personal commerce intelligence** — support governed price indices, fee and discount analysis, membership ROI, spending decomposition, and safe scenario analysis.
+6. **Document and business archaeology** — expose invoice-template drift, legal-entity rename history, emerging charge categories, and unexplained financial residuals without inventing causes.
 
 ## Architecture
 
@@ -120,6 +145,38 @@ The current contract provides:
 - privacy-safe diagnostics that retain error categories and numeric provider codes, never private model messages.
 
 The model may propose semantic regions, retrieval text, facts, entities, money interpretations, relationships, conflicts, and uncertainty. It may not create canonical IDs, perform authoritative arithmetic, resolve identities, or write graph state.
+
+### Planned production stack
+
+The implementation is being staged toward the architecture defined in [`PLAN.md`](PLAN.md): Python and Pydantic contracts for the offline pipeline; Neo4j AuraDB for the temporal graph; FastAPI and LangGraph for the query workflow; Next.js and Vercel for the public application; Cohere embeddings selected by benchmark; and Cloudflare Workers AI for bounded semantic enrichment.
+
+## Graph and truth model
+
+The planned graph is layered so that an answer can distinguish what a source said from what the system normalized, calculated, resolved, or inferred:
+
+```text
+Evidence layer      documents, pages, chunks, assertions, source coordinates
+Commerce layer      orders, order lines, merchants, outlets, platforms
+Product layer       observed items, canonical items, comparable item groups
+Identity layer      aliases, legal entities, business roles, reversible decisions
+Financial layer     money components, promotions, taxes, payments, reconciliations
+Intelligence layer  findings, metrics, query traces, evidence-backed explanations
+```
+
+Source claims remain separate from normalized facts. Deterministic calculations remain separate from model interpretations. Identity merges remain reversible. Unexplained residuals remain visible instead of being silently attributed.
+
+## Explicit boundaries
+
+Lunarbit is intentionally not:
+
+- a PDF chatbot that hides its evidence chain;
+- a generic expense dashboard that flattens truth scopes;
+- an unverified text-to-Cypher generator;
+- a banking core, payment processor, or financial-advice product;
+- a public viewer over raw invoices, mailboxes, names, addresses, or registrations;
+- a claim of universal superiority over platform or fintech infrastructure.
+
+The system is a user-owned, privacy-reviewed commerce reconstruction and economic-intelligence project. Public claims must be supported by measured benchmarks or clearly labeled as planned behavior.
 
 ## Privacy and data boundaries
 
@@ -230,6 +287,23 @@ Route questions across exact lookup, lexical retrieval, dense retrieval, graph e
 
 Add price and fee indices, membership ROI, spending decomposition, a privacy-reviewed public projection, an evidence laboratory, benchmark pages, and the live evidence demo.
 
+## Evaluation and definition of done
+
+The project is not complete when a model produces plausible prose. Each stage has a measurable exit gate:
+
+- extraction reproduces reviewed golden documents and preserves source coordinates;
+- agentic regions retain complete chunk and money-component coverage;
+- entity and order resolution meets reviewed precision gates and remains reversible;
+- financial reconciliation is exact, scoped, and residual-aware;
+- graph rebuilds are idempotent and satisfy relationship and privacy invariants;
+- retrieval publishes exact, lexical, dense, hybrid, and graph results with ablations;
+- every showcased answer exposes navigable evidence and its graph path;
+- public privacy-leakage tests pass;
+- deployment is stable and documented;
+- resume claims match measured results rather than aspirations.
+
+Planned benchmark reporting includes extraction accuracy, chunking coverage, entity-resolution precision/recall/F1, monetary accuracy and reconciliation rate, retrieval Hit@1 and MRR, end-to-end answer quality, evidence-support rate, latency, and cost.
+
 ## Professional positioning
 
 The final resume entry should use measured results rather than adjectives:
@@ -243,6 +317,10 @@ The final version will add measured reconciliation accuracy, entity-resolution F
 Lunarbit is an active portfolio build. The deterministic evidence foundation and guarded agentic contract are implemented. The full public claim remains intentionally gated on the financial quality pilot, deterministic resolution, graph construction, retrieval benchmarks, privacy-reviewed projection, and deployment.
 
 That distinction is part of the project: a trustworthy AI engineer should know exactly which results are measured, which are private, which are candidates, and which are still hypotheses.
+
+## The standard
+
+The goal is not to build the largest knowledge graph. It is to build the most convincing, trustworthy, and technically complete public GraphRAG demonstration possible from personal-commerce documents.
 
 ## License and responsible use
 
