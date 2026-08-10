@@ -16,9 +16,11 @@ from lunarbit.models import (
     SourceMessage,
 )
 from lunarbit.resolve import (
+    AgenticOrderRegionReference,
     OrderIdentityStatus,
     ResolutionSignal,
     ResolutionStatus,
+    link_agentic_regions_to_order_evidence,
     public_order_id,
     resolve_order_evidence,
 )
@@ -158,14 +160,18 @@ def test_order_resolution_is_deterministic_reversible_and_provenance_complete() 
         *region_links["ordinary-111"],
         *region_links["history-111"],
     }
-    decision = next(item for item in archive.decisions if item.resolution_id == resolved.resolution_id)
+    decision = next(
+        item for item in archive.decisions if item.resolution_id == resolved.resolution_id
+    )
     assert decision.status is ResolutionStatus.RESOLVED
     assert ResolutionSignal.EXACT_PLATFORM_ORDER_ID in decision.positive_signals
     assert ResolutionSignal.DUPLICATE_HISTORY_EVIDENCE in decision.positive_signals
     assert decision.candidate_ids == resolved.candidate_ids
 
     provisional_order = next(
-        order for order in archive.orders if order.identity_status is OrderIdentityStatus.PROVISIONAL
+        order
+        for order in archive.orders
+        if order.identity_status is OrderIdentityStatus.PROVISIONAL
     )
     assert provisional_order.platform_order_id_private is None
     assert provisional_order.provisional_fingerprint_private == provisional.message_id
@@ -175,8 +181,12 @@ def test_order_resolution_is_deterministic_reversible_and_provenance_complete() 
     assert provisional_decision.status is ResolutionStatus.PROVISIONAL
     assert provisional_decision.positive_signals == (ResolutionSignal.SINGLE_MESSAGE_EVIDENCE,)
 
-    all_candidate_ids = [candidate_id for order in archive.orders for candidate_id in order.candidate_ids]
-    assert sorted(all_candidate_ids) == sorted(candidate.candidate_id for candidate in archive.candidates)
+    all_candidate_ids = [
+        candidate_id for order in archive.orders for candidate_id in order.candidate_ids
+    ]
+    assert sorted(all_candidate_ids) == sorted(
+        candidate.candidate_id for candidate in archive.candidates
+    )
 
 
 def test_order_resolution_rejects_missing_or_cross_platform_source_ownership() -> None:
@@ -232,12 +242,15 @@ def test_public_order_ids_are_keyed_stable_and_do_not_expose_private_ids() -> No
     assert first == second
     assert first.startswith("ORD-SW-")
     assert private_order_id not in first
-    assert public_order_id(
-        order_id=order_id,
-        platform=Platform.SWIGGY,
-        private_order_id=private_order_id,
-        key=b"a different fixture key with at least 32 bytes",
-    ) != first
+    assert (
+        public_order_id(
+            order_id=order_id,
+            platform=Platform.SWIGGY,
+            private_order_id=private_order_id,
+            key=b"a different fixture key with at least 32 bytes",
+        )
+        != first
+    )
     with pytest.raises(ValueError, match="at least 32 bytes"):
         public_order_id(
             order_id=order_id,
@@ -245,3 +258,57 @@ def test_public_order_ids_are_keyed_stable_and_do_not_expose_private_ids() -> No
             private_order_id=private_order_id,
             key=b"short",
         )
+
+
+def test_agentic_region_links_use_bundle_scope_but_isolate_history_rows_by_order_id() -> None:
+    ordinary_document_id = "doc_0000000000000001"
+    history_document_id = "doc_0000000000000002"
+    ordinary = _message("1", documents=(ordinary_document_id,))
+    history = _message("2", documents=(history_document_id,))
+    evidence = (
+        _evidence(
+            "ordinary-111",
+            ordinary.message_id,
+            OrderEvidenceKind.PDF_BUNDLE,
+            "111111111111111",
+        ),
+        _evidence(
+            "history-111",
+            history.message_id,
+            OrderEvidenceKind.HISTORY_ROW,
+            "111111111111111",
+        ),
+        _evidence(
+            "history-222",
+            history.message_id,
+            OrderEvidenceKind.HISTORY_ROW,
+            "222222222222222",
+        ),
+    )
+    ordinary_region = AgenticOrderRegionReference(
+        region_id=UUID("10000000-0000-0000-0000-000000000001"),
+        source_ids=(ordinary_document_id,),
+        order_ids_private=(),
+    )
+    first_history_region = AgenticOrderRegionReference(
+        region_id=UUID("20000000-0000-0000-0000-000000000001"),
+        source_ids=(history_document_id,),
+        order_ids_private=("111111111111111",),
+    )
+    second_history_region = AgenticOrderRegionReference(
+        region_id=UUID("20000000-0000-0000-0000-000000000002"),
+        source_ids=(history_document_id,),
+        order_ids_private=("222222222222222",),
+    )
+
+    links = link_agentic_regions_to_order_evidence(
+        (ordinary, history),
+        evidence,
+        (ordinary_region, first_history_region, second_history_region),
+    )
+
+    assert links == {
+        "history-111": (first_history_region.region_id,),
+        "history-222": (second_history_region.region_id,),
+        "ordinary-111": (ordinary_region.region_id,),
+    }
