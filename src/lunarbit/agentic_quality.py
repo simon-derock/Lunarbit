@@ -149,14 +149,17 @@ def _temporary_aliases(text: str, raw_source_text: str) -> tuple[str, ...]:
 
 
 def _is_structurally_sparse(region: AgenticRegionProposal) -> bool:
-    return not (
-        region.candidate_facts
-        or region.entity_candidates
-        or region.money_interpretations
-        or region.relation_candidates
-        or region.conflict_flags
-        or region.uncertainty_notes_private
-    ) and len(region.semantic_summary_private.split()) < 8
+    return (
+        not (
+            region.candidate_facts
+            or region.entity_candidates
+            or region.money_interpretations
+            or region.relation_candidates
+            or region.conflict_flags
+            or region.uncertainty_notes_private
+        )
+        and len(region.semantic_summary_private.split()) < 8
+    )
 
 
 def _has_uncited_amount_conflict(
@@ -165,9 +168,7 @@ def _has_uncited_amount_conflict(
 ) -> bool:
     if AgenticConflictFlag.AMOUNT_SCOPE_CONFLICT not in region.conflict_flags:
         return False
-    source_numbers = {
-        token.replace(",", "") for token in _NUMBER_TOKEN.findall(raw_source_text)
-    }
+    source_numbers = {token.replace(",", "") for token in _NUMBER_TOKEN.findall(raw_source_text)}
     note_numbers = {
         token.replace(",", "")
         for token in _NUMBER_TOKEN.findall(" ".join(region.uncertainty_notes_private))
@@ -187,9 +188,7 @@ def audit_agentic_region(
         region.embedding_text_private,
     )
     aliases = tuple(
-        alias
-        for text in retrieval_texts
-        for alias in _temporary_aliases(text, raw_source_text)
+        alias for text in retrieval_texts for alias in _temporary_aliases(text, raw_source_text)
     )
     actual_facts = {_fact_key(candidate) for candidate in region.candidate_facts}
     expected_facts = {_fact_key(candidate) for candidate in _source_fact_candidates(sources)}
@@ -511,9 +510,7 @@ def select_agentic_region_retries(
         raise ValueError("region archives require accepted retry results")
 
     baseline_counts = Counter(
-        str(chunk_id)
-        for record in baseline
-        for chunk_id in record.region.source_chunk_ids
+        str(chunk_id) for record in baseline for chunk_id in record.region.source_chunk_ids
     )
     if set(baseline_counts) != set(chunks_by_id) or any(
         count != 1 for count in baseline_counts.values()
@@ -540,9 +537,9 @@ def select_agentic_region_retries(
         else:
             retained.append(record)
 
-    retry_by_bundle: dict[
-        str, list[tuple[AgenticBatchResult, AgenticRegionProposal]]
-    ] = defaultdict(list)
+    retry_by_bundle: dict[str, list[tuple[AgenticBatchResult, AgenticRegionProposal]]] = (
+        defaultdict(list)
+    )
     for result in retries:
         for region in result.regions:
             retry_by_bundle[region.bundle_id].append((result, region))
@@ -553,14 +550,10 @@ def select_agentic_region_retries(
         baseline_candidates = baseline_by_bundle[bundle_id]
         retry_candidates = retry_by_bundle[bundle_id]
         baseline_source_ids = {
-            str(value)
-            for record in baseline_candidates
-            for value in record.region.source_chunk_ids
+            str(value) for record in baseline_candidates for value in record.region.source_chunk_ids
         }
         retry_source_ids = {
-            str(value)
-            for _, region in retry_candidates
-            for value in region.source_chunk_ids
+            str(value) for _, region in retry_candidates for value in region.source_chunk_ids
         }
         if baseline_source_ids != retry_source_ids:
             raise ValueError("retry candidates must preserve bundle-local source coverage")
@@ -572,9 +565,7 @@ def select_agentic_region_retries(
             (result, region, audit_agentic_region(region, chunks_by_id))
             for result, region in retry_candidates
         )
-        retry_issues = tuple(
-            issue for _, _, audit in retry_audits for issue in audit.issues
-        )
+        retry_issues = tuple(issue for _, _, audit in retry_audits for issue in audit.issues)
         if agentic_quality_score(retry_issues) >= agentic_quality_score(baseline_issues):
             retained.extend(baseline_candidates)
             continue
@@ -603,9 +594,7 @@ def select_agentic_region_retries(
         )
     )
     selected_counts = Counter(
-        str(chunk_id)
-        for record in retained
-        for chunk_id in record.region.source_chunk_ids
+        str(chunk_id) for record in retained for chunk_id in record.region.source_chunk_ids
     )
     if selected_counts != baseline_counts:
         raise ValueError("selected region archive must preserve exact source coverage")

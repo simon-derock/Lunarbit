@@ -365,6 +365,4 @@ def test_retry_selection_improves_bundles_without_accepting_higher_evidence_risk
     assert by_bundle["bundle-one"].origin is AgenticRegionOrigin.SEMANTIC_RETRY
     assert by_bundle["bundle-one"].quality_issues == ()
     assert by_bundle["bundle-two"].origin is AgenticRegionOrigin.REPAIRED_BASELINE
-    assert by_bundle["bundle-two"].quality_issues == (
-        AgenticQualityIssue.DETERMINISTIC_FALLBACK,
-    )
+    assert by_bundle["bundle-two"].quality_issues == (AgenticQualityIssue.DETERMINISTIC_FALLBACK,)

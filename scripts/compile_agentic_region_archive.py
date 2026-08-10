@@ -39,8 +39,7 @@ def _parse_args() -> argparse.Namespace:
 def _read_results(root: Path) -> tuple[AgenticBatchResult, ...]:
     paths = tuple(path for path in sorted(root.glob("*.json")) if not path.name.startswith("_"))
     return tuple(
-        AgenticBatchResult.model_validate_json(path.read_text(encoding="utf-8"))
-        for path in paths
+        AgenticBatchResult.model_validate_json(path.read_text(encoding="utf-8")) for path in paths
     )
 
 
