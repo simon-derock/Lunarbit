@@ -224,9 +224,9 @@ def test_table_parent_and_rows_stay_in_one_batch_when_the_table_fits() -> None:
         (bundle,),
         policy=AgenticBatchPolicy(
             target_input_tokens=4_000,
-            max_input_tokens=6_000,
+            max_input_tokens=10_000,
             max_completion_tokens=1_000,
-            context_window_tokens=8_000,
+            context_window_tokens=12_000,
             max_chunks=8,
             max_bundles=1,
             minimum_chunks=2,
@@ -266,6 +266,39 @@ def test_final_mail_singleton_is_rebalanced_without_a_one_chunk_call() -> None:
 
     assert plan.quarantined_chunk_ids == ()
     assert tuple(len(batch.chunks) for batch in plan.batches) == (5, 2)
+
+
+def test_singleton_cohort_leftovers_are_repacked_without_quarantine() -> None:
+    bundles = tuple(
+        _bundle(
+            f"mail-cross-cohort-{index}",
+            (_chunk(index, source_number=index, text=f"mail evidence {index}"),),
+            mail_only=True,
+            cohort=f"platform-{index}:food:mail-only",
+        )
+        for index in range(1, 5)
+    )
+
+    plan = plan_agentic_batches(
+        bundles,
+        policy=AgenticBatchPolicy(
+            target_input_tokens=20_000,
+            max_input_tokens=30_000,
+            max_completion_tokens=5_000,
+            context_window_tokens=40_000,
+            max_chunks=6,
+            max_bundles=2,
+            minimum_chunks=2,
+        ),
+        token_counter=_CharacterTokenCounter(),
+    )
+
+    assert plan.quarantined_chunk_ids == ()
+    assert len(plan.batches) == 2
+    assert all(len(batch.chunks) == 2 for batch in plan.batches)
+    assert {chunk.chunk_id for batch in plan.batches for chunk in batch.chunks} == {
+        chunk.chunk_id for bundle in bundles for chunk in bundle.chunks
+    }
 
 
 def test_output_budget_splits_large_payloads_before_model_execution() -> None:
@@ -365,9 +398,9 @@ def _one_batch() -> tuple[AgenticBatch, tuple[UUID, UUID]]:
         (bundle,),
         policy=AgenticBatchPolicy(
             target_input_tokens=4_000,
-            max_input_tokens=6_000,
+            max_input_tokens=10_000,
             max_completion_tokens=1_000,
-            context_window_tokens=8_000,
+            context_window_tokens=12_000,
             max_chunks=8,
             max_bundles=1,
             minimum_chunks=2,
@@ -544,6 +577,35 @@ def test_agentic_prompt_enforces_closed_entity_vocabulary() -> None:
     assert "raw_value_private byte-for-byte from the cited source chunk" in prompt
     assert "union of source_chunk_ids equals the complete input chunk set exactly" in prompt
     assert "Every mail-only bundle must produce at least one region" in prompt
+    assert "Never emit `subtotal` as" in prompt
+    assert "This is exhaustive evidence transformation, not summarization" in (
+        agentic_module._SYSTEM_PROMPT
+    )
+    assert "Never generate, shorten, repair, reorder, or infer a UUID" in (
+        agentic_module._SYSTEM_PROMPT
+    )
+    assert "unsupported relations are forbidden" in agentic_module._SYSTEM_PROMPT
+
+
+def test_agentic_prompt_supplies_code_owned_identity_and_coverage_ledgers() -> None:
+    batch, chunk_ids = _one_batch()
+
+    prompt = render_agentic_user_prompt(batch)
+    evidence = json.loads(prompt.split("Evidence batch:\n", maxsplit=1)[1])
+
+    assert evidence["response_identity"] == {
+        "batch_id": str(batch.batch_id),
+        "covered_source_chunk_ids": [str(chunk_id) for chunk_id in chunk_ids],
+        "covered_money_component_ids": [],
+    }
+    assert evidence["coverage_ledger"] == [
+        {
+            "bundle_id": "order-client",
+            "source_chunk_id": str(chunk_id),
+            "source_component_ids": [],
+        }
+        for chunk_id in chunk_ids
+    ]
 
 
 def test_invalid_model_batch_is_quarantined_without_partial_acceptance() -> None:
@@ -631,9 +693,9 @@ def test_model_must_interpret_every_deterministic_money_component() -> None:
         (bundle,),
         policy=AgenticBatchPolicy(
             target_input_tokens=4_000,
-            max_input_tokens=6_000,
+            max_input_tokens=10_000,
             max_completion_tokens=1_000,
-            context_window_tokens=8_000,
+            context_window_tokens=12_000,
             max_chunks=4,
             max_bundles=1,
             minimum_chunks=2,
@@ -733,9 +795,9 @@ def test_model_cannot_merge_separate_mail_orders_in_a_shared_call() -> None:
         bundles,
         policy=AgenticBatchPolicy(
             target_input_tokens=4_000,
-            max_input_tokens=6_000,
+            max_input_tokens=10_000,
             max_completion_tokens=1_000,
-            context_window_tokens=8_000,
+            context_window_tokens=12_000,
             max_chunks=4,
             max_bundles=4,
             minimum_chunks=2,
@@ -885,9 +947,9 @@ def test_execute_plan_persists_only_safe_transport_error_code(tmp_path: Path) ->
     plan = AgenticBatchPlan(
         policy=AgenticBatchPolicy(
             target_input_tokens=4_000,
-            max_input_tokens=6_000,
+            max_input_tokens=10_000,
             max_completion_tokens=1_000,
-            context_window_tokens=8_000,
+            context_window_tokens=12_000,
             max_chunks=8,
             max_bundles=1,
             minimum_chunks=2,
@@ -920,7 +982,7 @@ def test_execute_plan_persists_only_safe_transport_error_code(tmp_path: Path) ->
 def test_default_policy_uses_80k_input_tokens_and_reserves_context() -> None:
     policy = AgenticBatchPolicy()
 
-    assert AGENTIC_CONTRACT_VERSION == "1.4.0"
+    assert AGENTIC_CONTRACT_VERSION == "1.5.0"
     assert CLOUDFLARE_MODEL == "@cf/google/gemma-4-26b-a4b-it"
     assert CLOUDFLARE_CONTEXT_WINDOW_TOKENS == 256_000
     assert policy.target_input_tokens == 64_000
