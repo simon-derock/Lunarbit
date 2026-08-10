@@ -53,17 +53,27 @@ def parse_args() -> Namespace:
     parser.add_argument("--max-estimated-output-tokens", type=int, default=18_000)
     parser.add_argument("--max-chunks", type=int, default=512)
     parser.add_argument("--max-bundles", type=int, default=6)
+    parser.add_argument("--bundle-start", type=int, default=0)
+    parser.add_argument("--bundle-count", type=int, default=0)
     parser.add_argument(
         "--timeout-seconds",
         type=float,
         default=CLOUDFLARE_STREAM_TIMEOUT_SECONDS,
         help="Socket timeout for connecting to and reading the SSE stream",
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Provider-specific result directory; defaults to input/_agentic/cloudflare",
+    )
     args = parser.parse_args()
     if args.execute and args.max_calls < 1:
         parser.error("--execute requires --max-calls of at least 1")
     if not args.execute and args.max_calls:
         parser.error("--max-calls is only valid with --execute")
+    if args.bundle_start < 0 or args.bundle_count < 0:
+        parser.error("bundle-start and bundle-count must be non-negative")
     return args
 
 
@@ -102,6 +112,10 @@ def main() -> int:
     load_dotenv(REPOSITORY_ROOT / ".env", override=False)
     args = parse_args()
     bundles = load_agentic_evidence_bundles(args.input)
+    if args.bundle_count:
+        bundles = bundles[args.bundle_start : args.bundle_start + args.bundle_count]
+    elif args.bundle_start:
+        bundles = bundles[args.bundle_start :]
     policy = AgenticBatchPolicy(
         target_input_tokens=args.target_input_tokens,
         max_input_tokens=args.max_input_tokens,
@@ -128,7 +142,7 @@ def main() -> int:
     summary = execute_agentic_plan(
         plan,
         client=client,
-        output_root=args.input / "_agentic",
+        output_root=args.output or (args.input / "_agentic" / "cloudflare"),
         max_calls=args.max_calls,
         resume=args.resume,
     )

@@ -8,7 +8,7 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from lunarbit.agentic import (
     _SYSTEM_PROMPT,
@@ -40,7 +40,8 @@ def _gemini_tool(batch: AgenticBatch) -> dict[str, object]:
         bundle_ids=batch.bundle_ids,
         chunks=batch.chunks,
     )
-    definitions = tool["parameters"].get("$defs", {})
+    parameters = cast(dict[str, Any], tool["parameters"])
+    definitions = parameters.get("$defs", {})
 
     def normalize(value: Any) -> Any:
         if isinstance(value, dict):
@@ -73,7 +74,7 @@ def _gemini_tool(batch: AgenticBatch) -> dict[str, object]:
             return [normalize(item) for item in value]
         return value
 
-    parameters = normalize(tool["parameters"])
+    parameters = normalize(parameters)
     return {
         "functionDeclarations": [
             {
@@ -125,7 +126,8 @@ def _propose(
     calls = [part["functionCall"]["args"] for part in parts if "functionCall" in part]
     if len(calls) != 1:
         raise RuntimeError("gemini_missing_or_multiple_function_calls")
-    return validate_agentic_response(batch, json.dumps(calls[0], ensure_ascii=False))
+    result = validate_agentic_response(batch, json.dumps(calls[0], ensure_ascii=False))
+    return result.model_copy(update={"model": model})
 
 
 def main() -> int:
@@ -133,12 +135,26 @@ def main() -> int:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--model", default="gemini-3.5-flash-lite")
     parser.add_argument("--max-calls", type=int, default=0)
+    parser.add_argument("--bundle-start", type=int, default=0)
+    parser.add_argument("--bundle-count", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--timeout-seconds", type=float, default=120)
     parser.add_argument("--max-output-tokens", type=int, default=24_000)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Provider-specific result directory; defaults to input/_agentic/gemini",
+    )
     args = parser.parse_args()
     key = _env_key(Path.cwd())
     bundles = load_agentic_evidence_bundles(args.input)
+    if args.bundle_start < 0 or args.bundle_count < 0:
+        parser.error("bundle-start and bundle-count must be non-negative")
+    if args.bundle_count:
+        bundles = bundles[args.bundle_start : args.bundle_start + args.bundle_count]
+    elif args.bundle_start:
+        bundles = bundles[args.bundle_start :]
     policy = AgenticBatchPolicy(
         target_input_tokens=12_000,
         max_input_tokens=16_000,
@@ -148,12 +164,14 @@ def main() -> int:
     )
     counter = GemmaTokenizerCounter.from_cache(args.input / "_agentic" / "_tokenizer")
     plan: AgenticBatchPlan = plan_agentic_batches(bundles, policy=policy, token_counter=counter)
+    output_root = args.output or (args.input / "_agentic" / "gemini")
+    output_root.mkdir(parents=True, exist_ok=True)
     limit = args.max_calls or len(plan.batches)
     accepted = 0
     attempted = 0
     processed = 0
     for batch in plan.batches:
-        result_path = args.input / "_agentic" / f"{batch.batch_id}.json"
+        result_path = output_root / f"{batch.batch_id}.json"
         if args.resume and result_path.exists():
             continue
         if processed >= limit:
@@ -180,7 +198,7 @@ def main() -> int:
                 )
             )
             return 1
-        write_agentic_result(result, args.input / "_agentic")
+        write_agentic_result(result, output_root)
         if result.validation_status.value == "accepted":
             accepted += 1
     print(
