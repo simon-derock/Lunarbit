@@ -2,12 +2,12 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-04
-- Active phase: Phase 2B bounded Gemma tool-output contract implemented; a bounded financial quality pilot is next.
+- Last updated: 2026-08-10
+- Active phase: Phase 2B corpus enrichment, targeted semantic retry, and canonical region compilation are complete; Phase 3 identity and order resolution is next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified remote commit: `e75e83d` (`feat(agentic): require typed Gemma tool-call responses`).
-- Last passing checks: Ruff lint, strict mypy, 46 pytest tests, the complete deterministic chunking benchmark, the dynamic-tool-schema-aware Gemma-tokenizer full-corpus dry run, an accepted live two-chunk SSE tool-call pilot, and an accepted representative mail-only pilot.
+- Last verified remote commit: `4387bab` (`docs(retrieval): define RaBitQ, HNSW, and MRL architecture`).
+- Last passing checks: Ruff lint, strict mypy, 60 pytest tests, complete deterministic extraction and chunking benchmarks, and a corpus-wide repaired-agentic invariant audit.
 
 ## Current state
 
@@ -50,15 +50,20 @@
   - Added privacy-safe transport categories and numeric-only Cloudflare error codes without retaining provider messages or private partial responses.
   - Verified the SSE event shape with a non-private request and ran isolated private pilots; all private artifacts remain ignored and mode `0600`.
   - Recorded TDD progression as separate red-test and green-implementation commits.
-- In progress: The latest bounded-output contract passes local validation but still requires a live money-dense pilot before any corpus-scale execution.
-- Pending external input: None. Cloudflare credentials load from the ignored `.env`; do not expose or commit them.
+  - Completed 1,308 accepted agentic batch results containing 13,889 semantic regions with exact coverage of all 24,675 deterministic chunks and 5,199 money components.
+  - Added deterministic post-processing that removes call-local aliases, restores supplied facts and entities, rejects candidates outside the deterministic contract, specializes duplicate embedding text, and enriches safe sparse regions without mutating the original model archive.
+  - Produced a private repaired archive with exact bundle, source, money, fact, entity, and relation invariants and a content-addressed quality manifest.
+  - Retried the 1,254 semantic-warning regions as 255 rate-governed batches, then deterministically repaired and accepted 1,388 replacement regions.
+  - Compiled one canonical private region archive with deterministic region IDs, exact source and money coverage, batch/model provenance, and explicit residual quality flags.
+- In progress: Phase 2 is complete. The 418 residual semantic warnings remain visible and evidence-safe rather than being rewritten until they appear clean.
+- Pending external input: None. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
   capabilities. The design retains full-precision vectors for reranking and
   evidence audits while compressed indexes provide scale-efficient candidate
   search across future Neo4j, Zilliz/Milvus, LanceDB, and CockroachDB
   projections.
-- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.4.0`, package `0.1.0`; graph/index versions remain design-only.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, package `0.1.0`; graph/index versions remain design-only.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -95,20 +100,41 @@
   - Agentic batching concurrency: 1
   - Agentic input quarantines: 0
   - Deterministic agentic plan SHA-256: `fe99da2d4996eb634f9f2abb81c940deb0300303f01666af3f4f7f36b3f6125e`
+  - Accepted agentic result files: 1,308
+  - Agentic semantic regions: 13,889
+  - Deterministically repaired regions: 5,420
+  - Temporary call-local references removed: 7,946
+  - Restored supplied fact candidates: 418
+  - Restored supplied entity candidates: 59
+  - Removed candidates outside the deterministic contract: 26 facts and 190 entity occurrences
+  - Initial semantic retry targets: 1,254 regions across 759 result batches
+  - Repaired agentic archive SHA-256: `3460f2c39106dc5ec5d2b3adc3ceadc433fc5b887354020eea5504fafb6a6124`
+  - Targeted semantic retry batches: 255 accepted of 255
+  - Canonical agentic regions: 14,023
+  - Canonical baseline regions retained: 12,635
+  - Canonical semantic-retry regions selected: 1,388
+  - Residual explicitly flagged regions: 418
+  - Canonical agentic-region archive SHA-256: `5b0e28da71a988e3b1fee20f9958d5478c20d90ca9cf69b343e0c0df9f9b99aa`
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Run one bounded money-dense live pilot and require complete typed acceptance before increasing the call cap.
-2. Manually review accepted financial and mail-only regions against the supplied source evidence.
-3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
-4. Compare tool-assisted proposals with the deterministic baseline; accept only measured improvements after typed validation.
-5. Confirm production-sized batches do not regress completeness or relationship precision before increasing the call cap.
-6. Begin Phase 3 order bundling and entity resolution only after golden financial/entity facts remain source-linked.
+1. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
+2. Begin Phase 3 order, merchant, legal-entity, item, and delivery-mention resolution from the canonical region archive.
+3. Compile deterministic persistent IDs and reversible resolution decisions before canonical graph ingestion.
+4. Preserve the 299 fallback, 17 sparse, and 110 under-cited-conflict flags as reviewable evidence quality state; do not silently erase them.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-10 — Repair model enrichment through a deterministic provenance boundary
+
+- Decision: Preserve the original accepted model archive, write repaired results to a separate private archive, restore only candidates already supplied by deterministic extraction, remove candidates outside that contract, eliminate call-local retrieval aliases, and queue semantic-only warnings for selective retry.
+- Rationale: Structural acceptance proved complete source and money coverage but did not guarantee exhaustive fact/entity transfer or retrieval-text hygiene. Deterministic evidence already contains enough information to repair those defects without spending tokens or weakening provenance.
+- Alternatives rejected: Mutating the original model archive; rerunning all 1,308 calls; accepting temporary `cNNNN` aliases into embeddings; allowing grounded but contract-external model candidates into canonical graph state; hiding fallbacks by rewriting their labels.
+- Validation performed: The repaired archive contains 1,308 valid results and 13,889 regions. A selective 255-batch retry reduced 1,254 semantic-warning regions to 418 explicitly flagged replacements. The compiled archive contains 14,023 deterministic region records; all 24,675 source chunks and all 5,199 money components occur exactly once, and bundle, alias, fact, entity, money, and relation invariant error counts are zero.
+- Revisit trigger: A reviewed semantic retry introduces incomplete coverage, unsupported candidates, cross-bundle regions, or worse retrieval quality than the deterministic repair.
 
 ### 2026-08-07 — Make adaptive quantized retrieval a core Lunarbit capability
 
