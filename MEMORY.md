@@ -2,12 +2,12 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-10
+- Last updated: 2026-08-11
 - Active phase: Phase 2B corpus enrichment, targeted semantic retry, and canonical region compilation are complete; Phase 3 identity and order resolution is next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified remote commit: `4387bab` (`docs(retrieval): define RaBitQ, HNSW, and MRL architecture`).
-- Last passing checks: Ruff lint, strict mypy, 60 pytest tests, complete deterministic extraction and chunking benchmarks, and a corpus-wide repaired-agentic invariant audit.
+- Last verified remote commit: `5a557a0` (`docs(memory): record canonical agentic archive completion`).
+- Last passing checks: Ruff lint, strict mypy, 64 pytest tests, complete deterministic extraction and chunking benchmarks, and a corpus-wide canonical-agentic invariant audit.
 
 ## Current state
 
@@ -55,7 +55,9 @@
   - Produced a private repaired archive with exact bundle, source, money, fact, entity, and relation invariants and a content-addressed quality manifest.
   - Retried the 1,254 semantic-warning regions as 255 rate-governed batches, then deterministically repaired and accepted 1,388 replacement regions.
   - Compiled one canonical private region archive with deterministic region IDs, exact source and money coverage, batch/model provenance, and explicit residual quality flags.
-- In progress: Phase 2 is complete. The 418 residual semantic warnings remain visible and evidence-safe rather than being rewritten until they appear clean.
+  - Completed a second 248-batch semantic pass over complete conflict bundles and deterministically selected retries only when they reduced bundle-level evidence risk.
+  - Compiled the final Phase 2 archive with all 24,675 source chunks and 5,199 money components represented exactly once, 13,597 unique deterministic region IDs, and zero blocking quality defects.
+- In progress: Phase 2 is complete. Phase 3 deterministic identity and order resolution is next; 335 non-blocking quality flags remain explicit across 334 evidence-safe regions.
 - Pending external input: None. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
@@ -110,23 +112,33 @@
   - Initial semantic retry targets: 1,254 regions across 759 result batches
   - Repaired agentic archive SHA-256: `3460f2c39106dc5ec5d2b3adc3ceadc433fc5b887354020eea5504fafb6a6124`
   - Targeted semantic retry batches: 255 accepted of 255
-  - Canonical agentic regions: 14,023
-  - Canonical baseline regions retained: 12,635
-  - Canonical semantic-retry regions selected: 1,388
-  - Residual explicitly flagged regions: 418
-  - Canonical agentic-region archive SHA-256: `5b0e28da71a988e3b1fee20f9958d5478c20d90ca9cf69b343e0c0df9f9b99aa`
+  - Second semantic retry batches: 248 accepted of 248, zero quarantines
+  - Final canonical agentic regions: 13,597
+  - Final canonical baseline regions retained: 10,736
+  - Final canonical semantic-retry regions selected: 2,861
+  - Residual explicitly flagged regions: 334
+  - Residual quality flags: 296 deterministic fallbacks, 9 sparse regions, 30 under-cited amount conflicts
+  - Final canonical agentic-region archive SHA-256: `9279ed9ad95cf1b4186f23d7abd270ec4524df1366c31e0cc90ff5d5c595939e`
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
 
 ## Next actions — ordered
 
-1. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
-2. Begin Phase 3 order, merchant, legal-entity, item, and delivery-mention resolution from the canonical region archive.
-3. Compile deterministic persistent IDs and reversible resolution decisions before canonical graph ingestion.
-4. Preserve the 299 fallback, 17 sparse, and 110 under-cited-conflict flags as reviewable evidence quality state; do not silently erase them.
+1. Begin Phase 3 order, merchant, legal-entity, item, and delivery-mention resolution from the final canonical region archive.
+2. Compile deterministic persistent IDs and reversible resolution decisions before canonical graph ingestion.
+3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
+4. Preserve the 296 fallback, 9 sparse, and 30 under-cited-conflict flags as reviewable evidence quality state; do not silently erase them.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-11 — Select semantic retries by complete-bundle evidence risk
+
+- Decision: Compare repaired baseline and second-pass retry candidates at complete bundle scope, weight under-cited amount conflicts above sparse structure and deterministic fallback prose, and replace a bundle only when its aggregate evidence-risk score improves.
+- Rationale: A blanket retry replacement reduced total warning counts but could regress a previously safe financial explanation. Bundle-level selection preserves interdependent order evidence while making provenance correctness the primary optimization target.
+- Alternatives rejected: Blindly replacing every retried region; selecting individual regions and splitting bundle context; minimizing raw warning count without distinguishing financial provenance risk; hiding residual flags through cosmetic rewriting.
+- Validation performed: All 248 second-pass batches were accepted with zero quarantines. The final archive contains 13,597 unique deterministic regions, covers all 24,675 source chunks and all 5,199 money components exactly once, and retains 335 explicit non-blocking flags across 334 regions. Blocking alias, candidate-support, coverage, identity, and money invariants are zero. Archive SHA-256 is `9279ed9ad95cf1b4186f23d7abd270ec4524df1366c31e0cc90ff5d5c595939e`.
+- Revisit trigger: A reviewed benchmark shows that a different evidence-risk weighting improves grounded retrieval without increasing unresolved financial provenance risk.
 
 ### 2026-08-10 — Repair model enrichment through a deterministic provenance boundary
 
