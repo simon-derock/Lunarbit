@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -387,6 +387,21 @@ _BLOCKING_ARCHIVE_ISSUES = frozenset(
     }
 )
 
+_QUALITY_ISSUE_WEIGHTS = {
+    AgenticQualityIssue.UNCITED_AMOUNT_CONFLICT: 10,
+    AgenticQualityIssue.SHORT_STRUCTURALLY_SPARSE: 5,
+    AgenticQualityIssue.DETERMINISTIC_FALLBACK: 2,
+    AgenticQualityIssue.DUPLICATE_RETRIEVAL_TEXT: 2,
+}
+
+
+def agentic_quality_score(issues: Iterable[AgenticQualityIssue]) -> tuple[int, int]:
+    issue_tuple = tuple(issues)
+    return (
+        sum(_QUALITY_ISSUE_WEIGHTS.get(issue, 100) for issue in issue_tuple),
+        len(issue_tuple),
+    )
+
 
 def compile_agentic_region_records(
     baseline_results: Iterable[AgenticBatchResult],
@@ -479,3 +494,133 @@ def compile_agentic_region_records(
     if len({record.region_id for record in records}) != len(records):
         raise ValueError("compiled region IDs must be unique")
     return tuple(records)
+
+
+def select_agentic_region_retries(
+    baseline_records: Iterable[AgenticRegionRecord],
+    retry_results: Iterable[AgenticBatchResult],
+    *,
+    retry_chunk_ids: frozenset[str],
+    chunks_by_id: Mapping[str, EvidenceChunk],
+) -> tuple[AgenticRegionRecord, ...]:
+    baseline = tuple(baseline_records)
+    retries = tuple(retry_results)
+    if not retry_chunk_ids:
+        raise ValueError("retry chunk IDs cannot be empty")
+    if any(result.validation_status is not ValidationStatus.ACCEPTED for result in retries):
+        raise ValueError("region archives require accepted retry results")
+
+    baseline_counts = Counter(
+        str(chunk_id)
+        for record in baseline
+        for chunk_id in record.region.source_chunk_ids
+    )
+    if set(baseline_counts) != set(chunks_by_id) or any(
+        count != 1 for count in baseline_counts.values()
+    ):
+        raise ValueError("baseline records must cover every source chunk exactly once")
+    retry_counts = Counter(
+        str(chunk_id)
+        for result in retries
+        for region in result.regions
+        for chunk_id in region.source_chunk_ids
+    )
+    if set(retry_counts) != retry_chunk_ids or any(count != 1 for count in retry_counts.values()):
+        raise ValueError("retry results must cover every selected source chunk exactly once")
+
+    retained: list[AgenticRegionRecord] = []
+    baseline_by_bundle: dict[str, list[AgenticRegionRecord]] = defaultdict(list)
+    for record in baseline:
+        source_ids = {str(value) for value in record.region.source_chunk_ids}
+        overlap = source_ids & retry_chunk_ids
+        if overlap and overlap != source_ids:
+            raise ValueError("retry selection cannot split an existing baseline region")
+        if overlap:
+            baseline_by_bundle[record.region.bundle_id].append(record)
+        else:
+            retained.append(record)
+
+    retry_by_bundle: dict[
+        str, list[tuple[AgenticBatchResult, AgenticRegionProposal]]
+    ] = defaultdict(list)
+    for result in retries:
+        for region in result.regions:
+            retry_by_bundle[region.bundle_id].append((result, region))
+    if set(baseline_by_bundle) != set(retry_by_bundle):
+        raise ValueError("retry and baseline bundle selections must match")
+
+    for bundle_id in sorted(baseline_by_bundle):
+        baseline_candidates = baseline_by_bundle[bundle_id]
+        retry_candidates = retry_by_bundle[bundle_id]
+        baseline_source_ids = {
+            str(value)
+            for record in baseline_candidates
+            for value in record.region.source_chunk_ids
+        }
+        retry_source_ids = {
+            str(value)
+            for _, region in retry_candidates
+            for value in region.source_chunk_ids
+        }
+        if baseline_source_ids != retry_source_ids:
+            raise ValueError("retry candidates must preserve bundle-local source coverage")
+
+        baseline_issues = tuple(
+            issue for record in baseline_candidates for issue in record.quality_issues
+        )
+        retry_audits = tuple(
+            (result, region, audit_agentic_region(region, chunks_by_id))
+            for result, region in retry_candidates
+        )
+        retry_issues = tuple(
+            issue for _, _, audit in retry_audits for issue in audit.issues
+        )
+        if agentic_quality_score(retry_issues) >= agentic_quality_score(baseline_issues):
+            retained.extend(baseline_candidates)
+            continue
+        for result, region, audit in retry_audits:
+            if set(audit.issues) & _BLOCKING_ARCHIVE_ISSUES:
+                raise ValueError("retry region contains a deterministic quality defect")
+            if result.response_sha256 is None:
+                raise ValueError("accepted result must retain its response hash")
+            retained.append(
+                AgenticRegionRecord(
+                    region_id=agentic_region_id(region),
+                    origin=AgenticRegionOrigin.SEMANTIC_RETRY,
+                    source_batch_id=result.batch_id,
+                    model=result.model,
+                    response_sha256=result.response_sha256,
+                    quality_issues=audit.issues,
+                    region=region,
+                )
+            )
+
+    retained.sort(
+        key=lambda record: (
+            record.region.bundle_id,
+            tuple(str(value) for value in record.region.source_chunk_ids),
+            str(record.region_id),
+        )
+    )
+    selected_counts = Counter(
+        str(chunk_id)
+        for record in retained
+        for chunk_id in record.region.source_chunk_ids
+    )
+    if selected_counts != baseline_counts:
+        raise ValueError("selected region archive must preserve exact source coverage")
+    expected_money = Counter(
+        str(component.component_id)
+        for chunk in chunks_by_id.values()
+        for component in chunk.candidate_money_components
+    )
+    selected_money = Counter(
+        str(interpretation.source_component_id)
+        for record in retained
+        for interpretation in record.region.money_interpretations
+    )
+    if selected_money != expected_money:
+        raise ValueError("selected region archive must preserve exact money coverage")
+    if len({record.region_id for record in retained}) != len(retained):
+        raise ValueError("selected region IDs must be unique")
+    return tuple(retained)

@@ -14,15 +14,22 @@ from lunarbit.agentic import (
     _atomic_private_write,
     load_agentic_evidence_bundles,
 )
-from lunarbit.agentic_quality import AgenticRegionOrigin, compile_agentic_region_records
+from lunarbit.agentic_quality import (
+    AgenticRegionOrigin,
+    AgenticRegionRecord,
+    compile_agentic_region_records,
+    select_agentic_region_retries,
+)
 
-ARCHIVE_VERSION = "1.0.0"
+ARCHIVE_VERSION = "1.1.0"
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--processed-root", type=Path, default=Path("data/processed"))
-    parser.add_argument("--baseline", type=Path, required=True)
+    baseline = parser.add_mutually_exclusive_group(required=True)
+    baseline.add_argument("--baseline", type=Path)
+    baseline.add_argument("--baseline-region-archive", type=Path)
     parser.add_argument("--retry", type=Path, required=True)
     parser.add_argument("--retry-manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -34,6 +41,14 @@ def _read_results(root: Path) -> tuple[AgenticBatchResult, ...]:
     return tuple(
         AgenticBatchResult.model_validate_json(path.read_text(encoding="utf-8"))
         for path in paths
+    )
+
+
+def _read_region_records(path: Path) -> tuple[AgenticRegionRecord, ...]:
+    return tuple(
+        AgenticRegionRecord.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
     )
 
 
@@ -51,12 +66,24 @@ def main() -> int:
     args = _parse_args()
     bundles = load_agentic_evidence_bundles(args.processed_root)
     chunks_by_id = {str(chunk.chunk_id): chunk for bundle in bundles for chunk in bundle.chunks}
-    records = compile_agentic_region_records(
-        _read_results(args.baseline),
-        _read_results(args.retry),
-        retry_chunk_ids=_retry_chunk_ids(args.retry_manifest),
-        chunks_by_id=chunks_by_id,
-    )
+    retry_results = _read_results(args.retry)
+    retry_chunk_ids = _retry_chunk_ids(args.retry_manifest)
+    if args.baseline_region_archive is not None:
+        records = select_agentic_region_retries(
+            _read_region_records(args.baseline_region_archive),
+            retry_results,
+            retry_chunk_ids=retry_chunk_ids,
+            chunks_by_id=chunks_by_id,
+        )
+        selection_policy = "evidence_risk_weighted_bundle_selection_v1"
+    else:
+        records = compile_agentic_region_records(
+            _read_results(args.baseline),
+            retry_results,
+            retry_chunk_ids=retry_chunk_ids,
+            chunks_by_id=chunks_by_id,
+        )
+        selection_policy = "exhaustive_retry_replacement_v1"
     content = "".join(f"{record.model_dump_json()}\n" for record in records).encode()
     output_root = args.output.resolve()
     _atomic_private_write(output_root / "regions.jsonl", content)
@@ -65,6 +92,7 @@ def main() -> int:
     issue_counts = Counter(issue.value for record in records for issue in record.quality_issues)
     manifest = {
         "archive_version": ARCHIVE_VERSION,
+        "selection_policy": selection_policy,
         "archive_sha256": sha256(content).hexdigest(),
         "regions": len(records),
         "source_chunks": len(chunks_by_id),
