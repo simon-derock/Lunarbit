@@ -8,6 +8,7 @@ import pytest
 
 from lunarbit.models import (
     DocumentRole,
+    EntityType,
     OrderCategory,
     OrderEvidence,
     OrderEvidenceKind,
@@ -17,11 +18,14 @@ from lunarbit.models import (
 )
 from lunarbit.resolve import (
     AgenticOrderRegionReference,
+    DeliveryIdentityStatus,
+    EntityEvidenceMention,
     OrderIdentityStatus,
     ResolutionSignal,
     ResolutionStatus,
     link_agentic_regions_to_order_evidence,
     public_order_id,
+    resolve_entity_mentions,
     resolve_order_evidence,
 )
 
@@ -312,3 +316,106 @@ def test_agentic_region_links_use_bundle_scope_but_isolate_history_rows_by_order
         "history-222": (second_history_region.region_id,),
         "ordinary-111": (ordinary_region.region_id,),
     }
+
+
+def test_entity_resolution_merges_brands_conservatively_and_never_merges_names_into_people() -> (
+    None
+):
+    first_order = UUID("30000000-0000-0000-0000-000000000001")
+    second_order = UUID("30000000-0000-0000-0000-000000000002")
+    mentions = (
+        EntityEvidenceMention(
+            mention_id=UUID("40000000-0000-0000-0000-000000000001"),
+            entity_type=EntityType.MERCHANT,
+            raw_value_private="Sample Kitchen",
+            normalized_value_private="sample kitchen",
+            source_chunk_id=UUID("50000000-0000-0000-0000-000000000001"),
+            source_id="doc_0000000000000001",
+            platform=Platform.SWIGGY,
+            order_ids=(first_order,),
+        ),
+        EntityEvidenceMention(
+            mention_id=UUID("40000000-0000-0000-0000-000000000002"),
+            entity_type=EntityType.MERCHANT,
+            raw_value_private="SAMPLE KITCHEN",
+            normalized_value_private="sample kitchen",
+            source_chunk_id=UUID("50000000-0000-0000-0000-000000000002"),
+            source_id="doc_0000000000000002",
+            platform=Platform.SWIGGY,
+            order_ids=(second_order,),
+        ),
+        EntityEvidenceMention(
+            mention_id=UUID("40000000-0000-0000-0000-000000000003"),
+            entity_type=EntityType.MERCHANT,
+            raw_value_private="Sample Kitchen",
+            normalized_value_private="sample kitchen",
+            source_chunk_id=UUID("50000000-0000-0000-0000-000000000003"),
+            source_id="msg_0000000000000003",
+            platform=Platform.ZOMATO,
+            order_ids=(first_order,),
+        ),
+        EntityEvidenceMention(
+            mention_id=UUID("40000000-0000-0000-0000-000000000004"),
+            entity_type=EntityType.LEGAL_ENTITY,
+            raw_value_private="Sample Foods Private Limited",
+            normalized_value_private="sample foods private limited",
+            source_chunk_id=UUID("50000000-0000-0000-0000-000000000004"),
+            source_id="doc_0000000000000001",
+            platform=Platform.SWIGGY,
+            order_ids=(first_order,),
+        ),
+        EntityEvidenceMention(
+            mention_id=UUID("40000000-0000-0000-0000-000000000005"),
+            entity_type=EntityType.DELIVERY_PARTNER,
+            raw_value_private="Alex",
+            normalized_value_private="alex",
+            source_chunk_id=UUID("50000000-0000-0000-0000-000000000005"),
+            source_id="doc_0000000000000001",
+            platform=Platform.SWIGGY,
+            order_ids=(first_order,),
+        ),
+        EntityEvidenceMention(
+            mention_id=UUID("40000000-0000-0000-0000-000000000006"),
+            entity_type=EntityType.DELIVERY_PARTNER,
+            raw_value_private="Alex",
+            normalized_value_private="alex",
+            source_chunk_id=UUID("50000000-0000-0000-0000-000000000006"),
+            source_id="doc_0000000000000002",
+            platform=Platform.SWIGGY,
+            order_ids=(second_order,),
+        ),
+    )
+
+    archive = resolve_entity_mentions(
+        mentions,
+        decided_at=datetime(2026, 8, 11, tzinfo=UTC),
+    )
+    replay = resolve_entity_mentions(
+        tuple(reversed(mentions)),
+        decided_at=datetime(2026, 8, 11, tzinfo=UTC),
+    )
+
+    assert archive == replay
+    assert archive.summary.merchants == 2
+    assert archive.summary.provisional_outlets == 3
+    assert archive.summary.legal_entities == 1
+    assert archive.summary.delivery_mentions == 2
+    assert archive.summary.person_identities == 0
+    swiggy_merchant = next(
+        merchant for merchant in archive.merchants if merchant.platform is Platform.SWIGGY
+    )
+    assert len(swiggy_merchant.mention_ids) == 2
+    assert (
+        len(
+            [
+                outlet
+                for outlet in archive.outlets
+                if outlet.merchant_id == swiggy_merchant.merchant_id
+            ]
+        )
+        == 2
+    )
+    assert {mention.identity_status for mention in archive.delivery_mentions} == {
+        DeliveryIdentityStatus.MENTION_ONLY
+    }
+    assert archive.person_identities == ()
