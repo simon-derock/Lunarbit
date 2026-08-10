@@ -36,7 +36,7 @@ from lunarbit.models import (
 )
 
 CLOUDFLARE_MODEL = "@cf/google/gemma-4-26b-a4b-it"
-AGENTIC_CONTRACT_VERSION = "1.4.0"
+AGENTIC_CONTRACT_VERSION = "1.5.0"
 CLOUDFLARE_CONTEXT_WINDOW_TOKENS = 256_000
 CLOUDFLARE_STREAM_TIMEOUT_SECONDS = 600.0
 CLOUDFLARE_REASONING_EFFORT = "low"
@@ -45,6 +45,10 @@ GEMMA_TOKENIZER_REPOSITORY = "google/gemma-4-26B-A4B-it"
 GEMMA_TOKENIZER_REVISION = "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
 
 _SYSTEM_PROMPT = """You are the evidence architect for a provenance-first personal-commerce graph.
+
+This is exhaustive evidence transformation, not summarization. Contract validity, complete source
+coverage, and provenance outrank fluent prose. A commercially useful response that drops one source
+chunk or invents one field is invalid.
 
 Your task is to transform deterministic evidence primitives into graph-ready candidate regions
 without weakening source truth. Work independently inside every bundle boundary. Preserve document
@@ -58,6 +62,34 @@ that an invoice settlement statement is bank-confirmed. Exact resolution, reconc
 privacy transformation, persistent IDs, and canonical graph writes remain deterministic downstream
 work.
 
+IDENTIFIER CONTROL:
+- Every identifier in the input is an opaque, copy-only token assigned by deterministic code.
+- Never generate, shorten, repair, reorder, or infer a UUID or source identifier.
+- Copy batch_id, bundle_id, source_chunk_id, source_component_id, and evidence_chunk_ids exactly.
+- Do not create region, node, edge, entity, assertion, or order IDs. Those are generated
+  deterministically after validation.
+
+COVERAGE CONTROL:
+- Before composing regions, build an internal ledger with one row per supplied source_chunk_id.
+- Assign every ledger row to exactly one region from the same bundle; never leave a row unassigned.
+- Reconcile the flattened region source_chunk_ids against the supplied coverage ledger before
+  calling the tool. The two multisets must be identical.
+- Interpret every supplied money component exactly once in the region containing its source chunk.
+- Sparse or unclear evidence still requires a region. Preserve it as general evidence and express
+  uncertainty; never drop it.
+
+VOCABULARY CONTROL:
+- Every enum is closed and case-sensitive. Copy only a value explicitly allowed for that field.
+- Do not transpose values between fields. In particular, SUBTOTAL is a chunk_type, subtotal is a
+  money_meaning, and neither is a valid financial_role. A subtotal region uses financial_role total.
+- When an optional candidate cannot be expressed with the allowed vocabulary, omit that candidate.
+
+RELATION CONTROL:
+- Relations are optional; unsupported relations are forbidden. An empty relation_candidates array
+  is better than a plausible edge.
+- Every relation evidence_chunk_id must also occur in its enclosing region source_chunk_ids.
+- Every non-symbolic endpoint must occur byte-for-byte in at least one cited evidence chunk.
+
 Be concise without dropping evidence. Do not repeat a fact, entity, money component, relationship,
 uncertainty, or narrative phrase. Use the shortest source-grounded wording that remains useful for
 retrieval and graph construction.
@@ -67,6 +99,7 @@ When evidence is incomplete or conflicting, retain both claims, add a governed c
 state the uncertainty instead of guessing. Every output region must belong to exactly one bundle and
 every source_chunk_id must appear exactly once across the complete response.
 
+Immediately before responding, repeat the coverage, money, enum, relation, and identifier checks.
 Call the submit_agentic_regions tool exactly once with the complete candidate graph data.
 Do not emit conversational content or Markdown.
 The tool arguments must not claim canonical truth."""
@@ -108,6 +141,10 @@ legal scopes require it. Never merge regions across bundle_id values. Use these 
 - conflict_flags: identifier_conflict, amount_scope_conflict, name_variant, duplicate_evidence,
   missing_context, unresolved_interpretation
 
+Field-boundary warning: `SUBTOTAL` is valid only as chunk_type, `subtotal` is valid only as
+money_meaning, and a subtotal region must use `total` as financial_role. Never emit `subtotal` as
+financial_role. Apply the same strict separation to every enum field.
+
 Entity candidates use a closed vocabulary.
 - Classify a named restaurant, store, or vendor as merchant.
 - Classify a named invoice issuer or registered company as legal_entity.
@@ -140,6 +177,7 @@ and its source_chunk_id pairing exactly as supplied, then classify its evidence 
 Do not omit, duplicate, combine, or arithmetically reconcile money components.
 
 Perform this coverage checklist before calling the tool:
+- Copy the supplied response_identity fields exactly; deterministic code owns these identifiers.
 - The union of source_chunk_ids equals the complete input chunk set exactly.
 - Every input source_chunk_id occurs once and only once across all regions.
 - Copy every input source_chunk_id into covered_source_chunk_ids in the supplied order.
@@ -858,10 +896,32 @@ def _batch_input_hash(
 def _render_assignments(assignments: Sequence[_ChunkAssignment]) -> str:
     batch_id = _batch_identity(assignments)
     bundle_ids = tuple(dict.fromkeys(assignment.bundle_id for assignment in assignments))
+    source_chunk_ids = tuple(str(assignment.chunk.chunk_id) for assignment in assignments)
+    money_component_ids = tuple(
+        str(component.component_id)
+        for assignment in assignments
+        for component in assignment.chunk.candidate_money_components
+    )
     evidence = {
         "batch_id": str(batch_id),
         "contract_version": AGENTIC_CONTRACT_VERSION,
         "cohort_key": assignments[0].cohort_key,
+        "response_identity": {
+            "batch_id": str(batch_id),
+            "covered_source_chunk_ids": source_chunk_ids,
+            "covered_money_component_ids": money_component_ids,
+        },
+        "coverage_ledger": [
+            {
+                "bundle_id": assignment.bundle_id,
+                "source_chunk_id": str(assignment.chunk.chunk_id),
+                "source_component_ids": [
+                    str(component.component_id)
+                    for component in assignment.chunk.candidate_money_components
+                ],
+            }
+            for assignment in assignments
+        ],
         "bundles": [
             {
                 "bundle_id": bundle_id,
@@ -1154,9 +1214,29 @@ def plan_agentic_batches(
             )
         )
 
+    complete_packed: list[tuple[_ChunkAssignment, ...]] = []
+    recovery_units: list[_PackingUnit] = []
+    for assignments in packed:
+        if len(assignments) < selected_policy.minimum_chunks and _fits(
+            assignments,
+            policy=selected_policy,
+            token_counter=selected_token_counter,
+        ):
+            recovery_units.append(_PackingUnit(assignments=assignments))
+        else:
+            complete_packed.append(assignments)
+    if recovery_units:
+        complete_packed.extend(
+            _pack_units(
+                recovery_units,
+                policy=selected_policy,
+                token_counter=selected_token_counter,
+            )
+        )
+
     accepted_batches: list[AgenticBatch] = []
     quarantined: list[UUID] = []
-    for assignments in packed:
+    for assignments in complete_packed:
         if len(assignments) < selected_policy.minimum_chunks or not _fits(
             assignments,
             policy=selected_policy,
