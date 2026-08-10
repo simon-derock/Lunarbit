@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hmac
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from decimal import Decimal
@@ -13,6 +13,7 @@ from pydantic import Field, model_validator
 
 from lunarbit.models import (
     ContractModel,
+    EntityType,
     OrderCategory,
     OrderEvidence,
     OrderEvidenceKind,
@@ -22,6 +23,7 @@ from lunarbit.models import (
 )
 
 ORDER_RESOLUTION_POLICY_VERSION = "order-resolution-v1.0.0"
+ENTITY_RESOLUTION_POLICY_VERSION = "entity-resolution-v1.0.0"
 
 
 class OrderIdentityStatus(StrEnum):
@@ -52,12 +54,22 @@ class ResolutionSignal(StrEnum):
     MULTIPLE_CORROBORATING_SOURCES = "multiple_corroborating_sources"
     SINGLE_MESSAGE_EVIDENCE = "single_message_evidence"
     NORMALIZED_TRADE_NAME = "normalized_trade_name"
+    EXACT_NORMALIZED_LEGAL_NAME = "exact_normalized_legal_name"
     EXACT_LEGAL_IDENTIFIER = "exact_legal_identifier"
     EXACT_PLATFORM_MERCHANT_ID = "exact_platform_merchant_id"
     ADDRESS_MATCH = "address_match"
     ADDRESS_CONFLICT = "address_conflict"
     LEGAL_OWNER_CONFLICT = "legal_owner_conflict"
     SAME_NAME_ONLY = "same_name_only"
+
+
+class DeliveryIdentityStatus(StrEnum):
+    MENTION_ONLY = "mention_only"
+    POSSIBLE_MATCH = "possible_match"
+    PROBABLE_MATCH = "probable_match"
+    HIGH_CONFIDENCE_MATCH = "high_confidence_match"
+    USER_CONFIRMED = "user_confirmed"
+    REJECTED = "rejected"
 
 
 class OrderIdentityCandidate(ContractModel):
@@ -220,6 +232,129 @@ class OrderResolutionArchive(ContractModel):
             referenced_candidates.extend(order.candidate_ids)
         if sorted(referenced_candidates) != sorted(candidate_ids):
             raise ValueError("every candidate must resolve into exactly one order")
+        return self
+
+
+class EntityEvidenceMention(ContractModel):
+    mention_id: UUID
+    entity_type: EntityType
+    raw_value_private: str = Field(repr=False, min_length=1)
+    normalized_value_private: str = Field(repr=False, min_length=1)
+    source_chunk_id: UUID
+    source_id: str = Field(pattern=r"^(?:doc|msg)_[0-9a-f]{16}$")
+    platform: Platform
+    order_ids: tuple[UUID, ...]
+
+
+class CanonicalMerchant(ContractModel):
+    merchant_id: UUID
+    platform: Platform
+    display_name_private: str = Field(repr=False, min_length=1)
+    normalized_name_private: str = Field(repr=False, min_length=1)
+    alias_names_private: tuple[str, ...] = Field(repr=False, min_length=1)
+    mention_ids: tuple[UUID, ...] = Field(min_length=1)
+    resolution_id: UUID
+
+
+class ProvisionalOutlet(ContractModel):
+    outlet_id: UUID
+    merchant_id: UUID
+    order_id: UUID
+    mention_ids: tuple[UUID, ...] = Field(min_length=1)
+    identity_status: ResolutionStatus
+    resolution_id: UUID
+
+    @model_validator(mode="after")
+    def outlet_stays_provisional_without_location_evidence(self) -> ProvisionalOutlet:
+        if self.identity_status is not ResolutionStatus.PROVISIONAL:
+            raise ValueError("name-only outlet observations must remain provisional")
+        return self
+
+
+class CanonicalLegalEntity(ContractModel):
+    legal_entity_id: UUID
+    platform: Platform
+    legal_name_private: str = Field(repr=False, min_length=1)
+    normalized_name_private: str = Field(repr=False, min_length=1)
+    alias_names_private: tuple[str, ...] = Field(repr=False, min_length=1)
+    mention_ids: tuple[UUID, ...] = Field(min_length=1)
+    identity_status: ResolutionStatus
+    resolution_id: UUID
+
+
+class DeliveryPartnerMention(ContractModel):
+    mention_id: UUID
+    raw_name_private: str = Field(repr=False, min_length=1)
+    normalized_name_private: str = Field(repr=False, min_length=1)
+    source_chunk_id: UUID
+    source_id: str = Field(pattern=r"^(?:doc|msg)_[0-9a-f]{16}$")
+    platform: Platform
+    order_ids: tuple[UUID, ...]
+    identity_status: DeliveryIdentityStatus
+
+    @model_validator(mode="after")
+    def unreviewed_mentions_cannot_claim_person_identity(self) -> DeliveryPartnerMention:
+        if self.identity_status is not DeliveryIdentityStatus.MENTION_ONLY:
+            raise ValueError("unreviewed source names must remain mention-only")
+        return self
+
+
+class PersonIdentity(ContractModel):
+    person_id: UUID
+    mention_ids: tuple[UUID, ...] = Field(min_length=1)
+    identity_status: DeliveryIdentityStatus
+    resolution_id: UUID
+
+
+class EntityResolutionSummary(ContractModel):
+    evidence_mentions: int = Field(ge=0)
+    merchants: int = Field(ge=0)
+    provisional_outlets: int = Field(ge=0)
+    legal_entities: int = Field(ge=0)
+    delivery_mentions: int = Field(ge=0)
+    person_identities: int = Field(ge=0)
+
+
+class EntityResolutionArchive(ContractModel):
+    policy_version: str = Field(min_length=1)
+    mentions: tuple[EntityEvidenceMention, ...]
+    merchants: tuple[CanonicalMerchant, ...]
+    outlets: tuple[ProvisionalOutlet, ...]
+    legal_entities: tuple[CanonicalLegalEntity, ...]
+    delivery_mentions: tuple[DeliveryPartnerMention, ...]
+    person_identities: tuple[PersonIdentity, ...]
+    decisions: tuple[ResolutionDecision, ...]
+    summary: EntityResolutionSummary
+
+    @model_validator(mode="after")
+    def mention_resolution_is_complete(self) -> EntityResolutionArchive:
+        mention_ids = {mention.mention_id for mention in self.mentions}
+        if len(mention_ids) != len(self.mentions):
+            raise ValueError("entity mention IDs must be unique")
+        merchant_mentions = {
+            mention_id for merchant in self.merchants for mention_id in merchant.mention_ids
+        }
+        legal_mentions = {
+            mention_id for entity in self.legal_entities for mention_id in entity.mention_ids
+        }
+        delivery_mentions = {mention.mention_id for mention in self.delivery_mentions}
+        resolved_mentions = merchant_mentions | legal_mentions | delivery_mentions
+        if resolved_mentions != mention_ids:
+            raise ValueError("every evidence mention must remain in one entity boundary")
+        if (
+            (merchant_mentions & legal_mentions)
+            or (merchant_mentions & delivery_mentions)
+            or (legal_mentions & delivery_mentions)
+        ):
+            raise ValueError("evidence mentions cannot cross entity-type boundaries")
+        decision_ids = {decision.resolution_id for decision in self.decisions}
+        expected_decisions = (
+            {merchant.resolution_id for merchant in self.merchants}
+            | {outlet.resolution_id for outlet in self.outlets}
+            | {entity.resolution_id for entity in self.legal_entities}
+        )
+        if decision_ids != expected_decisions:
+            raise ValueError("canonical entities require reversible resolution decisions")
         return self
 
 
@@ -456,6 +591,208 @@ def resolve_order_evidence(
             provisional_orders=provisional_orders,
             duplicate_evidence_records=len(candidates) - len(orders),
             total_orders=len(orders),
+        ),
+    )
+
+
+def _preferred_private_name(values: Iterable[str]) -> tuple[str, tuple[str, ...]]:
+    aliases = tuple(sorted(set(values), key=lambda value: (value.casefold(), value)))
+    counts = Counter(values)
+    preferred = min(aliases, key=lambda value: (-counts[value], value.casefold(), value))
+    return preferred, aliases
+
+
+def _entity_decision(
+    *,
+    namespace: str,
+    resolution_type: ResolutionType,
+    candidate_ids: tuple[UUID, ...],
+    selected_score: Decimal,
+    positive_signals: tuple[ResolutionSignal, ...],
+    negative_signals: tuple[ResolutionSignal, ...],
+    status: ResolutionStatus,
+    decided_at: datetime,
+) -> ResolutionDecision:
+    return ResolutionDecision(
+        resolution_id=_derived_id(namespace, candidate_ids),
+        resolution_type=resolution_type,
+        candidate_ids=candidate_ids,
+        selected_candidate_id=candidate_ids[0],
+        selected_score=selected_score,
+        second_candidate_score=Decimal("0"),
+        decision_margin=selected_score,
+        positive_signals=positive_signals,
+        negative_signals=negative_signals,
+        policy_version=ENTITY_RESOLUTION_POLICY_VERSION,
+        status=status,
+        decided_at=decided_at,
+    )
+
+
+def resolve_entity_mentions(
+    mentions: Iterable[EntityEvidenceMention],
+    *,
+    decided_at: datetime,
+) -> EntityResolutionArchive:
+    if decided_at.tzinfo is None or decided_at.utcoffset() is None:
+        raise ValueError("decided_at must be timezone-aware")
+    mention_values = tuple(sorted(mentions, key=lambda mention: str(mention.mention_id)))
+    if len({mention.mention_id for mention in mention_values}) != len(mention_values):
+        raise ValueError("entity mention IDs must be unique")
+
+    merchant_groups: dict[tuple[str, str], list[EntityEvidenceMention]] = defaultdict(list)
+    legal_groups: dict[tuple[str, str], list[EntityEvidenceMention]] = defaultdict(list)
+    delivery_evidence: list[EntityEvidenceMention] = []
+    for mention in mention_values:
+        key = (mention.platform.value, mention.normalized_value_private)
+        if mention.entity_type is EntityType.MERCHANT:
+            merchant_groups[key].append(mention)
+        elif mention.entity_type is EntityType.LEGAL_ENTITY:
+            legal_groups[key].append(mention)
+        else:
+            delivery_evidence.append(mention)
+
+    merchants: list[CanonicalMerchant] = []
+    outlets: list[ProvisionalOutlet] = []
+    legal_entities: list[CanonicalLegalEntity] = []
+    decisions: list[ResolutionDecision] = []
+    for key in sorted(merchant_groups):
+        group = tuple(sorted(merchant_groups[key], key=lambda mention: str(mention.mention_id)))
+        mention_ids = tuple(mention.mention_id for mention in group)
+        platform = group[0].platform
+        normalized_name = group[0].normalized_value_private
+        display_name, aliases = _preferred_private_name(
+            mention.raw_value_private for mention in group
+        )
+        merchant_id = uuid5(
+            NAMESPACE_URL,
+            f"lunarbit-merchant-v1:{platform.value}:{normalized_name}",
+        )
+        merchant_decision = _entity_decision(
+            namespace="lunarbit-merchant-resolution-v1",
+            resolution_type=ResolutionType.MERCHANT,
+            candidate_ids=mention_ids,
+            selected_score=Decimal("0.75"),
+            positive_signals=(ResolutionSignal.NORMALIZED_TRADE_NAME,),
+            negative_signals=(),
+            status=ResolutionStatus.RESOLVED,
+            decided_at=decided_at,
+        )
+        merchants.append(
+            CanonicalMerchant(
+                merchant_id=merchant_id,
+                platform=platform,
+                display_name_private=display_name,
+                normalized_name_private=normalized_name,
+                alias_names_private=aliases,
+                mention_ids=mention_ids,
+                resolution_id=merchant_decision.resolution_id,
+            )
+        )
+        decisions.append(merchant_decision)
+
+        order_ids = sorted(
+            {order_id for mention in group for order_id in mention.order_ids}, key=str
+        )
+        for order_id in order_ids:
+            order_mention_ids = tuple(
+                mention.mention_id for mention in group if order_id in mention.order_ids
+            )
+            outlet_id = uuid5(
+                NAMESPACE_URL,
+                f"lunarbit-provisional-outlet-v1:{merchant_id}:{order_id}",
+            )
+            outlet_decision = _entity_decision(
+                namespace=f"lunarbit-outlet-resolution-v1:{merchant_id}:{order_id}",
+                resolution_type=ResolutionType.OUTLET,
+                candidate_ids=order_mention_ids,
+                selected_score=Decimal("0.5"),
+                positive_signals=(ResolutionSignal.NORMALIZED_TRADE_NAME,),
+                negative_signals=(ResolutionSignal.SAME_NAME_ONLY,),
+                status=ResolutionStatus.PROVISIONAL,
+                decided_at=decided_at,
+            )
+            outlets.append(
+                ProvisionalOutlet(
+                    outlet_id=outlet_id,
+                    merchant_id=merchant_id,
+                    order_id=order_id,
+                    mention_ids=order_mention_ids,
+                    identity_status=ResolutionStatus.PROVISIONAL,
+                    resolution_id=outlet_decision.resolution_id,
+                )
+            )
+            decisions.append(outlet_decision)
+
+    for key in sorted(legal_groups):
+        group = tuple(sorted(legal_groups[key], key=lambda mention: str(mention.mention_id)))
+        mention_ids = tuple(mention.mention_id for mention in group)
+        platform = group[0].platform
+        normalized_name = group[0].normalized_value_private
+        legal_name, aliases = _preferred_private_name(
+            mention.raw_value_private for mention in group
+        )
+        legal_entity_id = uuid5(
+            NAMESPACE_URL,
+            f"lunarbit-legal-entity-v1:{platform.value}:{normalized_name}",
+        )
+        decision = _entity_decision(
+            namespace="lunarbit-legal-entity-resolution-v1",
+            resolution_type=ResolutionType.LEGAL_ENTITY,
+            candidate_ids=mention_ids,
+            selected_score=Decimal("0.65"),
+            positive_signals=(ResolutionSignal.EXACT_NORMALIZED_LEGAL_NAME,),
+            negative_signals=(),
+            status=ResolutionStatus.PROVISIONAL,
+            decided_at=decided_at,
+        )
+        legal_entities.append(
+            CanonicalLegalEntity(
+                legal_entity_id=legal_entity_id,
+                platform=platform,
+                legal_name_private=legal_name,
+                normalized_name_private=normalized_name,
+                alias_names_private=aliases,
+                mention_ids=mention_ids,
+                identity_status=ResolutionStatus.PROVISIONAL,
+                resolution_id=decision.resolution_id,
+            )
+        )
+        decisions.append(decision)
+
+    delivery_mentions = tuple(
+        DeliveryPartnerMention(
+            mention_id=mention.mention_id,
+            raw_name_private=mention.raw_value_private,
+            normalized_name_private=mention.normalized_value_private,
+            source_chunk_id=mention.source_chunk_id,
+            source_id=mention.source_id,
+            platform=mention.platform,
+            order_ids=mention.order_ids,
+            identity_status=DeliveryIdentityStatus.MENTION_ONLY,
+        )
+        for mention in delivery_evidence
+    )
+    merchants.sort(key=lambda merchant: str(merchant.merchant_id))
+    outlets.sort(key=lambda outlet: str(outlet.outlet_id))
+    legal_entities.sort(key=lambda entity: str(entity.legal_entity_id))
+    decisions.sort(key=lambda decision: str(decision.resolution_id))
+    return EntityResolutionArchive(
+        policy_version=ENTITY_RESOLUTION_POLICY_VERSION,
+        mentions=mention_values,
+        merchants=tuple(merchants),
+        outlets=tuple(outlets),
+        legal_entities=tuple(legal_entities),
+        delivery_mentions=delivery_mentions,
+        person_identities=(),
+        decisions=tuple(decisions),
+        summary=EntityResolutionSummary(
+            evidence_mentions=len(mention_values),
+            merchants=len(merchants),
+            provisional_outlets=len(outlets),
+            legal_entities=len(legal_entities),
+            delivery_mentions=len(delivery_mentions),
+            person_identities=0,
         ),
     )
 

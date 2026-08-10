@@ -9,6 +9,7 @@ import re
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -23,8 +24,11 @@ from lunarbit.models import (
 )
 from lunarbit.resolve import (
     AgenticOrderRegionReference,
+    EntityEvidenceMention,
+    EntityResolutionArchive,
     OrderResolutionArchive,
     link_agentic_regions_to_order_evidence,
+    resolve_entity_mentions,
     resolve_order_evidence,
 )
 
@@ -37,6 +41,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--processed-root", type=Path, default=Path("data/processed"))
     parser.add_argument("--canonical-regions", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--identity-output", type=Path, required=True)
     parser.add_argument(
         "--decided-at",
         type=datetime.fromisoformat,
@@ -128,6 +133,82 @@ def _write_archive(
     return manifest
 
 
+def _entity_mentions(
+    records: tuple[AgenticRegionRecord, ...],
+    chunks_by_id: dict[str, EvidenceChunk],
+    messages: tuple[SourceMessage, ...],
+    documents: tuple[SourceDocument, ...],
+    order_archive: OrderResolutionArchive,
+) -> tuple[EntityEvidenceMention, ...]:
+    platform_by_source_id = {
+        **{message.message_id: message.platform for message in messages},
+        **{document.document_id: document.platform for document in documents},
+    }
+    order_ids_by_region: dict[UUID, set[UUID]] = {}
+    for bundle in order_archive.bundles:
+        for region_id in bundle.agentic_region_ids:
+            order_ids_by_region.setdefault(region_id, set()).add(bundle.order_id)
+    region_by_chunk_id = {
+        str(chunk_id): record.region_id
+        for record in records
+        for chunk_id in record.region.source_chunk_ids
+    }
+    mentions: list[EntityEvidenceMention] = []
+    for chunk in chunks_by_id.values():
+        region_id = region_by_chunk_id[str(chunk.chunk_id)]
+        order_ids = tuple(sorted(order_ids_by_region.get(region_id, set()), key=str))
+        for mention in chunk.entity_mentions:
+            mentions.append(
+                EntityEvidenceMention(
+                    mention_id=mention.mention_id,
+                    entity_type=mention.entity_type,
+                    raw_value_private=mention.raw_value_private,
+                    normalized_value_private=mention.normalized_value_private,
+                    source_chunk_id=chunk.chunk_id,
+                    source_id=chunk.source_id,
+                    platform=platform_by_source_id[chunk.source_id],
+                    order_ids=order_ids,
+                )
+            )
+    return tuple(mentions)
+
+
+def _write_entity_archive(
+    archive: EntityResolutionArchive,
+    output_root: Path,
+    *,
+    order_archive_sha256: str,
+) -> dict[str, object]:
+    files = {
+        "mentions.jsonl": _jsonl(archive.mentions),
+        "merchants.jsonl": _jsonl(archive.merchants),
+        "outlets.jsonl": _jsonl(archive.outlets),
+        "legal_entities.jsonl": _jsonl(archive.legal_entities),
+        "delivery_mentions.jsonl": _jsonl(archive.delivery_mentions),
+        "person_identities.jsonl": _jsonl(archive.person_identities),
+        "decisions.jsonl": _jsonl(archive.decisions),
+    }
+    for name, content in files.items():
+        _atomic_private_write(output_root / name, content)
+    file_hashes = {name: sha256(content).hexdigest() for name, content in files.items()}
+    archive_digest = sha256(
+        "".join(f"{name}:{file_hashes[name]}\n" for name in sorted(file_hashes)).encode()
+    ).hexdigest()
+    manifest: dict[str, object] = {
+        "archive_version": RESOLUTION_ARCHIVE_VERSION,
+        "policy_version": archive.policy_version,
+        "archive_sha256": archive_digest,
+        "order_archive_sha256": order_archive_sha256,
+        "files": file_hashes,
+        **archive.summary.model_dump(mode="json"),
+    }
+    _atomic_private_write(
+        output_root / "manifest.json",
+        f"{json.dumps(manifest, indent=2, sort_keys=True)}\n".encode(),
+    )
+    return manifest
+
+
 def main() -> int:
     args = _parse_args()
     if args.decided_at.tzinfo is None or args.decided_at.utcoffset() is None:
@@ -156,12 +237,27 @@ def main() -> int:
         region_links_by_evidence_id=region_links,
         decided_at=args.decided_at,
     )
-    manifest = _write_archive(
+    order_manifest = _write_archive(
         archive,
         args.output.resolve(),
         canonical_region_sha256=sha256(region_content).hexdigest(),
     )
-    print(json.dumps(manifest, indent=2, sort_keys=True))
+    entity_archive = resolve_entity_mentions(
+        _entity_mentions(records, chunks_by_id, messages, documents, archive),
+        decided_at=args.decided_at,
+    )
+    entity_manifest = _write_entity_archive(
+        entity_archive,
+        args.identity_output.resolve(),
+        order_archive_sha256=str(order_manifest["archive_sha256"]),
+    )
+    print(
+        json.dumps(
+            {"orders": order_manifest, "entities": entity_manifest},
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
