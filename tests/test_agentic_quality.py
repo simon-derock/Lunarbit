@@ -6,6 +6,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from lunarbit.agentic import (
     AgenticBatchResult,
+    AgenticConflictFlag,
     AgenticEntityCandidate,
     AgenticFactCandidate,
     AgenticRegionProposal,
@@ -13,10 +14,12 @@ from lunarbit.agentic import (
 from lunarbit.agentic_quality import (
     AgenticQualityIssue,
     AgenticRegionOrigin,
+    agentic_quality_score,
     agentic_region_id,
     audit_agentic_region,
     compile_agentic_region_records,
     repair_agentic_result,
+    select_agentic_region_retries,
 )
 from lunarbit.models import (
     BoundingBox,
@@ -268,4 +271,100 @@ def test_compile_region_records_replaces_selected_baseline_coverage_deterministi
     assert by_chunk[str(first.chunk_id)].model == "retry-model"
     assert by_chunk[str(first.chunk_id)].region_id == agentic_region_id(
         by_chunk[str(first.chunk_id)].region
+    )
+
+
+def test_agentic_quality_score_prioritizes_evidence_risk_over_fallback_prose() -> None:
+    assert agentic_quality_score((AgenticQualityIssue.UNCITED_AMOUNT_CONFLICT,)) > (
+        agentic_quality_score(
+            (
+                AgenticQualityIssue.DETERMINISTIC_FALLBACK,
+                AgenticQualityIssue.DETERMINISTIC_FALLBACK,
+                AgenticQualityIssue.DETERMINISTIC_FALLBACK,
+                AgenticQualityIssue.DETERMINISTIC_FALLBACK,
+            )
+        )
+    )
+    assert agentic_quality_score((AgenticQualityIssue.SHORT_STRUCTURALLY_SPARSE,)) > (
+        agentic_quality_score((AgenticQualityIssue.DETERMINISTIC_FALLBACK,))
+    )
+
+
+def test_retry_selection_improves_bundles_without_accepting_higher_evidence_risk() -> None:
+    first = _evidence_chunk()
+    second = first.model_copy(
+        update={
+            "chunk_id": uuid5(NAMESPACE_URL, "quality-source-chunk-two"),
+            "source_id": "doc_0000000000000043",
+            "document_id": "doc_0000000000000043",
+        }
+    )
+    chunks = {str(first.chunk_id): first, str(second.chunk_id): second}
+    baseline_result = AgenticBatchResult(
+        batch_id=uuid5(NAMESPACE_URL, "quality-selection-baseline"),
+        model="baseline-model",
+        response_sha256="e" * 64,
+        regions=(
+            _region(first).model_copy(update={"bundle_id": "bundle-one"}),
+            _region(second).model_copy(update={"bundle_id": "bundle-two"}),
+        ),
+        validation_status=ValidationStatus.ACCEPTED,
+    )
+    repaired_baseline, _ = repair_agentic_result(baseline_result, chunks)
+    baseline_records = compile_agentic_region_records(
+        (),
+        (repaired_baseline,),
+        retry_chunk_ids=frozenset({str(first.chunk_id), str(second.chunk_id)}),
+        chunks_by_id=chunks,
+    )
+    baseline_records = tuple(
+        record.model_copy(
+            update={
+                "origin": AgenticRegionOrigin.REPAIRED_BASELINE,
+                "quality_issues": (AgenticQualityIssue.DETERMINISTIC_FALLBACK,),
+            }
+        )
+        for record in baseline_records
+    )
+    retry_result = AgenticBatchResult(
+        batch_id=uuid5(NAMESPACE_URL, "quality-selection-retry"),
+        model="retry-model",
+        response_sha256="f" * 64,
+        regions=(
+            _region(first).model_copy(
+                update={
+                    "bundle_id": "bundle-one",
+                    "semantic_summary_private": "Improved order identity from source evidence.",
+                    "embedding_text_private": "Find the improved Sample Kitchen order identity.",
+                }
+            ),
+            _region(second).model_copy(
+                update={
+                    "bundle_id": "bundle-two",
+                    "semantic_summary_private": "Order identity with an uncertain amount conflict.",
+                    "embedding_text_private": "Find the uncertain Sample Kitchen order identity.",
+                    "conflict_flags": (AgenticConflictFlag.AMOUNT_SCOPE_CONFLICT,),
+                    "uncertainty_notes_private": (
+                        "The conflicting amount 999 is not present in cited evidence.",
+                    ),
+                }
+            ),
+        ),
+        validation_status=ValidationStatus.ACCEPTED,
+    )
+    repaired_retry, _ = repair_agentic_result(retry_result, chunks)
+
+    records = select_agentic_region_retries(
+        baseline_records,
+        (repaired_retry,),
+        retry_chunk_ids=frozenset(chunks),
+        chunks_by_id=chunks,
+    )
+
+    by_bundle = {record.region.bundle_id: record for record in records}
+    assert by_bundle["bundle-one"].origin is AgenticRegionOrigin.SEMANTIC_RETRY
+    assert by_bundle["bundle-one"].quality_issues == ()
+    assert by_bundle["bundle-two"].origin is AgenticRegionOrigin.REPAIRED_BASELINE
+    assert by_bundle["bundle-two"].quality_issues == (
+        AgenticQualityIssue.DETERMINISTIC_FALLBACK,
     )
