@@ -41,6 +41,18 @@ def test_query_binding_requires_typed_slots_and_keeps_values_out_of_cypher() -> 
         bind_query_plan(plan, QuerySlots(merchant_name="sample kitchen"))
 
 
+def test_financial_filters_apply_before_optional_evidence_expansion() -> None:
+    plan = build_query_plan("How much platform fee did I pay?")
+    query = bind_query_plan(
+        plan,
+        QuerySlots(platform="swiggy", component_type="platform_fee"),
+    )[0]
+
+    assert query.cypher.index("WHERE component.component_type") < query.cypher.index(
+        "OPTIONAL MATCH"
+    )
+
+
 def test_financial_runtime_uses_decimal_deduplication_and_evidence_verification() -> None:
     source_hash = "a" * 64
     reader = StubReader(

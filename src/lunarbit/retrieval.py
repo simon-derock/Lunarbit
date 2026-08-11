@@ -214,23 +214,34 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
         "WHERE merchant.normalized_name_private = $merchant_name "
         "AND item.normalized_name_private CONTAINS $item_name "
+        "MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
         "RETURN order.node_id AS order_id, observation.observed_amount AS amount, "
-        "observation.currency AS currency ORDER BY order.node_id LIMIT $limit",
+        "observation.currency AS currency, min(message.occurred_at) AS occurred_at, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, "
+        "source.node_id AS source_id ORDER BY occurred_at, order.node_id LIMIT $limit",
         frozenset({"merchant_name", "item_name", "limit"}),
     ),
     QueryTemplate.DELIVERY_MENTION_COUNT: (
         "MATCH (order:Order)-[:HAS_DELIVERY_MENTION]->(mention:PersonMention) "
+        "MATCH (mention)-[:MENTIONED_IN]->(chunk:EvidenceChunk) "
+        "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "WHERE mention.normalized_value_private = $normalized_name "
-        "RETURN count(DISTINCT order) AS delivery_mentions, "
-        "collect(DISTINCT mention.node_id)[..$limit] AS mention_ids",
+        "RETURN order.node_id AS order_id, mention.node_id AS mention_id, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, "
+        "source.node_id AS source_id LIMIT $limit",
         frozenset({"normalized_name", "limit"}),
     ),
     QueryTemplate.FINANCIAL_COMPONENT_SUM: (
         "MATCH (order:Order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
         "WHERE component.component_type = $component_type "
         "AND order.platform = $platform "
+        "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "RETURN component.node_id AS component_id, component.amount AS amount, "
-        "component.currency AS currency "
+        "component.currency AS currency, chunk.node_id AS chunk_id, "
+        "chunk.source_hash AS source_hash, source.node_id AS source_id "
         "LIMIT $limit",
         frozenset({"component_type", "platform", "limit"}),
     ),
