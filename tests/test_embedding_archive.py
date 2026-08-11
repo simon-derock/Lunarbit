@@ -10,6 +10,7 @@ from lunarbit.embedding_archive import (
     archive_batch_path,
     batch_embedding_inputs,
     load_embedding_batch,
+    normalized_matryoshka_prefix,
     vector_identifiers,
     write_embedding_batch,
 )
@@ -103,3 +104,13 @@ def test_vector_identifiers_are_versioned_and_cypher_safe() -> None:
 
     with pytest.raises(ValueError, match="identifier"):
         vector_identifiers("cohere`) MATCH (n) DETACH DELETE n //", "embed-v4.0", 1536)
+
+
+def test_matryoshka_prefix_is_normalized_and_bounded() -> None:
+    prefix = normalized_matryoshka_prefix((3.0, 4.0, 12.0), dimension=2)
+
+    assert prefix == pytest.approx((0.6, 0.8))
+    with pytest.raises(ValueError, match="dimension"):
+        normalized_matryoshka_prefix((3.0, 4.0), dimension=3)
+    with pytest.raises(ValueError, match="zero"):
+        normalized_matryoshka_prefix((0.0, 0.0), dimension=2)
