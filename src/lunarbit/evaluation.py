@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence, Set
 from math import ceil
 from statistics import median
 
@@ -16,6 +17,24 @@ class RetrievalMetrics(ContractModel):
     mrr: float = Field(ge=0.0, le=1.0)
     p50_latency_ms: float = Field(ge=0.0)
     p95_latency_ms: float = Field(ge=0.0)
+
+
+def first_relevant_rank(
+    retrieved_ids: Sequence[str],
+    relevant_ids: Set[str],
+) -> int | None:
+    if not relevant_ids:
+        raise ValueError("a benchmark query must declare at least one relevant document")
+    if len(set(retrieved_ids)) != len(retrieved_ids):
+        raise ValueError("retrieved rankings cannot repeat a document")
+    return next(
+        (
+            rank
+            for rank, candidate_id in enumerate(retrieved_ids, start=1)
+            if candidate_id in relevant_ids
+        ),
+        None,
+    )
 
 
 def retrieval_metrics(

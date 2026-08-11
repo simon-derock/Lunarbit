@@ -1,0 +1,65 @@
+{
+  "corpus_nodes": 24675,
+  "limitation": "Relevance is exact normalized semantic-summary equivalence over balanced unique and ambiguous strata; this does not replace the user-query golden set.",
+  "metrics": {
+    "256": {
+      "hit_at_1": 0.975,
+      "hit_at_5": 0.975,
+      "hit_at_10": 0.975,
+      "mrr": 0.975,
+      "p50_latency_ms": 6.754813512088731,
+      "p95_latency_ms": 8.490387990605086,
+      "queries": 40
+    },
+    "512": {
+      "hit_at_1": 0.975,
+      "hit_at_5": 0.975,
+      "hit_at_10": 0.975,
+      "mrr": 0.975,
+      "p50_latency_ms": 7.87736100028269,
+      "p95_latency_ms": 11.932516994420439,
+      "queries": 40
+    },
+    "1024": {
+      "hit_at_1": 0.975,
+      "hit_at_5": 0.975,
+      "hit_at_10": 0.975,
+      "mrr": 0.975,
+      "p50_latency_ms": 8.759497504797764,
+      "p95_latency_ms": 15.059271012432873,
+      "queries": 40
+    },
+    "1536": {
+      "hit_at_1": 0.975,
+      "hit_at_5": 0.975,
+      "hit_at_10": 0.975,
+      "mrr": 0.975,
+      "p50_latency_ms": 10.989778995281085,
+      "p95_latency_ms": 14.14898197981529,
+      "queries": 40
+    }
+  },
+  "model": "embed-v4.0",
+  "noninferior_to_1536": {
+    "256": true,
+    "512": true,
+    "1024": true,
+    "1536": true
+  },
+  "protocol": "semantic-summary-relevance-set-v2",
+  "provisional_candidate_dimension": 256,
+  "query_count": 40,
+  "query_strata": {
+    "ambiguous_summary": 20,
+    "maximum_relevance_set": 8,
+    "unique_summary": 20
+  },
+  "representations": {
+    "256": "normalized_1536_prefix",
+    "512": "normalized_1536_prefix",
+    "1024": "normalized_1536_prefix",
+    "1536": "native_api_output"
+  },
+  "serving_reference_dimension": 1536,
+  "top_k": 10
+}

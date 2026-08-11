@@ -1,4 +1,5 @@
 {
+  "status": "diagnostic_superseded_by_relevance_set_v2",
   "corpus_nodes": 24675,
   "limitation": "This measures dimensional retention on deterministic semantic-summary self-retrieval; it does not replace the user-query golden set.",
   "metrics": {
@@ -54,6 +55,6 @@
     "1024": "normalized_1536_prefix",
     "1536": "native_api_output"
   },
-  "selected_serving_dimension": 1536,
+  "selected_serving_dimension_at_time_of_run": 1536,
   "top_k": 10
 }

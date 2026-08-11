@@ -17,12 +17,13 @@ from neo4j import GraphDatabase
 from lunarbit.agentic import _atomic_private_write
 from lunarbit.cohere import CohereClient, EmbedInputType
 from lunarbit.embedding_archive import vector_identifiers
-from lunarbit.evaluation import RetrievalMetrics, retrieval_metrics
+from lunarbit.evaluation import RetrievalMetrics, first_relevant_rank, retrieval_metrics
 
 MODEL = "embed-v4.0"
 DIMENSIONS = (256, 512, 1024, 1536)
 NATIVE_INDEX = "evidence_vector_cohere_embed_v4_0_1536"
-PROTOCOL = "semantic-summary-self-retrieval-v1"
+PROTOCOL = "semantic-summary-relevance-set-v2"
+type QueryCase = tuple[str, frozenset[str]]
 
 
 def _args() -> argparse.Namespace:
@@ -43,7 +44,7 @@ def _private_api_key() -> str:
     return value
 
 
-def _sample_queries(session: Any, count: int) -> tuple[tuple[str, str], ...]:
+def _sample_queries(session: Any, count: int) -> tuple[QueryCase, ...]:
     if not 1 <= count <= 96:
         raise ValueError("benchmark query count must be between 1 and 96")
     rows = tuple(
@@ -56,13 +57,31 @@ def _sample_queries(session: Any, count: int) -> tuple[tuple[str, str], ...]:
             "node.semantic_summary_private AS query_text"
         )
     )
-    ordered = sorted(
-        ((str(row["node_id"]), str(row["query_text"])) for row in rows),
-        key=lambda value: sha256(value[0].encode()).hexdigest(),
+    groups: dict[str, set[str]] = {}
+    for row in rows:
+        groups.setdefault(str(row["query_text"]), set()).add(str(row["node_id"]))
+
+    def by_hash(value: QueryCase) -> str:
+        return sha256(value[0].encode()).hexdigest()
+
+    unique = sorted(
+        ((text, frozenset(node_ids)) for text, node_ids in groups.items() if len(node_ids) == 1),
+        key=by_hash,
     )
-    if len(ordered) < count:
+    ambiguous = sorted(
+        (
+            (text, frozenset(node_ids))
+            for text, node_ids in groups.items()
+            if 2 <= len(node_ids) <= 20
+        ),
+        key=by_hash,
+    )
+    unique_count = (count + 1) // 2
+    ambiguous_count = count - unique_count
+    selected = unique[:unique_count] + ambiguous[:ambiguous_count]
+    if len(selected) < count:
         raise ValueError("graph does not contain enough benchmarkable evidence summaries")
-    return tuple(ordered[:count])
+    return tuple(sorted(selected, key=by_hash))
 
 
 def _index_name(dimension: int) -> str:
@@ -72,7 +91,11 @@ def _index_name(dimension: int) -> str:
 
 
 def _rank_for(
-    session: Any, index: str, vector: tuple[float, ...], expected: str, top_k: int
+    session: Any,
+    index: str,
+    vector: tuple[float, ...],
+    relevant_ids: frozenset[str],
+    top_k: int,
 ) -> int | None:
     rows = tuple(
         record.data()
@@ -82,15 +105,15 @@ def _rank_for(
             {"index_name": index, "top_k": top_k, "embedding": list(vector)},
         )
     )
-    return next(
-        (rank for rank, row in enumerate(rows, start=1) if str(row["node_id"]) == expected),
-        None,
+    return first_relevant_rank(
+        tuple(str(row["node_id"]) for row in rows),
+        relevant_ids,
     )
 
 
 def _evaluate_dimension(
     session: Any,
-    queries: tuple[tuple[str, str], ...],
+    queries: tuple[QueryCase, ...],
     *,
     api_key: str,
     dimension: int,
@@ -98,17 +121,17 @@ def _evaluate_dimension(
 ) -> RetrievalMetrics:
     client = CohereClient(api_key, embedding_dimension=dimension)
     vectors = client.embed(
-        tuple(text for _, text in queries),
+        tuple(text for text, _ in queries),
         input_type=EmbedInputType.SEARCH_QUERY,
     )
     index = _index_name(dimension)
     # Warm the index without including cold-start cost in the measured distribution.
-    _rank_for(session, index, vectors[0], queries[0][0], top_k)
+    _rank_for(session, index, vectors[0], queries[0][1], top_k)
     ranks: list[int | None] = []
     latencies: list[float] = []
-    for (expected, _), vector in zip(queries, vectors, strict=True):
+    for (_, relevant_ids), vector in zip(queries, vectors, strict=True):
         started = time.perf_counter()
-        ranks.append(_rank_for(session, index, vector, expected, top_k))
+        ranks.append(_rank_for(session, index, vector, relevant_ids, top_k))
         latencies.append((time.perf_counter() - started) * 1_000)
     return retrieval_metrics(tuple(ranks), tuple(latencies))
 
@@ -146,6 +169,11 @@ def main() -> int:
         "protocol": PROTOCOL,
         "model": MODEL,
         "query_count": len(queries),
+        "query_strata": {
+            "unique_summary": sum(len(relevant_ids) == 1 for _, relevant_ids in queries),
+            "ambiguous_summary": sum(len(relevant_ids) > 1 for _, relevant_ids in queries),
+            "maximum_relevance_set": max(len(relevant_ids) for _, relevant_ids in queries),
+        },
         "top_k": args.top_k,
         "corpus_nodes": 24675,
         "representations": {
@@ -159,8 +187,8 @@ def main() -> int:
         },
         "noninferior_to_1536": {str(key): value for key, value in noninferior.items()},
         "limitation": (
-            "This measures dimensional retention on deterministic semantic-summary "
-            "self-retrieval; it does not replace the user-query golden set."
+            "Relevance is exact normalized semantic-summary equivalence over balanced unique "
+            "and ambiguous strata; this does not replace the user-query golden set."
         ),
     }
     content = f"{json.dumps(result, indent=2, sort_keys=True)}\n"

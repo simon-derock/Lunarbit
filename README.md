@@ -68,7 +68,7 @@ These are measurements from the local private corpus and deterministic pipeline.
 - an authenticated FastAPI-to-Neo4j/Cohere runtime that returns bounded verification metadata without exposing private evidence text;
 - 112 automated tests passing, plus Ruff and strict MyPy across 21 source modules.
 
-The published MRL artifact is a dimensional-retention diagnostic, not an end-to-end RAG score. Its original exact-chunk metric is deliberately labelled as limited because 14,467 eligible chunks belong to duplicate-summary groups. Relevance-set retrieval and real user-query golden evaluation are separate gates.
+The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 0.975 MRR at every tested dimension. The 256-dimensional prefix reduced median local HNSW latency from 10.99 ms to 6.75 ms, making it the provisional candidate-search index; the native 1,536-dimensional index remains the serving reference until the real user-query golden set confirms the switch. The superseded exact-chunk artifact remains published as a diagnostic example of how duplicate evidence can invalidate a naive metric.
 
 ### What is already proven
 
