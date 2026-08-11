@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from lunarbit.evaluation import retrieval_metrics
+from lunarbit.evaluation import first_relevant_rank, retrieval_metrics
+
+
+def test_first_relevant_rank_accepts_any_member_of_the_relevance_set() -> None:
+    assert first_relevant_rank(("chunk:x", "chunk:b", "chunk:a"), {"chunk:a", "chunk:b"}) == 2
+    assert first_relevant_rank(("chunk:x", "chunk:y"), {"chunk:a", "chunk:b"}) is None
 
 
 def test_retrieval_metrics_report_rank_quality_and_tail_latency() -> None:
