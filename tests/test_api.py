@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from lunarbit.api import create_app
+from lunarbit.api import PrivateRetrievalTrace, create_app
 from lunarbit.public import PublicMetric, assert_public_payload, build_demo_snapshot
 
 
@@ -64,3 +64,57 @@ def test_unknown_demo_answer_is_a_stable_not_found_contract() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "demo answer not found"}
+
+
+class StubPrivateBackend:
+    def retrieve(self, question: str) -> PrivateRetrievalTrace:
+        assert question == "historic meal price"
+        return PrivateRetrievalTrace(
+            status="verified",
+            dense_candidates=30,
+            lexical_candidates=30,
+            evidence_count=10,
+            citation_count=10,
+            reranking_status="applied",
+            verification_status="verified",
+            degradations=(),
+        )
+
+
+def test_private_retrieval_requires_constant_time_bearer_authentication() -> None:
+    client = TestClient(
+        create_app(
+            private_backend=StubPrivateBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    missing = client.post("/v1/private/retrieval", json={"question": "historic meal price"})
+    wrong = client.post(
+        "/v1/private/retrieval",
+        json={"question": "historic meal price"},
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+    accepted = client.post(
+        "/v1/private/retrieval",
+        json={"question": "historic meal price"},
+        headers={"Authorization": "Bearer local-secret-token"},
+    )
+
+    assert missing.status_code == 401
+    assert missing.headers["www-authenticate"] == "Bearer"
+    assert wrong.status_code == 403
+    assert accepted.status_code == 200
+    assert accepted.json()["verification_status"] == "verified"
+    assert "historic meal price" not in accepted.text
+
+
+def test_private_retrieval_is_unavailable_without_server_side_configuration() -> None:
+    response = _client().post(
+        "/v1/private/retrieval",
+        json={"question": "historic meal price"},
+        headers={"Authorization": "Bearer anything"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "private retrieval is not configured"}
