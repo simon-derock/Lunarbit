@@ -29,9 +29,7 @@ class StubGraph:
         assert limit == 30
         return ("chunk:b", "chunk:c")
 
-    def expand_evidence(
-        self, candidate_ids: tuple[str, ...]
-    ) -> dict[str, EvidenceDocument]:
+    def expand_evidence(self, candidate_ids: tuple[str, ...]) -> dict[str, EvidenceDocument]:
         assert candidate_ids == ("chunk:b", "chunk:a", "chunk:c")
         return {
             "chunk:a": _document("chunk:a", "a"),
@@ -104,9 +102,7 @@ class LexicalGraph(StubGraph):
     def lexical_candidates(self, query: str, limit: int) -> tuple[str, ...]:
         return ("chunk:b", "chunk:c")
 
-    def expand_evidence(
-        self, candidate_ids: tuple[str, ...]
-    ) -> dict[str, EvidenceDocument]:
+    def expand_evidence(self, candidate_ids: tuple[str, ...]) -> dict[str, EvidenceDocument]:
         return {
             "chunk:b": _document("chunk:b", "b"),
             "chunk:c": _document("chunk:c", "c"),
