@@ -14,21 +14,24 @@ def test_embed_v4_uses_explicit_search_mode_and_mrl_dimension(
 
     def fake_post(url: str, payload: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
         observed.update(url=url, payload=payload, kwargs=kwargs)
-        return {"embeddings": {"float": [[0.1, 0.2], [0.3, 0.4]]}}
+        return {"embeddings": {"float": [[0.1] * 256, [0.2] * 256]}}
 
     monkeypatch.setattr("lunarbit.cohere._post_json", fake_post)
-    client = CohereClient("private-token", embedding_dimension=2)
+    client = CohereClient("private-token", embedding_dimension=256)
 
     vectors = client.embed(("first", "second"), input_type=EmbedInputType.SEARCH_DOCUMENT)
 
-    assert vectors == ((0.1, 0.2), (0.3, 0.4))
+    assert len(vectors) == 2
+    assert all(len(vector) == 256 for vector in vectors)
+    assert vectors[0][0] == 0.1
+    assert vectors[1][0] == 0.2
     assert observed["url"] == "https://api.cohere.com/v2/embed"
     assert observed["payload"] == {
         "model": "embed-v4.0",
         "texts": ["first", "second"],
         "input_type": "search_document",
         "embedding_types": ["float"],
-        "output_dimension": 2,
+        "output_dimension": 256,
     }
     assert observed["kwargs"]["api_key"] == "private-token"
 
@@ -45,7 +48,7 @@ def test_embed_rejects_response_shape_drift(monkeypatch: pytest.MonkeyPatch) -> 
         "lunarbit.cohere._post_json",
         lambda *args, **kwargs: {"embeddings": {"float": [[0.1]]}},
     )
-    client = CohereClient("private-token", embedding_dimension=2)
+    client = CohereClient("private-token", embedding_dimension=256)
 
     with pytest.raises(ValueError, match="shape"):
         client.embed(("first",))
