@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from hashlib import sha256
+from math import fsum, sqrt
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,20 @@ class VectorIdentifiers(ContractModel):
     index_name: str
     model_property: str
     dimension_property: str
+
+
+def normalized_matryoshka_prefix(
+    vector: tuple[float, ...],
+    *,
+    dimension: int,
+) -> tuple[float, ...]:
+    if not 1 <= dimension <= len(vector):
+        raise ValueError("Matryoshka dimension must fit inside the source vector")
+    prefix = vector[:dimension]
+    norm = sqrt(fsum(value * value for value in prefix))
+    if norm == 0:
+        raise ValueError("cannot normalize a zero Matryoshka prefix")
+    return tuple(value / norm for value in prefix)
 
 
 def batch_embedding_inputs(
