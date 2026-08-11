@@ -1,6 +1,9 @@
 // Lunarbit canonical graph schema — Neo4j 5.x
 // All writes use node_id/relationship_id MERGE keys and remain idempotent.
 
+CREATE CONSTRAINT lunarbit_node_id IF NOT EXISTS
+FOR (node:LunarbitNode) REQUIRE node.node_id IS UNIQUE;
+
 CREATE CONSTRAINT document_node_id IF NOT EXISTS
 FOR (node:Document) REQUIRE node.node_id IS UNIQUE;
 CREATE CONSTRAINT source_message_node_id IF NOT EXISTS

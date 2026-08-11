@@ -124,7 +124,8 @@ def neo4j_write_batches(
     for labels in sorted(nodes_by_labels, key=lambda values: tuple(item.value for item in values)):
         label_expression = ":".join(label.value for label in labels)
         cypher = (
-            f"UNWIND $rows AS row MERGE (n:{label_expression} {{node_id: row.node_id}}) "
+            f"UNWIND $rows AS row MERGE (n:LunarbitNode:{label_expression} "
+            "{node_id: row.node_id}) "
             "SET n += row.properties"
         )
         for node_batch in _batched(nodes_by_labels[labels], batch_size):
@@ -140,8 +141,8 @@ def neo4j_write_batches(
     for relationship_type in sorted(relationships_by_type, key=lambda value: value.value):
         cypher = (
             "UNWIND $rows AS row "
-            "MATCH (source {node_id: row.source_node_id}) "
-            "MATCH (target {node_id: row.target_node_id}) "
+            "MATCH (source:LunarbitNode {node_id: row.source_node_id}) "
+            "MATCH (target:LunarbitNode {node_id: row.target_node_id}) "
             f"MERGE (source)-[r:{relationship_type.value} "
             "{relationship_id: row.relationship_id}]->(target) SET r += row.properties"
         )
