@@ -7,15 +7,22 @@ import pytest
 from lunarbit.retrieval import (
     EvidenceCitation,
     EvidencePack,
+    FactFamily,
     QueryIntent,
     QueryTemplate,
     RetrievalCandidate,
+    TraversalAction,
+    TraversalPolicy,
+    TraversalStep,
     VerificationStatus,
+    authority_score,
     classify_query,
     governed_query,
     reciprocal_rank_fusion,
+    validate_traversal,
     verify_evidence_pack,
 )
+from lunarbit.graph import RelationshipType
 
 
 @pytest.mark.parametrize(
@@ -93,9 +100,7 @@ def test_evidence_verifier_accepts_covered_claims_and_abstains_on_conflict() -> 
         supports_claim_ids=("claim:1",),
         quality_flags=(),
     )
-    accepted = verify_evidence_pack(
-        EvidencePack(claim_ids=("claim:1",), citations=(citation,))
-    )
+    accepted = verify_evidence_pack(EvidencePack(claim_ids=("claim:1",), citations=(citation,)))
     conflicting = verify_evidence_pack(
         EvidencePack(
             claim_ids=("claim:1",),
@@ -111,3 +116,58 @@ def test_evidence_verifier_accepts_covered_claims_and_abstains_on_conflict() -> 
     assert conflicting.abstention_reason == "conflicting_evidence"
     assert missing.status is VerificationStatus.ABSTAINED
     assert missing.abstention_reason == "incomplete_evidence_coverage"
+
+
+def test_graph_reasoning_is_bounded_by_actions_depth_and_relationship_allowlist() -> None:
+    policy = TraversalPolicy(
+        maximum_depth=4,
+        candidate_paths_per_step=2,
+        maximum_actions=5,
+        row_limit=30,
+        relationship_allowlist=(
+            RelationshipType.ORDERED_FROM,
+            RelationshipType.HAS_COMPONENT,
+            RelationshipType.EVIDENCED_BY,
+        ),
+    )
+    valid = (
+        TraversalStep(action=TraversalAction.RESOLVE_ENTITY, depth=0),
+        TraversalStep(
+            action=TraversalAction.EXPAND_NEIGHBORS,
+            depth=1,
+            relationship_type=RelationshipType.ORDERED_FROM,
+        ),
+        TraversalStep(action=TraversalAction.VERIFY_PATH, depth=1),
+        TraversalStep(action=TraversalAction.FINISH_ANSWER, depth=1),
+    )
+
+    assert validate_traversal(valid, policy) == valid
+    with pytest.raises(ValueError, match="relationship allowlist"):
+        validate_traversal(
+            (
+                TraversalStep(
+                    action=TraversalAction.EXPAND_NEIGHBORS,
+                    depth=1,
+                    relationship_type=RelationshipType.HAS_DELIVERY_MENTION,
+                ),
+            ),
+            policy,
+        )
+    with pytest.raises(ValueError, match="action budget"):
+        validate_traversal(valid + valid[:2], policy)
+
+
+def test_source_authority_depends_on_the_claimed_fact_family() -> None:
+    summary_for_total = authority_score(FactFamily.CUSTOMER_PAYABLE_TOTAL, "order_summary")
+    invoice_for_total = authority_score(
+        FactFamily.CUSTOMER_PAYABLE_TOTAL,
+        "restaurant_invoice",
+    )
+    invoice_for_supply = authority_score(
+        FactFamily.RESTAURANT_TAXABLE_SUPPLY,
+        "restaurant_invoice",
+    )
+
+    assert summary_for_total > invoice_for_total
+    assert invoice_for_supply > invoice_for_total
+    assert authority_score(FactFamily.ACTUAL_BANK_DEBIT, "order_summary") == Decimal("0")
