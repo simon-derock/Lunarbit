@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -12,6 +13,7 @@ type GraphProperty = str | int | float | bool | None
 
 
 class NodeLabel(StrEnum):
+    SOURCE_MESSAGE = "SourceMessage"
     DOCUMENT = "Document"
     EVIDENCE_CHUNK = "EvidenceChunk"
     AGENTIC_REGION = "AgenticRegion"
@@ -45,6 +47,7 @@ class RelationshipType(StrEnum):
     EVALUATED_BY = "EVALUATED_BY"
     RESOLVES_TO = "RESOLVES_TO"
     HAS_DELIVERY_MENTION = "HAS_DELIVERY_MENTION"
+    HAS_ITEM_OBSERVATION = "HAS_ITEM_OBSERVATION"
     OBSERVED_AS = "OBSERVED_AS"
     LISTING_OF = "LISTING_OF"
     RESOLVED_TO = "RESOLVED_TO"
@@ -58,7 +61,7 @@ class RelationshipType(StrEnum):
 class GraphNode(ContractModel):
     node_id: str = Field(min_length=1)
     labels: tuple[NodeLabel, ...] = Field(min_length=1)
-    properties: dict[str, GraphProperty]
+    properties: Mapping[str, GraphProperty]
 
     @model_validator(mode="after")
     def labels_are_unique(self) -> GraphNode:
@@ -72,7 +75,7 @@ class GraphRelationship(ContractModel):
     relationship_type: RelationshipType
     source_node_id: str = Field(min_length=1)
     target_node_id: str = Field(min_length=1)
-    properties: dict[str, GraphProperty]
+    properties: Mapping[str, GraphProperty]
 
 
 class CanonicalGraph(ContractModel):

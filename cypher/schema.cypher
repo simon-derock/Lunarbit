@@ -3,6 +3,8 @@
 
 CREATE CONSTRAINT document_node_id IF NOT EXISTS
 FOR (node:Document) REQUIRE node.node_id IS UNIQUE;
+CREATE CONSTRAINT source_message_node_id IF NOT EXISTS
+FOR (node:SourceMessage) REQUIRE node.node_id IS UNIQUE;
 CREATE CONSTRAINT evidence_chunk_node_id IF NOT EXISTS
 FOR (node:EvidenceChunk) REQUIRE node.node_id IS UNIQUE;
 CREATE CONSTRAINT agentic_region_node_id IF NOT EXISTS
