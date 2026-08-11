@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from secrets import compare_digest
+from typing import Annotated, Protocol
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field
 
@@ -26,6 +28,21 @@ class HealthResponse(ContractModel):
 
 class QueryPlanRequest(ContractModel):
     question: str = Field(min_length=3, max_length=500)
+
+
+class PrivateRetrievalTrace(ContractModel):
+    status: str
+    dense_candidates: int = Field(ge=0)
+    lexical_candidates: int = Field(ge=0)
+    evidence_count: int = Field(ge=0)
+    citation_count: int = Field(ge=0)
+    reranking_status: str | None
+    verification_status: str
+    degradations: tuple[str, ...]
+
+
+class PrivateRetrievalBackend(Protocol):
+    def retrieve(self, question: str) -> PrivateRetrievalTrace: ...
 
 
 class PublicQueryPlan(ContractModel):
@@ -130,6 +147,8 @@ def create_app(
     *,
     snapshot: PublicSnapshot | None = None,
     allowed_origins: Sequence[str] = ("http://localhost:3000",),
+    private_backend: PrivateRetrievalBackend | None = None,
+    private_api_token: str | None = None,
 ) -> FastAPI:
     public_snapshot = snapshot or _default_snapshot()
     assert_public_payload(public_snapshot.model_dump(mode="json"))
@@ -175,6 +194,25 @@ def create_app(
             raise HTTPException(status_code=404, detail="demo answer not found")
         assert_public_payload(answer.model_dump(mode="json"))
         return answer
+
+    @app.post("/v1/private/retrieval", response_model=PrivateRetrievalTrace)
+    def private_retrieval(
+        request: QueryPlanRequest,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> PrivateRetrievalTrace:
+        if private_backend is None or private_api_token is None:
+            raise HTTPException(status_code=503, detail="private retrieval is not configured")
+        prefix = "Bearer "
+        if authorization is None or not authorization.startswith(prefix):
+            raise HTTPException(
+                status_code=401,
+                detail="bearer token required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        supplied = authorization.removeprefix(prefix)
+        if not supplied or not compare_digest(supplied, private_api_token):
+            raise HTTPException(status_code=403, detail="invalid bearer token")
+        return private_backend.retrieve(request.question)
 
     return app
 
