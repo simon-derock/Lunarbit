@@ -51,3 +51,13 @@ CREATE FULLTEXT INDEX merchant_item_lexical IF NOT EXISTS
 FOR (node:MerchantItem) ON EACH [node.normalized_name_private, node.display_name_private];
 CREATE FULLTEXT INDEX entity_alias_lexical IF NOT EXISTS
 FOR (node:Merchant|LegalEntity) ON EACH [node.normalized_name_private, node.display_name_private];
+
+CREATE VECTOR INDEX evidence_vector IF NOT EXISTS
+FOR (node:EvidenceChunk) ON node.embedding
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 1024,
+  `vector.similarity_function`: 'cosine',
+  `vector.quantization.enabled`: true,
+  `vector.hnsw.m`: 16,
+  `vector.hnsw.ef_construction`: 100
+}};

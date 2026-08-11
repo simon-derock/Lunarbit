@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytest
 
+from lunarbit.graph import RelationshipType
 from lunarbit.retrieval import (
     EvidenceCitation,
     EvidencePack,
@@ -22,7 +23,6 @@ from lunarbit.retrieval import (
     validate_traversal,
     verify_evidence_pack,
 )
-from lunarbit.graph import RelationshipType
 
 
 @pytest.mark.parametrize(
