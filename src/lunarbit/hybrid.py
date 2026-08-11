@@ -24,6 +24,17 @@ from lunarbit.retrieval import (
 )
 
 _LEXICAL_TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
+EVIDENCE_EXPANSION_CYPHER = (
+    "UNWIND range(0, size($node_ids) - 1) AS position "
+    "WITH position, $node_ids[position] AS node_id "
+    "MATCH (chunk:EvidenceChunk {node_id: node_id}) "
+    "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+    "RETURN position, chunk.node_id AS candidate_id, "
+    "coalesce(chunk.semantic_summary_private, '') + '\\nEvidence: ' + "
+    "coalesce(chunk.normalized_text_private, '') AS text_private, "
+    "min(source.node_id) AS source_node_id, chunk.source_hash AS source_hash, "
+    "[] AS quality_flags ORDER BY position"
+)
 
 
 class EvidenceDocument(ContractModel):
@@ -274,15 +285,7 @@ class Neo4jHybridGraph:
             rows = tuple(
                 record.data()
                 for record in session.run(
-                    "UNWIND range(0, size($node_ids) - 1) AS position "
-                    "WITH position, $node_ids[position] AS node_id "
-                    "MATCH (chunk:EvidenceChunk {node_id: node_id}) "
-                    "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
-                    "RETURN position, chunk.node_id AS candidate_id, "
-                    "coalesce(chunk.semantic_summary_private, '') + '\\nEvidence: ' + "
-                    "coalesce(chunk.normalized_text_private, '') AS text_private, "
-                    "min(source.node_id) AS source_node_id, chunk.source_hash AS source_hash, "
-                    "coalesce(chunk.quality_flags, []) AS quality_flags ORDER BY position",
+                    EVIDENCE_EXPANSION_CYPHER,
                     {"node_ids": list(candidate_ids)},
                 )
             )

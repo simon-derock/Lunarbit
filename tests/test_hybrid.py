@@ -3,7 +3,12 @@ from __future__ import annotations
 from decimal import Decimal
 
 from lunarbit.cohere import EmbedInputType, RerankResult
-from lunarbit.hybrid import EvidenceDocument, HybridRetriever, HybridStatus
+from lunarbit.hybrid import (
+    EVIDENCE_EXPANSION_CYPHER,
+    EvidenceDocument,
+    HybridRetriever,
+    HybridStatus,
+)
 from lunarbit.retrieval import VerificationStatus
 
 
@@ -120,3 +125,8 @@ def test_cohere_outage_degrades_to_verified_lexical_rrf_retrieval() -> None:
     assert [item.candidate_id for item in result.evidence] == ["chunk:b", "chunk:c"]
     assert result.degradations == ("dense_unavailable", "rerank_unavailable")
     assert result.verification.status is VerificationStatus.VERIFIED
+
+
+def test_evidence_expansion_queries_only_canonical_chunk_properties() -> None:
+    assert "chunk.quality_flags" not in EVIDENCE_EXPANSION_CYPHER
+    assert "[] AS quality_flags" in EVIDENCE_EXPANSION_CYPHER
