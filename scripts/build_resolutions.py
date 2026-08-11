@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections import defaultdict
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
@@ -15,6 +16,14 @@ from pydantic import BaseModel
 
 from lunarbit.agentic import _atomic_private_write, load_agentic_evidence_bundles
 from lunarbit.agentic_quality import AgenticRegionRecord
+from lunarbit.finance import (
+    FinancialArchive,
+    FinancialArchiveSummary,
+    MoneyComponent,
+    ReconciliationStatus,
+    normalize_money_component,
+    reconcile_document_scope,
+)
 from lunarbit.models import (
     CandidateFactType,
     EvidenceChunk,
@@ -50,6 +59,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--identity-output", type=Path, required=True)
     parser.add_argument("--product-output", type=Path, required=True)
+    parser.add_argument("--finance-output", type=Path, required=True)
     parser.add_argument(
         "--decided-at",
         type=datetime.fromisoformat,
@@ -284,6 +294,92 @@ def _write_product_archive(
     return manifest
 
 
+def _financial_archive(
+    records: tuple[AgenticRegionRecord, ...],
+    chunks_by_id: dict[str, EvidenceChunk],
+    order_archive: OrderResolutionArchive,
+    *,
+    executed_at: datetime,
+) -> FinancialArchive:
+    order_ids_by_region: dict[UUID, set[UUID]] = {}
+    for bundle in order_archive.bundles:
+        for region_id in bundle.agentic_region_ids:
+            order_ids_by_region.setdefault(region_id, set()).add(bundle.order_id)
+    candidates = {
+        component.component_id: (component, chunk)
+        for chunk in chunks_by_id.values()
+        for component in chunk.candidate_money_components
+    }
+    components: list[MoneyComponent] = []
+    for record in records:
+        order_ids = tuple(sorted(order_ids_by_region.get(record.region_id, set()), key=str))
+        for interpretation in record.region.money_interpretations:
+            source, chunk = candidates[interpretation.source_component_id]
+            components.append(
+                normalize_money_component(
+                    source,
+                    interpretation,
+                    source_id=chunk.source_id,
+                    order_ids=order_ids,
+                )
+            )
+    components.sort(key=lambda component: str(component.component_id))
+    groups: dict[tuple[str, str, tuple[UUID, ...]], list[MoneyComponent]] = defaultdict(list)
+    for component in components:
+        groups[(component.source_id, component.scope.value, component.order_ids)].append(component)
+    runs = tuple(
+        run
+        for key in sorted(groups, key=str)
+        if (run := reconcile_document_scope(groups[key], executed_at=executed_at)) is not None
+    )
+    return FinancialArchive(
+        policy_version="financial-truth-v1.0.0",
+        components=tuple(components),
+        reconciliation_runs=runs,
+        summary=FinancialArchiveSummary(
+            money_components=len(components),
+            assigned_order_components=sum(bool(component.order_ids) for component in components),
+            unassigned_order_components=sum(not component.order_ids for component in components),
+            reconciliation_runs=len(runs),
+            exact_reconciliations=sum(run.status is ReconciliationStatus.EXACT for run in runs),
+            conflicting_reconciliations=sum(
+                run.status is ReconciliationStatus.CONFLICTING for run in runs
+            ),
+        ),
+    )
+
+
+def _write_financial_archive(
+    archive: FinancialArchive,
+    output_root: Path,
+    *,
+    product_archive_sha256: str,
+) -> dict[str, object]:
+    files = {
+        "money_components.jsonl": _jsonl(archive.components),
+        "reconciliation_runs.jsonl": _jsonl(archive.reconciliation_runs),
+    }
+    for name, content in files.items():
+        _atomic_private_write(output_root / name, content)
+    file_hashes = {name: sha256(content).hexdigest() for name, content in files.items()}
+    archive_digest = sha256(
+        "".join(f"{name}:{file_hashes[name]}\n" for name in sorted(file_hashes)).encode()
+    ).hexdigest()
+    manifest: dict[str, object] = {
+        "archive_version": RESOLUTION_ARCHIVE_VERSION,
+        "policy_version": archive.policy_version,
+        "archive_sha256": archive_digest,
+        "product_archive_sha256": product_archive_sha256,
+        "files": file_hashes,
+        **archive.summary.model_dump(mode="json"),
+    }
+    _atomic_private_write(
+        output_root / "manifest.json",
+        f"{json.dumps(manifest, indent=2, sort_keys=True)}\n".encode(),
+    )
+    return manifest
+
+
 def main() -> int:
     args = _parse_args()
     if args.decided_at.tzinfo is None or args.decided_at.utcoffset() is None:
@@ -334,12 +430,24 @@ def main() -> int:
         args.product_output.resolve(),
         entity_archive_sha256=str(entity_manifest["archive_sha256"]),
     )
+    financial_archive = _financial_archive(
+        records,
+        chunks_by_id,
+        archive,
+        executed_at=args.decided_at,
+    )
+    finance_manifest = _write_financial_archive(
+        financial_archive,
+        args.finance_output.resolve(),
+        product_archive_sha256=str(product_manifest["archive_sha256"]),
+    )
     print(
         json.dumps(
             {
                 "orders": order_manifest,
                 "entities": entity_manifest,
                 "products": product_manifest,
+                "finance": finance_manifest,
             },
             indent=2,
             sort_keys=True,
