@@ -19,10 +19,13 @@ def test_item_name_extraction_uses_table_semantics_and_rejects_financial_labels(
         == "Chicken Biryani"
     )
     assert item_name_from_table_row("Paneer Roll | 149.00", ("", "")) == "Paneer Roll"
-    assert item_name_from_table_row(
-        "Platform fee | 6.00",
-        ("Particulars", "Total"),
-    ) is None
+    assert (
+        item_name_from_table_row(
+            "Platform fee | 6.00",
+            ("Particulars", "Total"),
+        )
+        is None
+    )
     assert item_name_from_table_row("2 | 299.00", ("Qty", "Total")) is None
 
 

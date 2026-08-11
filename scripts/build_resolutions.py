@@ -18,9 +18,16 @@ from lunarbit.agentic_quality import AgenticRegionRecord
 from lunarbit.models import (
     CandidateFactType,
     EvidenceChunk,
+    FinancialRole,
     OrderEvidence,
     SourceDocument,
     SourceMessage,
+)
+from lunarbit.product import (
+    ItemEvidenceObservation,
+    ProductResolutionArchive,
+    item_observation_from_chunk,
+    resolve_item_observations,
 )
 from lunarbit.resolve import (
     AgenticOrderRegionReference,
@@ -42,6 +49,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--canonical-regions", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--identity-output", type=Path, required=True)
+    parser.add_argument("--product-output", type=Path, required=True)
     parser.add_argument(
         "--decided-at",
         type=datetime.fromisoformat,
@@ -209,6 +217,73 @@ def _write_entity_archive(
     return manifest
 
 
+def _item_observations(
+    records: tuple[AgenticRegionRecord, ...],
+    chunks_by_id: dict[str, EvidenceChunk],
+    order_archive: OrderResolutionArchive,
+    entity_archive: EntityResolutionArchive,
+) -> tuple[ItemEvidenceObservation, ...]:
+    order_ids_by_region: dict[UUID, set[UUID]] = {}
+    for bundle in order_archive.bundles:
+        for region_id in bundle.agentic_region_ids:
+            order_ids_by_region.setdefault(region_id, set()).add(bundle.order_id)
+    merchant_ids_by_order: dict[UUID, set[UUID]] = {}
+    for outlet in entity_archive.outlets:
+        merchant_ids_by_order.setdefault(outlet.order_id, set()).add(outlet.merchant_id)
+    observations: dict[UUID, ItemEvidenceObservation] = {}
+    for record in records:
+        if record.region.financial_role is not FinancialRole.ITEM:
+            continue
+        order_ids = order_ids_by_region.get(record.region_id, set())
+        if len(order_ids) != 1:
+            continue
+        order_id = next(iter(order_ids))
+        merchant_ids = merchant_ids_by_order.get(order_id, set())
+        merchant_id = next(iter(merchant_ids)) if len(merchant_ids) == 1 else None
+        for chunk_id in record.region.source_chunk_ids:
+            observation = item_observation_from_chunk(
+                chunks_by_id[str(chunk_id)],
+                order_id=order_id,
+                merchant_id=merchant_id,
+            )
+            if observation is not None:
+                observations[observation.observation_id] = observation
+    return tuple(observations.values())
+
+
+def _write_product_archive(
+    archive: ProductResolutionArchive,
+    output_root: Path,
+    *,
+    entity_archive_sha256: str,
+) -> dict[str, object]:
+    files = {
+        "observations.jsonl": _jsonl(archive.observations),
+        "merchant_items.jsonl": _jsonl(archive.merchant_items),
+        "canonical_items.jsonl": _jsonl(archive.canonical_items),
+        "comparable_item_groups.jsonl": _jsonl(archive.comparable_item_groups),
+    }
+    for name, content in files.items():
+        _atomic_private_write(output_root / name, content)
+    file_hashes = {name: sha256(content).hexdigest() for name, content in files.items()}
+    archive_digest = sha256(
+        "".join(f"{name}:{file_hashes[name]}\n" for name in sorted(file_hashes)).encode()
+    ).hexdigest()
+    manifest: dict[str, object] = {
+        "archive_version": RESOLUTION_ARCHIVE_VERSION,
+        "policy_version": archive.policy_version,
+        "archive_sha256": archive_digest,
+        "entity_archive_sha256": entity_archive_sha256,
+        "files": file_hashes,
+        **archive.summary.model_dump(mode="json"),
+    }
+    _atomic_private_write(
+        output_root / "manifest.json",
+        f"{json.dumps(manifest, indent=2, sort_keys=True)}\n".encode(),
+    )
+    return manifest
+
+
 def main() -> int:
     args = _parse_args()
     if args.decided_at.tzinfo is None or args.decided_at.utcoffset() is None:
@@ -251,9 +326,21 @@ def main() -> int:
         args.identity_output.resolve(),
         order_archive_sha256=str(order_manifest["archive_sha256"]),
     )
+    product_archive = resolve_item_observations(
+        _item_observations(records, chunks_by_id, archive, entity_archive)
+    )
+    product_manifest = _write_product_archive(
+        product_archive,
+        args.product_output.resolve(),
+        entity_archive_sha256=str(entity_manifest["archive_sha256"]),
+    )
     print(
         json.dumps(
-            {"orders": order_manifest, "entities": entity_manifest},
+            {
+                "orders": order_manifest,
+                "entities": entity_manifest,
+                "products": product_manifest,
+            },
             indent=2,
             sort_keys=True,
         )
