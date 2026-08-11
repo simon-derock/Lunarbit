@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-11
-- Active phase: Phase 3 deterministic order, entity, product, and financial resolution is complete; canonical graph compilation and local Neo4j ingestion are next.
+- Active phase: Canonical graph, local Neo4j ingestion, dense/lexical hybrid retrieval, bounded graph expansion, and evidence verification are complete; the agent/API and privacy-safe public application are next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified remote commit: `5a557a0` (`docs(memory): record canonical agentic archive completion`).
-- Last passing checks: Ruff lint, strict mypy, 73 pytest tests, deterministic resolution replay, and corpus-wide order, identity, product, and financial invariant audits.
+- Last verified commit: `614be5d` (`feat(retrieval): build evidence-verified hybrid GraphRAG`); push is pending this memory update.
+- Last passing checks: Ruff lint, strict mypy, 79 public pytest tests, two live retrieval smoke suites, deterministic graph replay, and exact Neo4j node/relationship/embedding coverage audits.
 
 ## Current state
 
@@ -61,7 +61,13 @@
   - Resolved 1,231 entity mentions into 139 platform-scoped merchants, 423 provisional per-order outlets, 4 legal entities, and 4 mention-only delivery records without inferring any person identity.
   - Produced 320 source-backed item observations and 245 merchant-scoped items; cross-merchant canonical items and comparable groups remain intentionally unasserted.
   - Normalized all 5,199 source amounts into Decimal-backed financial truth records and ran 256 document/scope reconciliations without inventing a global zero-sum.
-- In progress: Phase 3 is complete. Canonical graph projection is next; unresolved entity, item-comparability, financial-conflict, and semantic-quality states remain explicit.
+  - Compiled 48,784 typed nodes and 70,010 relationships into a closed-reference, storage-neutral canonical graph with content-addressed archives.
+  - Loaded the complete graph into local Neo4j through indexed, parameterized, idempotent batches and verified that a replay leaves counts unchanged.
+  - Embedded all 24,675 evidence chunks in 193 resumable batches with 1,024-dimensional `mistral-embed-2312` vectors.
+  - Created an online Neo4j HNSW vector index with cosine similarity, scalar quantization, `M=16`, and construction effort `100`, while retaining full vectors on evidence nodes.
+  - Added exact, full-text, dense, reciprocal-rank-fused, graph-expanded retrieval with fact-specific source authority and citation-level abstention gates.
+  - Added Graph-O1-inspired action, depth, candidate-path, relationship, row, and read-only query limits before database execution.
+- In progress: Agent workflow, FastAPI surface, privacy-safe public projection, interactive web application, and measured retrieval/end-to-end evaluation.
 - Pending external input: None. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
@@ -69,7 +75,7 @@
   evidence audits while compressed indexes provide scale-efficient candidate
   search across future Neo4j, Zilliz/Milvus, LanceDB, and CockroachDB
   projections.
-- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, package `0.1.0`; graph/index versions remain design-only.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, canonical graph `v1`, retrieval policy `hybrid-retrieval-v1.0.0`, package `0.1.0`.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -131,15 +137,32 @@
   - Product-resolution archive SHA-256: `654230dd537ad4ed526521eddaf45b53b34ba69c27389b16df479cf23353cb1e`
   - Financial archive SHA-256: `3ef5de0ec2199199727f54f4539669c3fb1a3153981f25919ed0b9b279e4f078`
   - Reconciliations: 256 total; 57 exact, 199 explicitly conflicting
+  - Canonical graph nodes: 48,784
+  - Canonical graph relationships: 70,010
+  - Graph node archive SHA-256: `af4517cc4be79f6bb5a4878bc5b57976c71df1fb3db53e6f431c93ae046b07dd`
+  - Graph relationship archive SHA-256: `3cb2c3607034d948942a17dda9734ef0344d95bd4479782df20d54ac7abd3093`
+  - Embedded evidence nodes: 24,675 of 24,675 across 193 batches
+  - Dense vector dimensions: 1,024
+  - Live hybrid candidates: 30 dense, 30 lexical, 10 fused, 10 graph-expanded
+  - Live evidence verification: verified
 
 ## Next actions — ordered
 
-1. Compile the canonical graph projection and validate graph invariants before local Neo4j ingestion.
-2. Add versioned Cypher constraints/indexes and an idempotent local-to-cloud graph loader.
-3. Build exact, lexical, vector, and bounded graph retrieval with evidence verification.
-4. Preserve all provisional identities, comparability abstentions, 199 financial conflicts, and 335 agentic quality flags as reviewable state.
+1. Build the bounded online agent workflow and FastAPI query contracts over governed retrieval.
+2. Produce and test a deterministic public projection that cannot expose private graph properties or source artifacts.
+3. Build the Next.js graph explorer, evidence trace, transaction reconstruction, dashboard, and benchmark views.
+4. Publish retrieval ablations and end-to-end answer metrics, then deploy the public-safe graph/API/frontend.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-11 — Gate hybrid graph retrieval with evidence and hard execution budgets
+
+- Decision: Retrieve independent dense and Lucene candidates, combine them through reciprocal-rank fusion, selectively expand the canonical graph, and accept answers only when every claim has source-addressable evidence. Constrain all online graph work through allowlisted parameterized Cypher, fact-specific source authority, read-only execution, and explicit action, depth, relationship, row, and candidate-path budgets.
+- Rationale: Vector similarity is useful for discovery but cannot establish financial truth. Independent channels improve candidate recall, graph paths reconstruct economic context, and the verification boundary preserves the distinction between retrieval relevance and evidence-backed fact.
+- Alternatives rejected: One retrieval channel; arbitrary generated Cypher; whole-subgraph serialization; database floating-point financial aggregation; treating one document role as universally authoritative; returning unsupported answers when evidence is incomplete or conflicting.
+- Validation performed: All 24,675 evidence nodes carry 1,024-dimensional vectors. Neo4j reports the quantized HNSW index online. Live smoke tests returned 30 dense and 30 lexical candidates, fused and expanded 10 evidence paths, reached semantic regions and money components, and produced a verified citation pack. All 79 public tests, Ruff, and strict mypy pass.
+- Portability note: Local Neo4j 5.26 uses its supported scalar-quantized HNSW implementation, not a native RaBitQ index. The retrieval adapter retains full vectors and can select native RaBitQ where a benchmarked backend exposes it.
+- Revisit trigger: Retrieval ablations show a material Hit@k, MRR, latency, memory, or evidence-coverage improvement from different dimensions, HNSW parameters, quantization, fusion, reranking, or traversal budgets.
 
 ### 2026-08-11 — Resolve commerce truth conservatively before graph writes
 
