@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-11
-- Active phase: Phase 2B corpus enrichment, targeted semantic retry, and canonical region compilation are complete; Phase 3 identity and order resolution is next.
+- Active phase: Phase 3 deterministic order, entity, product, and financial resolution is complete; canonical graph compilation and local Neo4j ingestion are next.
 - Current branch: `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
 - Last verified remote commit: `5a557a0` (`docs(memory): record canonical agentic archive completion`).
-- Last passing checks: Ruff lint, strict mypy, 64 pytest tests, complete deterministic extraction and chunking benchmarks, and a corpus-wide canonical-agentic invariant audit.
+- Last passing checks: Ruff lint, strict mypy, 73 pytest tests, deterministic resolution replay, and corpus-wide order, identity, product, and financial invariant audits.
 
 ## Current state
 
@@ -57,7 +57,11 @@
   - Compiled one canonical private region archive with deterministic region IDs, exact source and money coverage, batch/model provenance, and explicit residual quality flags.
   - Completed a second 248-batch semantic pass over complete conflict bundles and deterministically selected retries only when they reduced bundle-level evidence risk.
   - Compiled the final Phase 2 archive with all 24,675 source chunks and 5,199 money components represented exactly once, 13,597 unique deterministic region IDs, and zero blocking quality defects.
-- In progress: Phase 2 is complete. Phase 3 deterministic identity and order resolution is next; 335 non-blocking quality flags remain explicit across 334 evidence-safe regions.
+  - Resolved 559 immutable order-evidence records into 453 exact platform orders and 1 provisional order while retaining 105 duplicate evidence links and reversible decisions.
+  - Resolved 1,231 entity mentions into 139 platform-scoped merchants, 423 provisional per-order outlets, 4 legal entities, and 4 mention-only delivery records without inferring any person identity.
+  - Produced 320 source-backed item observations and 245 merchant-scoped items; cross-merchant canonical items and comparable groups remain intentionally unasserted.
+  - Normalized all 5,199 source amounts into Decimal-backed financial truth records and ran 256 document/scope reconciliations without inventing a global zero-sum.
+- In progress: Phase 3 is complete. Canonical graph projection is next; unresolved entity, item-comparability, financial-conflict, and semantic-quality states remain explicit.
 - Pending external input: None. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
@@ -122,15 +126,28 @@
   - Orders with recoverable unique IDs: 453
   - Provisional one-message/one-order records: 1
   - Current combined order total: 454
+  - Order-resolution archive SHA-256: `0b32ab2a462cf3a64f2bc544515458b6ce544ef3818a0b3c8288a81e4f149a23`
+  - Entity-resolution archive SHA-256: `99963af87ecf6d1fb63fc6fbff6f20f140dc9d37874c0cb70366363ec0c2ca6f`
+  - Product-resolution archive SHA-256: `654230dd537ad4ed526521eddaf45b53b34ba69c27389b16df479cf23353cb1e`
+  - Financial archive SHA-256: `3ef5de0ec2199199727f54f4539669c3fb1a3153981f25919ed0b9b279e4f078`
+  - Reconciliations: 256 total; 57 exact, 199 explicitly conflicting
 
 ## Next actions — ordered
 
-1. Begin Phase 3 order, merchant, legal-entity, item, and delivery-mention resolution from the final canonical region archive.
-2. Compile deterministic persistent IDs and reversible resolution decisions before canonical graph ingestion.
-3. Add private golden expectations for benchmark-designated hard cases, conflicts, and future unknown templates.
-4. Preserve the 296 fallback, 9 sparse, and 30 under-cited-conflict flags as reviewable evidence quality state; do not silently erase them.
+1. Compile the canonical graph projection and validate graph invariants before local Neo4j ingestion.
+2. Add versioned Cypher constraints/indexes and an idempotent local-to-cloud graph loader.
+3. Build exact, lexical, vector, and bounded graph retrieval with evidence verification.
+4. Preserve all provisional identities, comparability abstentions, 199 financial conflicts, and 335 agentic quality flags as reviewable state.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-11 — Resolve commerce truth conservatively before graph writes
+
+- Decision: Resolve exact platform orders deterministically, retain one provisional order, scope merchants by platform and normalized trade name, keep outlets provisional without location identifiers, preserve every delivery name as an independent mention, restrict item identity to merchant scope, and reconcile money only within document and commercial scope.
+- Rationale: Canonical graph richness is valuable only when merges and arithmetic remain reversible. Name similarity cannot prove outlet or person identity, identical dish names cannot prove cross-merchant comparability, and invoice/payment claims cannot prove bank settlement.
+- Alternatives rejected: Dropping duplicate history evidence; globally merging merchants or delivery names; collapsing same-named dishes across restaurants; forcing all commercial legs into a synthetic zero-sum; hiding residual conflicts.
+- Validation performed: Two deterministic executions produced stable private archives. The corpus resolves to 454 orders, 139 merchants, 423 provisional outlets, 4 legal entities, 4 mention-only delivery records, 320 item observations, 245 merchant items, 5,199 exactly covered money components, and 256 scoped reconciliations. All 73 tests, Ruff, and strict mypy pass.
+- Revisit trigger: New exact address, GSTIN/FSSAI, platform merchant ID, user confirmation, reviewed item matching, or payment/bank evidence supports a stronger resolution status.
 
 ### 2026-08-11 — Select semantic retries by complete-bundle evidence risk
 
