@@ -4,7 +4,6 @@ from pathlib import Path
 
 from lunarbit.scenarios import ScenarioCapability, load_scenario_packs
 
-
 FIXTURES = Path("tests/fixtures/economic_scenarios.json")
 
 
