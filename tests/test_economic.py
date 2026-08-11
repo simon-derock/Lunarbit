@@ -12,16 +12,21 @@ from lunarbit.economic import (
     CounterfactualScenario,
     EconomicFinding,
     EconomicMetric,
-    FindingStatus,
     FinancialEvent,
     FinancialEventType,
+    FindingStatus,
     Hypothesis,
     HypothesisOrigin,
     IndexObservation,
     ResearchTool,
     financial_event_id,
 )
-from lunarbit.finance import EpistemicMode, FinancialScope, TruthScope
+from lunarbit.finance import (
+    EpistemicMode,
+    FinancialComponentType,
+    FinancialScope,
+    TruthScope,
+)
 
 
 def _time(day: int) -> datetime:
@@ -64,12 +69,14 @@ def test_financial_event_is_decimal_temporal_provenance_and_content_addressed() 
     assert event.amount == Decimal("12.00")
     assert event.source_chunk_ids and event.source_hashes
     with pytest.raises(ValidationError):
-        event.model_copy(update={"amount": 12.0}, revalidate_instances="always")
+        FinancialEvent.model_validate({**event.model_dump(), "amount": 12.0})
 
 
 def test_financial_event_rejects_invalid_validity_interval() -> None:
     with pytest.raises(ValidationError, match="valid_to"):
-        _event().model_copy(update={"valid_to": _time(1), "valid_from": _time(2)})
+        FinancialEvent.model_validate(
+            {**_event().model_dump(), "valid_to": _time(1), "valid_from": _time(2)}
+        )
 
 
 def test_index_observation_requires_evidence_and_bounded_coverage() -> None:
@@ -84,7 +91,9 @@ def test_index_observation_requires_evidence_and_bounded_coverage() -> None:
 
     assert observation.value == Decimal("103.25")
     with pytest.raises(ValidationError):
-        observation.model_copy(update={"coverage_ratio": Decimal("1.01")})
+        IndexObservation.model_validate(
+            {**observation.model_dump(), "coverage_ratio": Decimal("1.01")}
+        )
 
 
 def test_economic_finding_cannot_exist_without_experiment_and_evidence() -> None:
@@ -120,7 +129,7 @@ def test_counterfactuals_are_explicitly_simulated_and_do_not_mutate_history() ->
         base_event_ids=(_event().event_id,),
         interventions=(
             CounterfactualIntervention(
-                component_type="platform_fee",
+                component_type=FinancialComponentType.PLATFORM_FEE,
                 replacement_amount=Decimal("0.00"),
                 currency="INR",
             ),
@@ -131,4 +140,6 @@ def test_counterfactuals_are_explicitly_simulated_and_do_not_mutate_history() ->
 
     assert scenario.epistemic_mode is EpistemicMode.SIMULATED
     with pytest.raises(ValidationError, match="simulated"):
-        scenario.model_copy(update={"epistemic_mode": EpistemicMode.OBSERVED})
+        CounterfactualScenario.model_validate(
+            {**scenario.model_dump(), "epistemic_mode": EpistemicMode.OBSERVED}
+        )
