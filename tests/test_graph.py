@@ -14,7 +14,9 @@ from lunarbit.graph import (
 
 
 def test_canonical_graph_rejects_duplicate_nodes_and_orphan_relationships() -> None:
-    order = GraphNode(node_id="order:1", labels=(NodeLabel.ORDER,), properties={"status": "resolved"})
+    order = GraphNode(
+        node_id="order:1", labels=(NodeLabel.ORDER,), properties={"status": "resolved"}
+    )
     platform = GraphNode(
         node_id="platform:swiggy",
         labels=(NodeLabel.PLATFORM,),
