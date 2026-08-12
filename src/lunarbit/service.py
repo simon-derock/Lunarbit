@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from lunarbit.api import PrivateRetrievalTrace
+from lunarbit.api import PrivateGroundedAnswer, PrivateRetrievalTrace
 from lunarbit.hybrid import HybridRetriever
+from lunarbit.runtime import GraphReader, RuntimeRequest, retrieve_grounded_context
 
 
 class HybridRetrievalBackend:
@@ -21,4 +22,24 @@ class HybridRetrievalBackend:
             reranking_status=(result.reranking.status.value if result.reranking else None),
             verification_status=result.verification.status.value,
             degradations=result.degradations,
+        )
+
+
+class GovernedAnswerBackend:
+    """Run allowlisted graph queries and expose only evidence-verified answers."""
+
+    def __init__(self, reader: GraphReader) -> None:
+        self._reader = reader
+
+    def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer:
+        context = retrieve_grounded_context(request, self._reader)
+        return PrivateGroundedAnswer(
+            status=context.status.value,
+            direct_answer=context.direct_answer,
+            calculation=context.calculation,
+            fact_count=context.fact_count,
+            citation_ids=context.verification.citation_ids,
+            verification_status=context.verification.status.value,
+            limitations=context.limitations,
+            abstention_reason=context.abstention_reason,
         )

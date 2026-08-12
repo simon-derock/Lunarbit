@@ -81,6 +81,14 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
                 relationship_type=RelationshipType.ORDERED_FROM,
             )
         )
+    if QueryTemplate.DELIVERY_MENTION_COUNT in templates:
+        steps.append(
+            TraversalStep(
+                action=TraversalAction.EXPAND_NEIGHBORS,
+                depth=1,
+                relationship_type=RelationshipType.HAS_DELIVERY_MENTION,
+            )
+        )
     if any(
         template
         in {QueryTemplate.FINANCIAL_COMPONENT_SUM, QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT}

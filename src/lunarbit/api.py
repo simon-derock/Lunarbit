@@ -16,6 +16,7 @@ from lunarbit.public import (
     assert_public_payload,
     build_demo_snapshot,
 )
+from lunarbit.runtime import QuerySlots, RuntimeRequest
 
 API_VERSION = "1.0.0"
 
@@ -43,6 +44,26 @@ class PrivateRetrievalTrace(ContractModel):
 
 class PrivateRetrievalBackend(Protocol):
     def retrieve(self, question: str) -> PrivateRetrievalTrace: ...
+
+
+class PrivateAnswerRequest(ContractModel):
+    question: str = Field(min_length=3, max_length=500)
+    slots: QuerySlots
+
+
+class PrivateGroundedAnswer(ContractModel):
+    status: str
+    direct_answer: str | None
+    calculation: str | None
+    fact_count: int = Field(ge=0)
+    citation_ids: tuple[str, ...]
+    verification_status: str
+    limitations: tuple[str, ...]
+    abstention_reason: str | None
+
+
+class PrivateAnswerBackend(Protocol):
+    def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer: ...
 
 
 class PublicQueryPlan(ContractModel):
@@ -148,6 +169,7 @@ def create_app(
     snapshot: PublicSnapshot | None = None,
     allowed_origins: Sequence[str] = ("http://localhost:3000",),
     private_backend: PrivateRetrievalBackend | None = None,
+    private_answer_backend: PrivateAnswerBackend | None = None,
     private_api_token: str | None = None,
 ) -> FastAPI:
     public_snapshot = snapshot or _default_snapshot()
@@ -162,8 +184,24 @@ def create_app(
         allow_origins=list(allowed_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
+
+    def authorize_private(authorization: str | None) -> None:
+        prefix = "Bearer "
+        if authorization is None or not authorization.startswith(prefix):
+            raise HTTPException(
+                status_code=401,
+                detail="bearer token required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        supplied = authorization.removeprefix(prefix)
+        if (
+            not supplied
+            or private_api_token is None
+            or not compare_digest(supplied, private_api_token)
+        ):
+            raise HTTPException(status_code=403, detail="invalid bearer token")
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -202,17 +240,20 @@ def create_app(
     ) -> PrivateRetrievalTrace:
         if private_backend is None or private_api_token is None:
             raise HTTPException(status_code=503, detail="private retrieval is not configured")
-        prefix = "Bearer "
-        if authorization is None or not authorization.startswith(prefix):
-            raise HTTPException(
-                status_code=401,
-                detail="bearer token required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        supplied = authorization.removeprefix(prefix)
-        if not supplied or not compare_digest(supplied, private_api_token):
-            raise HTTPException(status_code=403, detail="invalid bearer token")
+        authorize_private(authorization)
         return private_backend.retrieve(request.question)
+
+    @app.post("/v1/private/answer", response_model=PrivateGroundedAnswer)
+    def private_answer(
+        request: PrivateAnswerRequest,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> PrivateGroundedAnswer:
+        if private_answer_backend is None or private_api_token is None:
+            raise HTTPException(status_code=503, detail="private answer is not configured")
+        authorize_private(authorization)
+        return private_answer_backend.answer(
+            RuntimeRequest(question=request.question, slots=request.slots)
+        )
 
     return app
 

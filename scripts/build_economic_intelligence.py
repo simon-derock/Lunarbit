@@ -65,8 +65,8 @@ def main() -> int:
     files = {
         "financial_events.jsonl": _jsonl(corpus.events),
         "financial_chunks.jsonl": _jsonl(corpus.chunk_archive.chunks),
-        "graph_nodes.jsonl": _jsonl(corpus.graph.nodes),
-        "graph_relationships.jsonl": _jsonl(corpus.graph.relationships),
+        "nodes.jsonl": _jsonl(corpus.graph.nodes),
+        "relationships.jsonl": _jsonl(corpus.graph.relationships),
     }
     manifest = {
         "archive_version": ARCHIVE_VERSION,

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from lunarbit.api import PrivateRetrievalTrace, create_app
+from lunarbit.api import PrivateGroundedAnswer, PrivateRetrievalTrace, create_app
 from lunarbit.public import PublicMetric, assert_public_payload, build_demo_snapshot
+from lunarbit.runtime import RuntimeRequest
 
 
 def _client() -> TestClient:
@@ -118,3 +119,68 @@ def test_private_retrieval_is_unavailable_without_server_side_configuration() ->
 
     assert response.status_code == 503
     assert response.json() == {"detail": "private retrieval is not configured"}
+
+
+class StubPrivateAnswerBackend:
+    def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer:
+        assert request.slots.component_type == "platform_fee"
+        assert request.slots.platform == "swiggy"
+        return PrivateGroundedAnswer(
+            status="verified",
+            direct_answer="The evidence-backed total is INR 10.30.",
+            calculation="INR 10.10 + INR 0.20 = INR 10.30",
+            fact_count=2,
+            citation_ids=("runtime:citation:1", "runtime:citation:2"),
+            verification_status="verified",
+            limitations=("Not a bank-confirmed debit.",),
+            abstention_reason=None,
+        )
+
+
+def test_private_answer_returns_verified_calculation_without_raw_evidence() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/answer",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={
+            "question": "How much platform fee did I pay?",
+            "slots": {"platform": "swiggy", "component_type": "platform_fee"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["direct_answer"] == "The evidence-backed total is INR 10.30."
+    assert response.json()["citation_ids"] == [
+        "runtime:citation:1",
+        "runtime:citation:2",
+    ]
+    assert "source_hash" not in response.text
+    assert "evidence_text" not in response.text
+
+
+def test_private_answer_uses_the_same_bearer_security_boundary() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    missing = client.post(
+        "/v1/private/answer",
+        json={"question": "How much?", "slots": {}},
+    )
+    wrong = client.post(
+        "/v1/private/answer",
+        headers={"Authorization": "Bearer wrong-token"},
+        json={"question": "How much?", "slots": {}},
+    )
+
+    assert missing.status_code == 401
+    assert wrong.status_code == 403
