@@ -23,6 +23,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to intelligence workspace</a>
       <header className="topbar">
         <Link className="wordmark" href={`/${query}`} aria-label="Lunarbit overview">
           <span className="mark-orbit"><i /><i /></span>
@@ -64,7 +65,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </div>
       </aside>
 
-      <main className="main-stage" key={`${dataProfile.id}:${visualProfile.id}`}>
+      <main className="main-stage" id="main-content" key={`${dataProfile.id}:${visualProfile.id}`}>
         <div className="stage-grid" aria-hidden="true" />
         {children}
       </main>
