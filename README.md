@@ -13,7 +13,7 @@ The hard problem is not generating a fluent summary. It is preserving document s
 > **Project thesis:** trustworthy GraphRAG is not just retrieval plus an LLM. It separates source claims, normalized facts, deterministic calculations, identity decisions, unresolved uncertainty, and analytical findings—and makes each layer auditable.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-170%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/tests-181%20passing-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/source%20data-private%20by%20design-6f42c1)](#privacy-and-data-boundaries)
@@ -41,6 +41,7 @@ Lunarbit treats the archive as an evidence reconstruction problem:
 | Financial correctness | Exact source amounts, scoped money components, temporal financial events, deterministic reconciliation, residual visibility, and no model arithmetic |
 | Knowledge graph | 53,983 typed nodes and 85,607 closed-reference relationships across evidence, commerce, identity, product, financial-event, reconciliation, and provenance layers |
 | Retrieval systems | Neo4j HNSW, Lucene/BM25, Cohere Embed v4, RRF, bounded graph expansion, Cohere Rerank v4, source authority, and citation-level abstention |
+| Product engineering | Six interactive intelligence routes, four isolated commerce profiles, five independent rendering systems, responsive evidence replay, and shareable profile state |
 | Production judgment | Rate-governed resumable jobs, hard context budgets, no private data in Git, `0600` artifacts, visible red/green TDD, and measured gates before claims |
 
 ### Adaptive retrieval and vector systems
@@ -68,7 +69,7 @@ These are measurements from the local private corpus and deterministic pipeline.
 - a live hybrid smoke path of 30 dense + 30 lexical candidates, RRF, graph expansion, Cohere reranking, 10/10 citations, and verified evidence status;
 - an authenticated FastAPI runtime that serves evidence-verified Decimal calculations and temporal comparisons without exposing private evidence text;
 - a 24-case canonical-oracle answer evaluation with 100% status, answer, calculation, fact-count, citation-support, and abstention accuracy; P50 15.87 ms and P95 256.19 ms locally;
-- 170 automated tests passing, plus Ruff and strict MyPy across 33 source modules.
+- 170 backend and 11 frontend tests passing, plus Ruff, ESLint, strict MyPy, strict TypeScript, and a production Next.js build.
 
 The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 0.975 MRR at every tested dimension. The 256-dimensional prefix reduced median local HNSW latency from 10.99 ms to 6.75 ms, making it the provisional candidate-search index; the native 1,536-dimensional index remains the serving reference until a human-reviewed natural-language golden set confirms the switch. The superseded exact-chunk artifact remains published as a diagnostic example of how duplicate evidence can invalidate a naive metric.
 
@@ -87,7 +88,18 @@ The 24-case answer suite uses an independent deterministic oracle built from imm
 - Large aggregates page until complete under an action budget, use Decimal arithmetic, and abstain rather than present a partial result as a lifetime total.
 - The private API requires server-side bearer configuration; credentials and raw source evidence never enter its response contract.
 
-The core local backend is complete through deterministic extraction, economic-corpus compilation, temporal Neo4j ingestion, hybrid retrieval, evidence-bound answer synthesis, and canonical-oracle evaluation. Frontend implementation remains intentionally paused until its visual and interaction direction is agreed; human-reviewed natural-language evaluation, Aura deployment, and the public privacy review remain release gates.
+The core local backend is complete through deterministic extraction, economic-corpus compilation, temporal Neo4j ingestion, hybrid retrieval, evidence-bound answer synthesis, and canonical-oracle evaluation. The public frontend now implements the agreed dark-chromatic product direction across overview, graph, economics, transactions, evidence, and benchmark routes. Human-reviewed natural-language evaluation, live API integration, Aura deployment, and the public privacy review remain release gates.
+
+### Public intelligence workspace
+
+The Next.js application is a privacy-safe product surface, not a decorative dashboard. Its two profile dimensions are deliberately independent:
+
+- **four synthetic commerce profiles** replace the complete graph, metrics, findings, transactions, and suggested questions without crossing profile boundaries;
+- **five visual profiles**—Dark Chromatic, Monochrome Wireframe, Spectral Bloom, Signal Noir, and Economic Terrain—change palette, geometry, depth, and signal treatment without mutating the selected data;
+- **six navigable workspaces** expose graph topology, personal-price terrain, exact spending decomposition, reconciled transaction bundles, claim-to-proof replay, and versioned MRL benchmarks;
+- selections persist locally and in shareable query parameters, producing 20 valid data/render combinations from the same governed interface contract.
+
+All currently rendered records are explicit synthetic mirrors. Private source text, personal identifiers, document bytes, and credentials never enter the web bundle.
 
 ## What the finished system will demonstrate
 
@@ -118,9 +130,10 @@ flowchart LR
     L --> M[Exact, lexical, dense, and graph retrieval]
     M --> N[Deterministic answer and evidence gates]
     N --> O[Privacy-reviewed public projection]
+    O --> P[Next.js intelligence workspace]
 ```
 
-The implemented backend covers ingestion, extraction, chunking, guarded semantic enrichment, reversible resolution, deterministic finance, multi-resolution economic compilation, temporal graph extension, local Neo4j loading, Cohere/Mistral embeddings, hybrid retrieval, reranking, citation verification, deterministic answer synthesis, canonical-oracle evaluation, a synthetic public projection, and an authenticated FastAPI surface. The interactive frontend and deployment remain behind explicit acceptance gates in [`PLAN.md`](PLAN.md).
+The implementation covers ingestion, extraction, chunking, guarded semantic enrichment, reversible resolution, deterministic finance, multi-resolution economic compilation, temporal graph extension, local Neo4j loading, Cohere/Mistral embeddings, hybrid retrieval, reranking, citation verification, deterministic answer synthesis, canonical-oracle evaluation, a synthetic public projection, an authenticated FastAPI surface, and an interactive Next.js intelligence workspace. Live public API integration and deployment remain behind explicit acceptance gates in [`PLAN.md`](PLAN.md).
 
 ## What the system preserves
 
@@ -157,7 +170,7 @@ Models may propose semantic regions, retrieval text, query families, interpretat
 
 ### Runtime stack
 
-The current backend uses Python 3.12+, strict Pydantic contracts, Neo4j 5.26, Lucene full text, Neo4j HNSW, Cohere Embed v4 and Rerank v4, application-owned RRF, deterministic verification, and FastAPI. The serving dimension is 1,536 pending the corrected golden evaluation; Mistral 1,024-d vectors remain an ablation baseline. Next.js/Vercel and Aura deployment are planned only after the frontend direction and public privacy review are complete.
+The backend uses Python 3.12+, strict Pydantic contracts, Neo4j 5.26, Lucene full text, Neo4j HNSW, Cohere Embed v4 and Rerank v4, application-owned RRF, deterministic verification, and FastAPI. The public workspace uses Next.js 16, React 19, strict TypeScript, code-native SVG visualization, and isolated synthetic profile contracts. The serving dimension is 1,536 pending the corrected golden evaluation; Mistral 1,024-d vectors remain an ablation baseline. Vercel and Aura deployment follow the live integration and public privacy review.
 
 ## Graph and truth model
 
@@ -212,6 +225,20 @@ uv run pytest -q
 uv run ruff check src scripts tests
 uv run ruff format --check src scripts tests
 uv run mypy src/lunarbit
+
+cd web
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+Run the public synthetic workspace:
+
+```bash
+cd web
+npm install
+npm run dev
 ```
 
 Build the deterministic private pipeline:
@@ -300,10 +327,15 @@ scripts/
 tests/          # 170 extraction, graph, finance, retrieval, API, privacy, and TDD checks
 benchmarks/     # aggregate-only evaluation artifacts; never source evidence
 
+web/
+├── app/         # six responsive intelligence routes
+├── components/  # graph, terrain, evidence, profile, and signal primitives
+├── lib/         # isolated synthetic data and visual-profile contracts
+└── tests/       # 11 interaction, isolation, route, and arithmetic checks
+
 PLAN.md       # complete architecture, ontology, acceptance criteria, and roadmap
 MEMORY.md     # append-only engineering handoff and decisions
 cypher/       # graph design assets and future migrations
-web/          # public application surface under construction
 ```
 
 ## Delivery roadmap and proof gates
@@ -334,7 +366,7 @@ Completed locally: governed exact queries and hybrid HNSW/Lucene retrieval use R
 
 ### Phase 7–8 — Economic intelligence and public product
 
-The financial core now includes 5,199 temporal events, five chunk resolutions, personal-price/spending/platform metrics, economic signals, safe simulations, and a governed hypothesis-to-finding loop. The deterministic public projection and synthetic demo contracts exist. Interactive graph, evidence, benchmark, transaction, and economic-intelligence pages begin only after frontend design review.
+The financial core includes 5,199 temporal events, five chunk resolutions, personal-price/spending/platform metrics, economic signals, safe simulations, and a governed hypothesis-to-finding loop. The deterministic public projection and synthetic demo contracts drive implemented graph, evidence, benchmark, transaction, and economic-intelligence pages with independent data and rendering profiles. Live API integration, public evidence review, and deployment are the remaining product gates.
 
 ## Evaluation and definition of done
 
@@ -359,7 +391,7 @@ Lunarbit currently reconstructs 454 orders from 456 relevant emails and 763 priv
 
 ## Project status
 
-Lunarbit is an active evidence-systems build. The private data pipeline, temporal economic graph, vector and lexical indexes, hybrid retrieval, reranking, evidence-bound answer synthesis, deterministic economic engines, canonical-oracle evaluation, public-safe synthetic projection, and authenticated API are implemented locally. Frontend implementation, human-reviewed natural-language evaluation, cloud deployment, and public privacy review remain open.
+Lunarbit is an active evidence-systems build. The private data pipeline, temporal economic graph, vector and lexical indexes, hybrid retrieval, reranking, evidence-bound answer synthesis, deterministic economic engines, canonical-oracle evaluation, public-safe synthetic projection, authenticated API, and multi-profile frontend are implemented locally. Human-reviewed natural-language evaluation, live frontend/API integration, cloud deployment, and public privacy review remain open.
 
 That distinction is part of the project: a trustworthy AI engineer should know exactly which results are measured, which are private, which are candidates, and which are still hypotheses.
 

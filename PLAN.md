@@ -2992,16 +2992,17 @@ The initial `MEMORY.md` must include:
 
 ### Phase 8 — Public application
 
-- landing dashboard;
-- Ask Lunarbit;
-- transaction reconstruction;
-- graph explorer;
-- evidence laboratory;
-- benchmark page;
-- privacy tests;
+- landing dashboard — implemented with synthetic profile contracts;
+- Ask Lunarbit question surface — implemented; live answer transport pending;
+- transaction reconstruction — implemented synthetic ledger and scoped component replay;
+- graph explorer — implemented bounded profile-isolated topology;
+- evidence laboratory — implemented synthetic claim-to-proof replay;
+- benchmark page — implemented from versioned aggregate artifacts;
+- independent data and visualization profiles — implemented with URL persistence;
+- frontend isolation, interaction, arithmetic, route, responsive, and privacy-safe rendering checks — implemented;
 - Vercel deployment.
 
-**Exit:** a recruiter can verify one complex answer in under two minutes.
+**Exit:** a public user can verify one complex live answer in under two minutes. The local synthetic product surface is complete; live API wiring, public privacy review, and deployment remain.
 
 ### Phase 9 — Advanced bounded graph reasoning
 

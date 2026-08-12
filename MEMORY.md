@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-12
-- Active phase: The local backend is complete through temporal economic compilation, idempotent Neo4j ingestion, governed answer synthesis, and canonical-oracle evaluation. Pause before frontend implementation for user-supplied visual and interaction direction.
+- Active phase: The local backend is complete through canonical-oracle evaluation, and the privacy-safe multi-profile frontend is implemented across six routes. Next gates are live API integration, public privacy review, and deployment.
 - Current branch: `backend-runtime`, pushed to remote `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `dc81eb5` (`test(runtime): benchmark answers against canonical truth`), pushed to `main`.
-- Last passing checks: Ruff lint, strict mypy across 33 source modules, 170 pytest tests, byte-stable private economic rebuild, two-pass Neo4j idempotence, live aggregation and temporal-answer smoke tests, and a 24-case canonical-oracle evaluation.
+- Last verified implementation commit: `29ce6aa` (`feat(web): deliver the economic intelligence visualization suite`), pushed to `main`.
+- Last passing checks: Ruff lint, strict mypy across 33 source modules, 170 pytest tests, 11 Vitest tests, ESLint, strict TypeScript, production Next.js build, desktop visual QA across four rendering/data combinations, mobile evidence QA, byte-stable private economic rebuild, two-pass Neo4j idempotence, and a 24-case canonical-oracle evaluation.
 
 ## Current state
 
@@ -73,8 +73,12 @@
   - Added reviewed-basket personal food price indexing, exact spending-change decomposition, fee/discount/membership economics, descriptive elasticity/substitution signals, robust anomaly/change-point detection, immutable counterfactuals, and a governed hypothesis-to-finding loop.
   - Added an authenticated `/v1/private/answer` runtime using only allowlisted read queries, bounded pagination, Decimal arithmetic, citation verification, and explicit abstention; raw evidence text never enters the response contract.
   - Built private answer goldens from immutable JSONL archives rather than Neo4j and passed 24 of 24 canonical-oracle cases across financial aggregation, price history, merchant counts, delivery mentions, and abstention.
-- In progress: Backend documentation and handoff only. Do not start frontend code until the user provides graph visualization, templates, page structure, and design direction.
-- Pending external input: Frontend direction. Provider credentials load from the ignored `.env`; do not expose or commit them.
+  - Implemented a Next.js 16 public workspace with overview, graph explorer, economic terrain, transactions, evidence lab, and benchmark routes.
+  - Added four fully isolated synthetic commerce profiles and five independent visualization profiles, persisted in local state and shareable query parameters.
+  - Translated the reviewed Dark Chromatic references into code-native constellation, terrain, signal, receipt, proof, and benchmark visual systems without committing the private sample directory.
+  - Verified all six routes through interaction tests, strict TypeScript, ESLint, production build, and headless desktop/mobile visual review.
+- In progress: Documentation and frontend/API integration planning. The current UI intentionally consumes synthetic public contracts only.
+- Pending external input: Public deployment target and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
   capabilities. The design retains full-precision vectors for reranking and
