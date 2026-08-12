@@ -50,6 +50,10 @@ def _period(
     observed_total: str,
     order_count: int,
 ) -> PeriodEconomics:
+    event_ids = tuple(sorted({event_id for item in basket for event_id in item.event_ids}, key=str))
+    evidence_chunk_ids = tuple(
+        sorted({chunk_id for item in basket for chunk_id in item.evidence_chunk_ids}, key=str)
+    )
     return PeriodEconomics(
         period_start=_time(start_month),
         period_end=_time(start_month + 1),
@@ -62,6 +66,8 @@ def _period(
         membership_cost=Decimal(membership_cost),
         observed_customer_total=Decimal(observed_total),
         order_count=order_count,
+        event_ids=event_ids,
+        evidence_chunk_ids=evidence_chunk_ids,
     )
 
 
