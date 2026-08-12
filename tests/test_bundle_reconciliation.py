@@ -18,7 +18,6 @@ from lunarbit.finance import (
 )
 from lunarbit.models import DocumentRole
 
-
 ORDER_ID = UUID("30000000-0000-0000-0000-000000000001")
 
 
@@ -81,9 +80,7 @@ def test_document_authority_prevents_summary_duplicates_from_double_counting() -
     summary_duplicate = _component(
         2, "doc_0000000000000002", FinancialComponentType.ITEM_GROSS, "400.00"
     )
-    total = _component(
-        3, "doc_0000000000000002", FinancialComponentType.CUSTOMER_TOTAL, "400.00"
-    )
+    total = _component(3, "doc_0000000000000002", FinancialComponentType.CUSTOMER_TOTAL, "400.00")
 
     result = reconcile_transaction_bundle(
         (merchant_item, summary_duplicate, total),
@@ -110,9 +107,7 @@ def test_conflicting_bundle_preserves_residual_instead_of_forcing_balance() -> N
                 FinancialComponentType.MEMBERSHIP_BENEFIT,
                 "50.00",
             ),
-            _component(
-                3, "doc_0000000000000001", FinancialComponentType.CUSTOMER_TOTAL, "280.00"
-            ),
+            _component(3, "doc_0000000000000001", FinancialComponentType.CUSTOMER_TOTAL, "280.00"),
         ),
         document_roles={
             "doc_0000000000000001": DocumentRole.SWIGGY_RESTAURANT_INVOICE,
