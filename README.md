@@ -13,7 +13,7 @@ The hard problem is not generating a fluent summary. It is preserving document s
 > **Project thesis:** trustworthy GraphRAG is not just retrieval plus an LLM. It separates source claims, normalized facts, deterministic calculations, identity decisions, unresolved uncertainty, and analytical findings—and makes each layer auditable.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-112%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/tests-170%20passing-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/source%20data-private%20by%20design-6f42c1)](#privacy-and-data-boundaries)
@@ -38,8 +38,8 @@ Lunarbit treats the archive as an evidence reconstruction problem:
 | Document intelligence | Native PDF extraction, layout and table preservation, page coordinates, quality profiles, email parsing, and document-role classification |
 | Data contracts | Strict Pydantic contracts, content-addressed IDs, deterministic manifests, source hashes, provenance spans, and atomic validation boundaries |
 | Agentic AI | Provider-adapted structured generation, bounded semantic regions, exact source and money coverage, typed validation, deterministic repair, and resumable quarantine |
-| Financial correctness | Exact source amounts, scoped money components, deterministic reconciliation, residual visibility, and no model arithmetic |
-| Knowledge graph | 48,784 typed nodes and 70,010 closed-reference relationships across evidence, commerce, identity, product, financial, reconciliation, and provenance layers |
+| Financial correctness | Exact source amounts, scoped money components, temporal financial events, deterministic reconciliation, residual visibility, and no model arithmetic |
+| Knowledge graph | 53,983 typed nodes and 85,607 closed-reference relationships across evidence, commerce, identity, product, financial-event, reconciliation, and provenance layers |
 | Retrieval systems | Neo4j HNSW, Lucene/BM25, Cohere Embed v4, RRF, bounded graph expansion, Cohere Rerank v4, source authority, and citation-level abstention |
 | Production judgment | Rate-governed resumable jobs, hard context budgets, no private data in Git, `0600` artifacts, visible red/green TDD, and measured gates before claims |
 
@@ -61,14 +61,18 @@ These are measurements from the local private corpus and deterministic pipeline.
 - 454 current reconstructed order records under the documented counting policy;
 - 24,675 deterministic evidence chunks across 456 order-evidence bundles;
 - 13,597 final deterministic agentic regions with exact coverage of all 24,675 chunks and 5,199 money components;
-- 48,784 canonical graph nodes and 70,010 relationships, with byte-stable private archives and idempotent Neo4j replay;
+- a 48,784-node/70,010-relationship canonical source graph extended to 53,983 nodes and 85,607 relationships by 5,199 temporal financial events;
+- 11,368 multi-resolution financial-intelligence chunks: evidence cells, events, transaction bundles, 529 entity histories, and seven annual research windows;
 - 24,675/24,675 native Cohere Embed v4 vectors at 1,536 dimensions, generated in 258 resumable calls;
 - complete 256/512/1024 MRL-prefix and 1,536 native HNSW indexes, while retaining the earlier 1,024-dimensional Mistral embedding baseline for ablation;
 - a live hybrid smoke path of 30 dense + 30 lexical candidates, RRF, graph expansion, Cohere reranking, 10/10 citations, and verified evidence status;
-- an authenticated FastAPI-to-Neo4j/Cohere runtime that returns bounded verification metadata without exposing private evidence text;
-- 112 automated tests passing, plus Ruff and strict MyPy across 21 source modules.
+- an authenticated FastAPI runtime that serves evidence-verified Decimal calculations and temporal comparisons without exposing private evidence text;
+- a 24-case canonical-oracle answer evaluation with 100% status, answer, calculation, fact-count, citation-support, and abstention accuracy; P50 15.87 ms and P95 256.19 ms locally;
+- 170 automated tests passing, plus Ruff and strict MyPy across 33 source modules.
 
-The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 0.975 MRR at every tested dimension. The 256-dimensional prefix reduced median local HNSW latency from 10.99 ms to 6.75 ms, making it the provisional candidate-search index; the native 1,536-dimensional index remains the serving reference until the real user-query golden set confirms the switch. The superseded exact-chunk artifact remains published as a diagnostic example of how duplicate evidence can invalidate a naive metric.
+The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 0.975 MRR at every tested dimension. The 256-dimensional prefix reduced median local HNSW latency from 10.99 ms to 6.75 ms, making it the provisional candidate-search index; the native 1,536-dimensional index remains the serving reference until a human-reviewed natural-language golden set confirms the switch. The superseded exact-chunk artifact remains published as a diagnostic example of how duplicate evidence can invalidate a naive metric.
+
+The 24-case answer suite uses an independent deterministic oracle built from immutable inventory, finance, and graph archives. It proves runtime agreement with canonical truth for nine financial aggregates, five price histories, five merchant counts, two delivery-mention histories, and three abstentions. It is deliberately reported separately from human review: it validates system correctness and evidence coverage, not subjective answer style or universal semantic understanding.
 
 ### What is already proven
 
@@ -77,11 +81,13 @@ The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 
 - Rich chunks carry facts, entities, money candidates, graph candidates, confidence, completeness, and privacy metadata.
 - Deterministic resolution preserves duplicate evidence, provisional identities, merchant-scoped products, and explicit uncertainty instead of forcing unsafe merges.
 - All 5,199 source amounts are Decimal-backed and reconciled only within valid document and commercial scopes.
+- Every money component compiles into exactly one source-backed temporal financial event and one evidence cell; higher-resolution chunks retain closed child lineage.
 - The canonical graph rebuild is closed-reference and idempotent; vector properties are versioned so experiments never overwrite the serving or baseline representation.
 - The online path performs read-only parameterized retrieval, exact/Lucene/dense fusion, bounded graph expansion, reranking, source-authority scoring, evidence verification, and explicit degradation.
+- Large aggregates page until complete under an action budget, use Decimal arithmetic, and abstain rather than present a partial result as a lifetime total.
 - The private API requires server-side bearer configuration; credentials and raw source evidence never enter its response contract.
 
-The remaining backend work is explicit: complete the corrected relevance-set and user-query golden evaluations, then add evidence-bound answer synthesis. Frontend implementation remains intentionally paused until its visual and interaction direction is agreed.
+The core local backend is complete through deterministic extraction, economic-corpus compilation, temporal Neo4j ingestion, hybrid retrieval, evidence-bound answer synthesis, and canonical-oracle evaluation. Frontend implementation remains intentionally paused until its visual and interaction direction is agreed; human-reviewed natural-language evaluation, Aura deployment, and the public privacy review remain release gates.
 
 ## What the finished system will demonstrate
 
@@ -107,13 +113,14 @@ flowchart LR
     G --> H[Typed validation and quarantine]
     H --> I[Entity and order resolution]
     I --> J[Financial reconciliation]
-    J --> K[Neo4j temporal graph]
-    K --> L[Exact, lexical, dense, and graph retrieval]
-    L --> M[Evidence-grounded answer workflow]
-    M --> N[Privacy-reviewed public projection]
+    J --> K[Temporal financial events]
+    K --> L[Neo4j temporal graph]
+    L --> M[Exact, lexical, dense, and graph retrieval]
+    M --> N[Deterministic answer and evidence gates]
+    N --> O[Privacy-reviewed public projection]
 ```
 
-The implemented backend covers ingestion, extraction, chunking, guarded semantic enrichment, reversible resolution, deterministic finance, canonical graph compilation, local Neo4j loading, Cohere/Mistral embeddings, hybrid retrieval, reranking, citation verification, a synthetic public projection, and an authenticated FastAPI retrieval surface. The interactive frontend and deployment remain behind explicit acceptance gates in [`PLAN.md`](PLAN.md).
+The implemented backend covers ingestion, extraction, chunking, guarded semantic enrichment, reversible resolution, deterministic finance, multi-resolution economic compilation, temporal graph extension, local Neo4j loading, Cohere/Mistral embeddings, hybrid retrieval, reranking, citation verification, deterministic answer synthesis, canonical-oracle evaluation, a synthetic public projection, and an authenticated FastAPI surface. The interactive frontend and deployment remain behind explicit acceptance gates in [`PLAN.md`](PLAN.md).
 
 ## What the system preserves
 
@@ -233,6 +240,29 @@ uv run python scripts/derive_mrl_indexes.py \
 uv run python scripts/benchmark_mrl_retrieval.py --queries 40 --top-k 10
 ```
 
+Build, load, and evaluate the private financial-intelligence graph:
+
+```bash
+uv run python scripts/build_economic_intelligence.py \
+  --inventory-root data/processed/_inventory \
+  --finance-root data/processed/_resolution/finance_v1_20260811 \
+  --graph-root data/processed/_graph/canonical_v1_20260811 \
+  --output data/processed/_economic/financial_intelligence_v1_20260812
+
+uv run python scripts/ingest_graph.py \
+  --graph-root data/processed/_economic/financial_intelligence_v1_20260812
+
+uv run python scripts/build_answer_goldens.py \
+  --inventory-root data/processed/_inventory \
+  --finance-root data/processed/_resolution/finance_v1_20260811 \
+  --graph-root data/processed/_economic/financial_intelligence_v1_20260812 \
+  --output data/processed/_economic/financial_intelligence_v1_20260812/answer_goldens.jsonl
+
+uv run python scripts/evaluate_answer_runtime.py \
+  --goldens data/processed/_economic/financial_intelligence_v1_20260812/answer_goldens.jsonl \
+  --output data/processed/_economic/financial_intelligence_v1_20260812/answer_evaluation.json
+```
+
 All live provider execution is opt-in. Put credentials only in ignored `.env`; begin with a bounded smoke run and inspect deterministic validation output before scaling.
 
 ## Repository map
@@ -248,7 +278,11 @@ src/lunarbit/
 ├── cohere.py              # typed Embed v4 and Rerank v4 transport boundary
 ├── hybrid.py              # HNSW + Lucene + RRF + graph expansion + reranking
 ├── runtime.py             # read-only governed analytical execution
-├── evaluation.py          # retrieval quality and latency metric contracts
+├── economic_pipeline.py   # temporal events and multi-resolution financial corpus
+├── economic_metrics.py    # price, spending, fee, discount, and membership economics
+├── economic_research.py   # signals, anomalies, change points, and counterfactuals
+├── answer_goldens.py      # independent canonical-oracle answer cases
+├── evaluation.py / answer_evaluation.py # retrieval and answer metric contracts
 └── api.py / service.py    # public demo and authenticated private retrieval API
 
 scripts/
@@ -258,9 +292,12 @@ scripts/
 ├── embed_graph_cohere.py                  # resumable native Embed v4 corpus vectors
 ├── derive_mrl_indexes.py                  # explicit normalized MRL ablation indexes
 ├── benchmark_mrl_retrieval.py             # privacy-safe aggregate retrieval benchmark
+├── build_economic_intelligence.py          # deterministic temporal financial archive
+├── build_answer_goldens.py                 # private canonical-oracle evaluation cases
+├── evaluate_answer_runtime.py              # end-to-end governed-answer benchmark
 └── serve_api.py                           # local FastAPI + Neo4j + Cohere runtime
 
-tests/          # 112 extraction, graph, finance, retrieval, API, privacy, and TDD checks
+tests/          # 170 extraction, graph, finance, retrieval, API, privacy, and TDD checks
 benchmarks/     # aggregate-only evaluation artifacts; never source evidence
 
 PLAN.md       # complete architecture, ontology, acceptance criteria, and roadmap
@@ -289,15 +326,15 @@ Completed: all 5,199 source amounts use Decimal semantics; 256 scoped reconcilia
 
 ### Phase 5 — Temporal graph and indexes
 
-Completed locally: the 48,784-node/70,010-relationship graph loads idempotently with constraints, exact and Lucene indexes, four Cohere HNSW representations, and a retained Mistral baseline.
+Completed locally: the canonical source graph extends deterministically to 53,983 nodes and 85,607 relationships, loads idempotently with constraints and exact/Lucene indexes, preserves four Cohere HNSW representations, and retains the Mistral baseline.
 
 ### Phase 6 — Hybrid GraphRAG retrieval
 
-Backend retrieval completed: governed exact queries and hybrid HNSW/Lucene retrieval use RRF, bounded graph expansion, Cohere reranking, authority scoring, verification, and explicit fallback. Evidence-bound answer synthesis and the user-query golden evaluation remain the final backend gates.
+Completed locally: governed exact queries and hybrid HNSW/Lucene retrieval use RRF, bounded graph expansion, Cohere reranking, authority scoring, verification, and explicit fallback. Authenticated answer synthesis performs coverage-aware pagination and Decimal calculation, and the independent 24-case canonical-oracle suite passes every measured correctness gate.
 
 ### Phase 7–8 — Economic intelligence and public product
 
-The deterministic public projection and synthetic demo contracts exist. Interactive graph, evidence, benchmark, transaction, and economic-intelligence pages begin only after frontend design review.
+The financial core now includes 5,199 temporal events, five chunk resolutions, personal-price/spending/platform metrics, economic signals, safe simulations, and a governed hypothesis-to-finding loop. The deterministic public projection and synthetic demo contracts exist. Interactive graph, evidence, benchmark, transaction, and economic-intelligence pages begin only after frontend design review.
 
 ## Evaluation and definition of done
 
@@ -318,11 +355,11 @@ Benchmark reporting includes extraction and coverage invariants, entity and orde
 
 ## Measured engineering outcome
 
-Lunarbit currently reconstructs 454 orders from 456 relevant emails and 763 private PDFs; compiles 24,675 source-addressable evidence chunks into a 48,784-node temporal knowledge graph; preserves 5,199 deterministic financial components; and executes verified hybrid GraphRAG through Neo4j, Cohere, RRF, graph traversal, reranking, and citation gates. Private source artifacts remain outside Git by construction.
+Lunarbit currently reconstructs 454 orders from 456 relevant emails and 763 private PDFs; compiles 24,675 source-addressable evidence chunks into a 53,983-node temporal knowledge graph; preserves 5,199 deterministic financial components as 5,199 source-backed events; and executes verified GraphRAG answers through Neo4j, Cohere, RRF, graph traversal, Decimal calculation, and citation gates. Private source artifacts remain outside Git by construction.
 
 ## Project status
 
-Lunarbit is an active evidence-systems build. The private data pipeline, canonical graph, vector and lexical indexes, hybrid retrieval, reranking, verification, public-safe synthetic projection, and authenticated retrieval API are implemented. Corrected relevance-set evaluation, evidence-bound answer synthesis, frontend implementation, deployment, and public privacy review remain open.
+Lunarbit is an active evidence-systems build. The private data pipeline, temporal economic graph, vector and lexical indexes, hybrid retrieval, reranking, evidence-bound answer synthesis, deterministic economic engines, canonical-oracle evaluation, public-safe synthetic projection, and authenticated API are implemented locally. Frontend implementation, human-reviewed natural-language evaluation, cloud deployment, and public privacy review remain open.
 
 That distinction is part of the project: a trustworthy AI engineer should know exactly which results are measured, which are private, which are candidates, and which are still hypotheses.
 

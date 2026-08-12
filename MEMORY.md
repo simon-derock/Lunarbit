@@ -2,12 +2,12 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-11
-- Active phase: Canonical graph, local Neo4j ingestion, dense/lexical hybrid retrieval, bounded graph expansion, and evidence verification are complete; the agent/API and privacy-safe public application are next.
-- Current branch: `main`
+- Last updated: 2026-08-12
+- Active phase: The local backend is complete through temporal economic compilation, idempotent Neo4j ingestion, governed answer synthesis, and canonical-oracle evaluation. Pause before frontend implementation for user-supplied visual and interaction direction.
+- Current branch: `backend-runtime`, pushed to remote `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified commit: `614be5d` (`feat(retrieval): build evidence-verified hybrid GraphRAG`); push is pending this memory update.
-- Last passing checks: Ruff lint, strict mypy, 79 public pytest tests, two live retrieval smoke suites, deterministic graph replay, and exact Neo4j node/relationship/embedding coverage audits.
+- Last verified implementation commit: `dc81eb5` (`test(runtime): benchmark answers against canonical truth`), pushed to `main`.
+- Last passing checks: Ruff lint, strict mypy across 33 source modules, 170 pytest tests, byte-stable private economic rebuild, two-pass Neo4j idempotence, live aggregation and temporal-answer smoke tests, and a 24-case canonical-oracle evaluation.
 
 ## Current state
 
@@ -67,15 +67,21 @@
   - Created an online Neo4j HNSW vector index with cosine similarity, scalar quantization, `M=16`, and construction effort `100`, while retaining full vectors on evidence nodes.
   - Added exact, full-text, dense, reciprocal-rank-fused, graph-expanded retrieval with fact-specific source authority and citation-level abstention gates.
   - Added Graph-O1-inspired action, depth, candidate-path, relationship, row, and read-only query limits before database execution.
-- In progress: Agent workflow, FastAPI surface, privacy-safe public projection, interactive web application, and measured retrieval/end-to-end evaluation.
-- Pending external input: None. Provider credentials load from the ignored `.env`; do not expose or commit them.
+  - Compiled all 5,199 canonical money components into exactly 5,199 temporal financial events and 5,199 evidence cells using source-message occurrence time, immutable component lineage, and deterministic event semantics.
+  - Compiled 11,368 multi-resolution financial chunks spanning evidence cells, financial events, transaction bundles, 529 merchant/outlet histories, and seven annual research windows.
+  - Extended the private graph to 53,983 nodes and 85,607 relationships, loaded it into local Neo4j twice, and verified identical counts after replay while preserving vector properties.
+  - Added reviewed-basket personal food price indexing, exact spending-change decomposition, fee/discount/membership economics, descriptive elasticity/substitution signals, robust anomaly/change-point detection, immutable counterfactuals, and a governed hypothesis-to-finding loop.
+  - Added an authenticated `/v1/private/answer` runtime using only allowlisted read queries, bounded pagination, Decimal arithmetic, citation verification, and explicit abstention; raw evidence text never enters the response contract.
+  - Built private answer goldens from immutable JSONL archives rather than Neo4j and passed 24 of 24 canonical-oracle cases across financial aggregation, price history, merchant counts, delivery mentions, and abstention.
+- In progress: Backend documentation and handoff only. Do not start frontend code until the user provides graph visualization, templates, page structure, and design direction.
+- Pending external input: Frontend direction. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
   capabilities. The design retains full-precision vectors for reranking and
   evidence audits while compressed indexes provide scale-efficient candidate
   search across future Neo4j, Zilliz/Milvus, LanceDB, and CockroachDB
   projections.
-- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, canonical graph `v1`, retrieval policy `hybrid-retrieval-v1.0.0`, package `0.1.0`.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, canonical graph `v1`, economic corpus `economic-corpus-v1.0.0`, financial chunks `financial-intelligence-chunks-v1.0.0`, retrieval policy `hybrid-retrieval-v1.0.0`, answer evaluation `grounded-answer-evaluation-v1.0.0`, package `0.1.0`.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -139,21 +145,39 @@
   - Reconciliations: 256 total; 57 exact, 199 explicitly conflicting
   - Canonical graph nodes: 48,784
   - Canonical graph relationships: 70,010
+  - Temporal economic graph nodes: 53,983
+  - Temporal economic graph relationships: 85,607
+  - Financial events and evidence cells: 5,199 each
+  - Multi-resolution financial chunks: 11,368
+  - Entity histories: 529
+  - Annual research windows: 7
   - Graph node archive SHA-256: `af4517cc4be79f6bb5a4878bc5b57976c71df1fb3db53e6f431c93ae046b07dd`
   - Graph relationship archive SHA-256: `3cb2c3607034d948942a17dda9734ef0344d95bd4479782df20d54ac7abd3093`
   - Embedded evidence nodes: 24,675 of 24,675 across 193 batches
   - Dense vector dimensions: 1,024
   - Live hybrid candidates: 30 dense, 30 lexical, 10 fused, 10 graph-expanded
   - Live evidence verification: verified
+  - Canonical-oracle answer cases: 24
+  - Answer status, exact answer, exact calculation, fact-count, citation-support, and abstention accuracy: 100%
+  - Governed-answer local latency: P50 15.87 ms, P95 256.19 ms
+  - Passing automated tests: 170
 
 ## Next actions — ordered
 
-1. Build the bounded online agent workflow and FastAPI query contracts over governed retrieval.
-2. Produce and test a deterministic public projection that cannot expose private graph properties or source artifacts.
-3. Build the Next.js graph explorer, evidence trace, transaction reconstruction, dashboard, and benchmark views.
-4. Publish retrieval ablations and end-to-end answer metrics, then deploy the public-safe graph/API/frontend.
+1. Pause and obtain the user's frontend visual system, graph-visualization references, page templates, and interaction requirements.
+2. Build the Next.js graph explorer, evidence trace, transaction reconstruction, economic dashboard, and benchmark views against public-safe contracts only.
+3. Create a human-reviewed natural-language golden set and public privacy-leakage review without publishing private cases.
+4. Deploy the reviewed public projection and API to Aura/Vercel, then run the final end-to-end release audit.
 
 ## Decisions — append-only, newest first
+
+### 2026-08-12 — Make canonical archives the oracle for financial answers
+
+- Decision: Compile one temporal financial event and one evidence cell per canonical money component, extend the graph without mutating source truth, and evaluate Neo4j answers against expected values independently derived from immutable private archives. LLMs may propose research questions and prose, but deterministic code owns money, graph truth, validity time, evidence coverage, and privacy.
+- Rationale: Evaluating a database query with values produced by the same query can hide schema, pagination, and calculation defects. An independent archive oracle proves storage/runtime agreement and makes partial lifetime totals impossible to present as verified answers.
+- Alternatives rejected: LLM arithmetic; unbounded formula strings; grading Neo4j against its own rows; treating a row-limited page as a complete aggregate; publishing private goldens; silently inventing observation timestamps.
+- Validation performed: The archive rebuild is byte-stable and mode `0600`; all 5,199 components have exact event/evidence coverage; two Neo4j loads end at 53,983 nodes and 85,607 relationships; 170 tests, Ruff, and strict mypy pass; all 24 canonical-oracle cases pass with 100% measured correctness and P50/P95 latency of 15.87/256.19 ms.
+- Revisit trigger: A human-reviewed golden disagrees with the canonical oracle, a source correction requires temporal supersession, or the action budget cannot prove complete coverage for a supported aggregate.
 
 ### 2026-08-11 — Gate hybrid graph retrieval with evidence and hard execution budgets
 
