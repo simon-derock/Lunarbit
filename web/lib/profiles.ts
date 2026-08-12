@@ -117,6 +117,12 @@ export const DATA_PROFILES = {
       "Which discounts actually offset delivery charges?",
       "Show every source behind my highest reconstructed total.",
     ],
+    answers: [
+      { directAnswer: "In the synthetic mirror, the reviewed Ember Kitchen rice-bowl group cost ₹320 in 2023 and ₹412 in 2026.", calculation: "₹412 − ₹320 = ₹92; matched-item increase = 28.75%.", confidenceScope: "Same reviewed merchant-item group · 31 observations", findingIndex: 0 },
+      { directAnswer: "Fee pressure changes regime in late 2023, after which fees rise faster than the matched item-price signal.", calculation: "Median fee burden: 4.9% before the change point → 6.8% after; +1.9 percentage points.", confidenceScope: "Robust descriptive change point · no causal claim", findingIndex: 1 },
+      { directAnswer: "Reviewed synthetic discounts total ₹14.6K against ₹9.1K of delivery and platform charges.", calculation: "₹14.6K benefits − ₹9.1K charges = ₹5.5K net scoped offset.", confidenceScope: "Promotion and membership scopes kept separate", findingIndex: 2 },
+      { directAnswer: "The highest reconstructed synthetic total is ₹1,248 and resolves to both mail confirmation and invoice evidence.", calculation: "Item subtotal ₹1,156 + fees/tax ₹132 − discount ₹40 = customer total ₹1,248.", confidenceScope: "Two-source bundle · exact component reconciliation", findingIndex: 0 },
+    ],
   },
   meridian: {
     id: "meridian",
@@ -152,6 +158,12 @@ export const DATA_PROFILES = {
       "Which family meals remained stable after inflation?",
       "Why do two documents disagree on this order total?",
     ],
+    answers: [
+      { directAnswer: "Yes. Synthetic membership benefits return ₹1.42 for every ₹1.00 of membership cost this year.", calculation: "₹7,100 observed benefits ÷ ₹5,000 synthetic cost = 1.42×; net benefit ₹2,100.", confidenceScope: "Observed benefit components versus explicit synthetic cost", findingIndex: 1 },
+      { directAnswer: "Larger baskets explain 61% of the reviewed spending increase.", calculation: "₹18.0K total change × 61% basket contribution = ₹10.98K.", confidenceScope: "Exact price/quantity/fee/discount decomposition", findingIndex: 0 },
+      { directAnswer: "The Common Table family meal remained the most stable matched bundle, moving only 2.6% after discounts.", calculation: "Effective bundle price ₹642 → ₹659; change ₹17 / ₹642 = 2.65%.", confidenceScope: "Same merchant and reviewed bundle composition", findingIndex: 0 },
+      { directAnswer: "The invoice asserts ₹812 while the customer summary asserts ₹839 because their commercial scopes differ by ₹27 of customer-facing fees.", calculation: "Customer scope ₹839 − merchant-invoice scope ₹812 = ₹27 preserved difference.", confidenceScope: "Both source assertions retained · neither treated as bank truth", findingIndex: 2 },
+    ],
   },
   nova: {
     id: "nova",
@@ -186,6 +198,12 @@ export const DATA_PROFILES = {
       "Where did I substitute after a price rise?",
       "Which deal looked large but failed to offset fees?",
     ],
+    answers: [
+      { directAnswer: "In 76% of qualifying synthetic transitions, a higher focal-item price is followed by a lower-cost substitute on the next comparable order.", calculation: "19 qualifying substitution transitions ÷ 25 reviewed transitions = 0.76 directional signal.", confidenceScope: "Temporal association only · not causal elasticity", findingIndex: 1 },
+      { directAnswer: "Without reviewed coupons, synthetic observed spend would rise from ₹97.2K to ₹109.0K.", calculation: "₹97.2K observed + ₹11.8K removed promotion benefit = ₹109.0K counterfactual.", confidenceScope: "Immutable bounded simulation · cannot overwrite observed truth", findingIndex: 2 },
+      { directAnswer: "After the reviewed Citrus Counter bowl rose from ₹289 to ₹338, the next comparable purchase shifted to a lower-cost grain bowl.", calculation: "Focal price change ₹49 / ₹289 = 16.96%; next-basket substitution observed once.", confidenceScope: "One evidence-linked transition · descriptive only", findingIndex: 1 },
+      { directAnswer: "A ₹40 headline discount failed to offset ₹56 of delivery, platform, and tax charges on the reviewed bundle.", calculation: "₹40 discount − ₹56 scoped charges = −₹16 net benefit.", confidenceScope: "Face-value promotion separated from total landed cost", findingIndex: 0 },
+    ],
   },
   solstice: {
     id: "solstice",
@@ -218,6 +236,12 @@ export const DATA_PROFILES = {
       "Which anomalies have direct documentary explanations?",
       "Show orders reconstructed from email alone.",
       "Did the same restaurant charge differently after 10 PM?",
+    ],
+    answers: [
+      { directAnswer: "The reviewed late-hour basket costs ₹37.79 more than its same-merchant daytime baseline in the synthetic mirror.", calculation: "₹402.00 baseline × 9.4% late-hour premium = ₹37.79; comparable total ₹439.79.", confidenceScope: "Same-merchant descriptive comparison after 22:00", findingIndex: 0 },
+      { directAnswer: "Eight of twelve robust anomalies map to explicit fee or basket changes; four remain unexplained and visible.", calculation: "8 evidence-resolved / 12 detected = 66.7%; unresolved = 4.", confidenceScope: "Robust statistical flags · not fraud claims", findingIndex: 1 },
+      { directAnswer: "Four representative order events are reconstructed from attachmentless confirmation mail alone.", calculation: "4 mail-only proofs → 4 provisional order bundles; zero synthetic PDFs invented.", confidenceScope: "Email evidence scope · attachment absence preserved", findingIndex: 2 },
+      { directAnswer: "Yes. The reviewed Nightjar Foods basket averages ₹418 before 22:00 and ₹457 after 22:00.", calculation: "₹457 − ₹418 = ₹39; relative difference = 9.33%.", confidenceScope: "Same merchant and comparable basket · descriptive only", findingIndex: 0 },
     ],
   },
 } as const satisfies Record<DataProfileId, CommerceDataProfile>;
@@ -371,6 +395,14 @@ export function validateProfileIsolation(profile: CommerceDataProfile): void {
       !nodeIds.has(value.target)
     ) {
       throw new Error("data profile contains a foreign or open edge");
+    }
+  }
+  if (profile.answers.length !== profile.questions.length) {
+    throw new Error("every reviewed question must have exactly one reviewed answer");
+  }
+  for (const answer of profile.answers) {
+    if (!profile.findings[answer.findingIndex]) {
+      throw new Error("reviewed answer references an unknown finding");
     }
   }
 }

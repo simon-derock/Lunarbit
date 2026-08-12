@@ -13,7 +13,7 @@ The hard problem is not generating a fluent summary. It is preserving document s
 > **Project thesis:** trustworthy GraphRAG is not just retrieval plus an LLM. It separates source claims, normalized facts, deterministic calculations, identity decisions, unresolved uncertainty, and analytical findings—and makes each layer auditable.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-181%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/tests-185%20passing-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/source%20data-private%20by%20design-6f42c1)](#privacy-and-data-boundaries)
@@ -69,7 +69,7 @@ These are measurements from the local private corpus and deterministic pipeline.
 - a live hybrid smoke path of 30 dense + 30 lexical candidates, RRF, graph expansion, Cohere reranking, 10/10 citations, and verified evidence status;
 - an authenticated FastAPI runtime that serves evidence-verified Decimal calculations and temporal comparisons without exposing private evidence text;
 - a 24-case canonical-oracle answer evaluation with 100% status, answer, calculation, fact-count, citation-support, and abstention accuracy; P50 15.87 ms and P95 256.19 ms locally;
-- 170 backend and 11 frontend tests passing, plus Ruff, ESLint, strict MyPy, strict TypeScript, and a production Next.js build.
+- 170 backend and 15 frontend tests passing, plus Ruff, ESLint, strict MyPy, strict TypeScript, and a production Next.js build.
 
 The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 0.975 MRR at every tested dimension. The 256-dimensional prefix reduced median local HNSW latency from 10.99 ms to 6.75 ms, making it the provisional candidate-search index; the native 1,536-dimensional index remains the serving reference until a human-reviewed natural-language golden set confirms the switch. The superseded exact-chunk artifact remains published as a diagnostic example of how duplicate evidence can invalidate a naive metric.
 
@@ -97,6 +97,7 @@ The Next.js application is a privacy-safe product surface, not a decorative dash
 - **four synthetic commerce profiles** replace the complete graph, metrics, findings, transactions, and suggested questions without crossing profile boundaries;
 - **five visual profiles**—Dark Chromatic, Monochrome Wireframe, Spectral Bloom, Signal Noir, and Economic Terrain—change palette, geometry, depth, and signal treatment without mutating the selected data;
 - **six navigable workspaces** expose graph topology, personal-price terrain, exact spending decomposition, reconciled transaction bundles, claim-to-proof replay, and versioned MRL benchmarks;
+- **a governed query console** replays reviewed questions through visible route/retrieve/expand/verify stages and abstains before traversal for requests outside the public projection;
 - selections persist locally and in shareable query parameters, producing 20 valid data/render combinations from the same governed interface contract.
 
 All currently rendered records are explicit synthetic mirrors. Private source text, personal identifiers, document bytes, and credentials never enter the web bundle.
@@ -331,7 +332,7 @@ web/
 ├── app/         # six responsive intelligence routes
 ├── components/  # graph, terrain, evidence, profile, and signal primitives
 ├── lib/         # isolated synthetic data and visual-profile contracts
-└── tests/       # 11 interaction, isolation, route, and arithmetic checks
+└── tests/       # 15 interaction, isolation, governance, route, and arithmetic checks
 
 PLAN.md       # complete architecture, ontology, acceptance criteria, and roadmap
 MEMORY.md     # append-only engineering handoff and decisions

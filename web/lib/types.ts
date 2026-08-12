@@ -66,6 +66,12 @@ export interface CommerceDataProfile {
     confidence: string;
   }[];
   questions: readonly string[];
+  answers: readonly {
+    directAnswer: string;
+    calculation: string;
+    confidenceScope: string;
+    findingIndex: number;
+  }[];
 }
 
 export interface VisualProfile {

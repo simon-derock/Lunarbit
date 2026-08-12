@@ -6,6 +6,7 @@ import { ConstellationGraph } from "@/components/ConstellationGraph";
 import { Icon } from "@/components/Icons";
 import { MetricRail } from "@/components/MetricRail";
 import { useProfiles } from "@/components/ProfileProvider";
+import { openQueryConsole } from "@/components/QueryConsole";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SignalChart } from "@/components/SignalChart";
 
@@ -54,7 +55,7 @@ export default function OverviewPage() {
             <header className="panel-header"><div><span>03 / ASK LUNARBIT</span><h2>Interrogate the graph</h2></div><Icon name="spark" /></header>
             <div className="question-list">
               {dataProfile.questions.map((question, index) => (
-                <button key={question} type="button"><span>Q{index + 1}</span>{question}<Icon name="chevron" /></button>
+                <button key={question} onClick={() => openQueryConsole(question)} type="button"><span>Q{index + 1}</span>{question}<Icon name="chevron" /></button>
               ))}
             </div>
           </article>

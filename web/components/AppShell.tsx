@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { Icon, type IconName } from "@/components/Icons";
 import { ProfileControls } from "@/components/ProfileControls";
 import { useProfiles } from "@/components/ProfileProvider";
+import { openQueryConsole, QueryConsole } from "@/components/QueryConsole";
 
 const navigation: readonly { href: string; label: string; index: string; icon: IconName }[] = [
   { href: "/", label: "Overview", index: "01", icon: "overview" },
@@ -34,7 +35,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <div className="system-state" aria-label="System state">
           <span><i /> GRAPH ONLINE</span>
           <b>53,983 <small>NODES</small></b>
-          <button className="command-key" type="button" aria-label="Open command palette"><Icon name="command" /> K</button>
+          <button className="command-key" onClick={() => openQueryConsole()} type="button" aria-label="Open query console"><Icon name="command" /> K</button>
         </div>
       </header>
 
@@ -69,6 +70,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <div className="stage-grid" aria-hidden="true" />
         {children}
       </main>
+      <QueryConsole />
     </div>
   );
 }

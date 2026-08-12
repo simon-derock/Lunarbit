@@ -13,6 +13,7 @@ describe("profile architecture", () => {
   it("keeps every commerce graph closed inside its data profile", () => {
     for (const profile of Object.values(DATA_PROFILES)) {
       expect(() => validateProfileIsolation(profile)).not.toThrow();
+      expect(profile.answers).toHaveLength(profile.questions.length);
       expect(profile.nodes.every((node) => node.profileId === profile.id)).toBe(true);
       expect(profile.edges.every((edge) => edge.profileId === profile.id)).toBe(true);
     }
