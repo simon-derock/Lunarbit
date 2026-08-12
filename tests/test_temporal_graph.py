@@ -11,7 +11,6 @@ from lunarbit.finance import EpistemicMode, FinancialScope, TruthScope
 from lunarbit.graph import CanonicalGraph, GraphNode, NodeLabel, RelationshipType
 from lunarbit.temporal_graph import EventSupersession, extend_graph_with_financial_events
 
-
 COMPONENT_ID = UUID("10000000-0000-0000-0000-000000000001")
 CORRECTED_COMPONENT_ID = UUID("10000000-0000-0000-0000-000000000002")
 ORDER_ID = UUID("20000000-0000-0000-0000-000000000001")
@@ -154,7 +153,5 @@ def test_supersession_requires_contiguous_validity_and_later_observation() -> No
         extend_graph_with_financial_events(
             _base_graph(),
             (prior, invalid),
-            supersessions=(
-                supersession.model_copy(update={"new_event_id": invalid.event_id}),
-            ),
+            supersessions=(supersession.model_copy(update={"new_event_id": invalid.event_id}),),
         )
