@@ -6,8 +6,8 @@
 - Active phase: The local backend is complete through canonical-oracle evaluation, and the privacy-safe multi-profile frontend is implemented across six routes. Next gates are live API integration, public privacy review, and deployment.
 - Current branch: `backend-runtime`, pushed to remote `main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `29ce6aa` (`feat(web): deliver the economic intelligence visualization suite`), pushed to `main`.
-- Last passing checks: Ruff lint, strict mypy across 33 source modules, 170 pytest tests, 11 Vitest tests, ESLint, strict TypeScript, production Next.js build, desktop visual QA across four rendering/data combinations, mobile evidence QA, byte-stable private economic rebuild, two-pass Neo4j idempotence, and a 24-case canonical-oracle evaluation.
+- Last verified implementation commit: `1928be2` (`feat(web): add a governed evidence query console`), pushed to `main`.
+- Last passing checks: Ruff lint, strict mypy across 33 source modules, 170 pytest tests, 16 Vitest tests, ESLint, strict TypeScript, production Next.js build, desktop visual QA across five rendering/data combinations, mobile evidence QA, byte-stable private economic rebuild, two-pass Neo4j idempotence, and a 24-case canonical-oracle evaluation.
 
 ## Current state
 
@@ -77,6 +77,7 @@
   - Added four fully isolated synthetic commerce profiles and five independent visualization profiles, persisted in local state and shareable query parameters.
   - Translated the reviewed Dark Chromatic references into code-native constellation, terrain, signal, receipt, proof, and benchmark visual systems without committing the private sample directory.
   - Verified all six routes through interaction tests, strict TypeScript, ESLint, production build, and headless desktop/mobile visual review.
+  - Added a keyboard-accessible governed query console with 16 question-matched synthetic answers, explicit calculations, profile-closed graph traces, and pre-traversal abstention for unreviewed requests.
 - In progress: Documentation and frontend/API integration planning. The current UI intentionally consumes synthetic public contracts only.
 - Pending external input: Public deployment target and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW

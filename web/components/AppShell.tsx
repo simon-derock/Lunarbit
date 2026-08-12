@@ -21,6 +21,7 @@ const navigation: readonly { href: string; label: string; index: string; icon: I
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { query, dataProfile, visualProfile } = useProfiles();
+  const currentIndex = dataProfile.timeline.at(-1)?.index.toFixed(1) ?? "—";
 
   return (
     <div className="app-shell">
@@ -33,7 +34,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </Link>
         <ProfileControls />
         <div className="system-state" aria-label="System state">
-          <span><i /> GRAPH ONLINE</span>
+          <span><i /> CORPUS VERIFIED</span>
           <b>53,983 <small>NODES</small></b>
           <button className="command-key" onClick={() => openQueryConsole()} type="button" aria-label="Open query console"><Icon name="command" /> K</button>
         </div>
@@ -62,7 +63,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           <span>ACTIVE MATRIX</span>
           <b>{dataProfile.handle}</b>
           <small>{visualProfile.name}</small>
-          <div className="side-code">PFI / 128.6<br />EVID / VERIFIED<br />PRIV / SYNTHETIC</div>
+          <div className="side-code">PFI / {currentIndex}<br />EVID / VERIFIED<br />PRIV / SYNTHETIC</div>
         </div>
       </aside>
 
@@ -70,7 +71,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <div className="stage-grid" aria-hidden="true" />
         {children}
       </main>
-      <QueryConsole />
+      <QueryConsole key={dataProfile.id} />
     </div>
   );
 }

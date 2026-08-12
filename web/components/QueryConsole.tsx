@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Icon } from "@/components/Icons";
 import { useProfiles } from "@/components/ProfileProvider";
@@ -17,12 +17,20 @@ export function QueryConsole() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState(dataProfile.questions[0] ?? "");
   const [submitted, setSubmitted] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const answer = submitted ? reviewedDemoAnswer(dataProfile, submitted) : null;
+
+  const close = useCallback(() => {
+    setOpen(false);
+    previousFocusRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const onAsk = (event: Event) => {
       const detail = (event as CustomEvent<AskEventDetail>).detail;
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
       if (detail?.question) {
         setQuestion(detail.question);
         setSubmitted(detail.question);
@@ -32,9 +40,21 @@ export function QueryConsole() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((value) => !value);
+        if (open) close();
+        else {
+          previousFocusRef.current = document.activeElement as HTMLElement | null;
+          setOpen(true);
+        }
       }
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
+      if (event.key === "Tab" && open) {
+        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])");
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
     };
     window.addEventListener("lunarbit:ask", onAsk);
     window.addEventListener("keydown", onKey);
@@ -42,10 +62,14 @@ export function QueryConsole() {
       window.removeEventListener("lunarbit:ask", onAsk);
       window.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [close, open]);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (!open) return;
+    inputRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
   }, [open]);
 
   const submit = (event: FormEvent) => {
@@ -57,9 +81,9 @@ export function QueryConsole() {
   if (!open) return null;
 
   return (
-    <div className="query-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
-      <section aria-label="Ask Lunarbit" aria-modal="true" className="query-console" role="dialog">
-        <header className="query-console-header"><div><span>QUERY CONTROL / {dataProfile.handle}</span><h2>Ask the evidence graph</h2></div><button aria-label="Close query console" onClick={() => setOpen(false)} type="button">ESC</button></header>
+    <div className="query-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+      <section aria-label="Ask Lunarbit" aria-modal="true" className="query-console" ref={dialogRef} role="dialog">
+        <header className="query-console-header"><div><span>QUERY CONTROL / {dataProfile.handle}</span><h2>Ask the evidence graph</h2></div><button aria-label="Close query console" onClick={close} type="button">ESC</button></header>
         <form className="query-form" onSubmit={submit}><Icon name="spark" /><input aria-label="Commerce question" maxLength={500} onChange={(event) => setQuestion(event.target.value)} ref={inputRef} value={question} /><button type="submit">RUN <Icon name="arrow" /></button></form>
         <div className="query-presets"><span>REVIEWED SYNTHETIC QUESTIONS</span><div>{dataProfile.questions.map((value, index) => <button key={value} onClick={() => { setQuestion(value); setSubmitted(value); }} type="button"><i>Q{index + 1}</i>{value}</button>)}</div></div>
         {answer && <div className={`answer-console ${answer.status}`}>

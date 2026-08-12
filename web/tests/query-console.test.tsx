@@ -17,7 +17,7 @@ describe("governed query console", () => {
 
     expect(screen.getByRole("dialog", { name: "Ask Lunarbit" })).toBeInTheDocument();
     expect(screen.getByText(/EVIDENCE COMPLETE/i)).toBeInTheDocument();
-    expect(screen.getByText(/self → platform-z/i)).toBeInTheDocument();
+    expect(screen.getByText(/merchant → order-a → item/i)).toBeInTheDocument();
   });
 
   it("withholds unreviewed answers at the public projection gate", () => {
@@ -29,5 +29,19 @@ describe("governed query console", () => {
 
     expect(screen.getByText(/ANSWER WITHHELD/i)).toBeInTheDocument();
     expect(screen.getByText(/No private traversal executed/i)).toBeInTheDocument();
+  });
+
+  it("restores focus and page scrolling when dismissed by keyboard", () => {
+    render(<ProfileProvider><button type="button">Origin</button><QueryConsole /></ProfileProvider>);
+    const origin = screen.getByRole("button", { name: "Origin" });
+    origin.focus();
+    act(() => openQueryConsole());
+
+    expect(screen.getByRole("textbox", { name: "Commerce question" })).toHaveFocus();
+    expect(document.body.style.overflow).toBe("hidden");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Ask Lunarbit" })).not.toBeInTheDocument();
+    expect(origin).toHaveFocus();
+    expect(document.body.style.overflow).toBe("");
   });
 });

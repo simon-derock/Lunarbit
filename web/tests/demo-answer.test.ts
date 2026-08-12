@@ -13,6 +13,8 @@ describe("reviewed public answer boundary", () => {
     expect(answer.calculation).toContain("28.75%");
     expect(answer.graphPath).not.toHaveLength(0);
     expect(answer.graphPath.every((id) => id.startsWith("atlas:"))).toBe(true);
+    const knownNodes = new Set(profile.nodes.map((node) => node.id));
+    expect(answer.graphPath.every((id) => knownNodes.has(id))).toBe(true);
     expect(answer.evidence).not.toHaveLength(0);
   });
 

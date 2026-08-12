@@ -28,12 +28,19 @@ export function reviewedDemoAnswer(profile: CommerceDataProfile, question: strin
 
   const reviewed = profile.answers[index];
   const finding = profile.findings[reviewed.findingIndex];
+  const paths = [
+    ["merchant", "order-a", "item", "event", "evidence-b"],
+    ["platform-s", "order-b", "money", "event", "evidence-b"],
+    ["order-a", "item", "money", "event", "evidence-a"],
+    ["order-a", "evidence-a", "order-b", "evidence-b"],
+  ] as const;
+  const graphPath = paths[index].map((suffix) => `${profile.id}:${suffix}`);
   return {
     status: "verified",
     directAnswer: reviewed.directAnswer,
     calculation: reviewed.calculation,
     confidence: `${reviewed.confidenceScope} · confidence ${finding.confidence}`,
-    graphPath: profile.nodes.slice(0, 6).map((node) => node.id),
+    graphPath,
     evidence: profile.nodes.filter((node) => node.kind === "evidence").map((node) => node.label),
     limitations: [profile.disclosure, "This demonstration does not expose or query private source text."],
   };
