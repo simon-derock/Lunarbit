@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from hashlib import sha256
 from uuid import UUID
 
 import pytest
@@ -144,3 +145,58 @@ def test_compiler_is_byte_stable_for_reordered_inputs() -> None:
     right = compile_financial_intelligence_chunks((second, first), tuple(reversed(cells)))
 
     assert left.model_dump_json() == right.model_dump_json()
+
+
+def test_large_entity_histories_are_bounded_without_losing_child_coverage() -> None:
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    events: list[FinancialEvent] = []
+    cells: list[EvidenceCellInput] = []
+    for suffix in range(180):
+        component_id = UUID(f"10000000-0000-0000-0000-{suffix:012d}")
+        chunk_id = UUID(f"30000000-0000-0000-0000-{suffix:012d}")
+        occurred_at = base + timedelta(minutes=suffix)
+        source_hash = sha256(str(suffix).encode()).hexdigest()
+        event = FinancialEvent(
+            event_id=financial_event_id(
+                component_ids=(component_id,),
+                event_type=FinancialEventType.CHARGE_ASSESSED,
+                occurred_at=occurred_at,
+            ),
+            event_type=FinancialEventType.CHARGE_ASSESSED,
+            component_ids=(component_id,),
+            order_ids=(UUID("20000000-0000-0000-0000-000000000001"),),
+            amount=Decimal("10.00"),
+            currency="INR",
+            scope=FinancialScope.ORDER,
+            epistemic_mode=EpistemicMode.OBSERVED,
+            truth_scope=TruthScope.DOCUMENT_ASSERTED,
+            occurred_at=occurred_at,
+            observed_at=base + timedelta(days=1),
+            valid_from=occurred_at,
+            valid_to=None,
+            source_chunk_ids=(chunk_id,),
+            source_hashes=(source_hash,),
+        )
+        events.append(event)
+        cells.append(
+            EvidenceCellInput(
+                event_id=event.event_id,
+                component_id=component_id,
+                source_chunk_id=chunk_id,
+                source_hash=source_hash,
+                source_text_private=f"Observed charge {suffix}",
+            )
+        )
+
+    archive = compile_financial_intelligence_chunks(
+        tuple(events),
+        tuple(cells),
+        entity_event_ids={"merchant:frequent": tuple(event.event_id for event in events)},
+    )
+    history = next(
+        chunk for chunk in archive.chunks if chunk.level is FinancialChunkLevel.ENTITY_HISTORY
+    )
+
+    assert len(history.retrieval_text_private) <= 8_000
+    assert "180 source-backed financial events" in history.retrieval_text_private
+    assert len(history.child_chunk_ids) == 180

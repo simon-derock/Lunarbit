@@ -149,6 +149,34 @@ def _sorted_uuids(values: set[UUID] | tuple[UUID, ...]) -> tuple[UUID, ...]:
     return tuple(sorted(set(values), key=str))
 
 
+def _bounded_retrieval_text(value: str, *, limit: int = 8_000) -> str:
+    if len(value) <= limit:
+        return value
+    marker = "\n[Middle detail omitted from retrieval text; complete lineage is retained.]\n"
+    side = (limit - len(marker)) // 2
+    return value[:side] + marker + value[-side:]
+
+
+def _event_digest(events: tuple[FinancialEvent, ...]) -> str:
+    ordered = tuple(sorted(events, key=lambda item: (item.occurred_at, str(item.event_id))))
+    counts = Counter(event.event_type.value for event in ordered)
+    totals: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
+    for event in ordered:
+        totals[(event.currency, event.event_type.value)] += event.amount
+    count_text = ", ".join(f"{name}={count}" for name, count in sorted(counts.items()))
+    total_text = ", ".join(
+        f"{currency} {event_type}={amount}"
+        for (currency, event_type), amount in sorted(totals.items())
+    )
+    return (
+        f"{len(ordered)} source-backed financial events from "
+        f"{ordered[0].occurred_at.isoformat()} to {ordered[-1].occurred_at.isoformat()}. "
+        f"Event counts: {count_text}. Asserted amount aggregates by event type "
+        f"(not transaction netting): {total_text}. Complete event-level evidence remains "
+        "available through child chunk lineage."
+    )
+
+
 def _aggregate_chunk(
     *,
     level: FinancialChunkLevel,
@@ -177,7 +205,7 @@ def _aggregate_chunk(
         chunk_id=_chunk_id(level, identity),
         level=level,
         title_private=title,
-        retrieval_text_private=retrieval_text,
+        retrieval_text_private=_bounded_retrieval_text(retrieval_text),
         event_ids=tuple(event.event_id for event in ordered_events),
         component_ids=_sorted_uuids(
             tuple(component for event in ordered_events for component in event.component_ids)
@@ -316,12 +344,8 @@ def compile_financial_intelligence_chunks(
                 identity=entity_id,
                 title="Entity financial history",
                 retrieval_text=(
-                    f"Chronological financial event history for {entity_id}: "
-                    + "; ".join(
-                        f"{event.occurred_at.date()} {event.event_type.value} "
-                        f"{event.currency} {event.amount}"
-                        for event in sorted(entity_values, key=lambda item: item.occurred_at)
-                    )
+                    f"Chronological financial event history for {entity_id}. "
+                    + _event_digest(entity_values)
                 ),
                 events=entity_values,
                 children=tuple(event_chunks[event.event_id] for event in entity_values),
@@ -345,11 +369,7 @@ def compile_financial_intelligence_chunks(
                 title=window.title_private,
                 retrieval_text=(
                     f"Temporal research evidence from {window.period_start.isoformat()} to "
-                    f"{window.period_end.isoformat()}: "
-                    + "; ".join(
-                        f"{event.event_type.value} {event.currency} {event.amount}"
-                        for event in sorted(research_values, key=lambda item: item.occurred_at)
-                    )
+                    f"{window.period_end.isoformat()}. " + _event_digest(research_values)
                 ),
                 events=research_values,
                 children=tuple(event_chunks[event.event_id] for event in research_values),
