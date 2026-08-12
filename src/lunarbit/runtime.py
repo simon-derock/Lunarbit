@@ -143,7 +143,7 @@ class GroundedContext(ContractModel):
     plan: QueryPlan
     fact_count: int = Field(ge=0)
     direct_answer: str | None = Field(default=None, max_length=2_000)
-    calculation: str | None
+    calculation: str | None = Field(default=None, max_length=2_000)
     limitations: tuple[str, ...]
     citations: tuple[EvidenceCitation, ...]
     verification: EvidenceVerification
@@ -201,10 +201,23 @@ def _money_calculation(
     if len(currencies) != 1:
         raise ValueError("runtime refuses to aggregate mixed currencies")
     currency = currencies.pop()
-    ordered = [components[key][0] for key in sorted(components)]
+    ordered_ids = tuple(sorted(components))
+    ordered = tuple(components[key][0] for key in ordered_ids)
     total = sum(ordered, start=Decimal("0"))
-    terms = " + ".join(f"{currency} {amount:.2f}" for amount in ordered)
-    return len(components), f"{terms} = {currency} {total:.2f}", total, currency
+    if len(ordered) <= 20:
+        terms = " + ".join(f"{currency} {amount:.2f}" for amount in ordered)
+        calculation = f"{terms} = {currency} {total:.2f}"
+    else:
+        canonical_terms = "\n".join(
+            f"{component_id}|{currency}|{components[component_id][0]}"
+            for component_id in ordered_ids
+        )
+        digest = sha256(canonical_terms.encode()).hexdigest()
+        calculation = (
+            f"Decimal sum of {len(ordered)} distinct source-backed components = "
+            f"{currency} {total:.2f}; ordered-term SHA-256={digest}"
+        )
+    return len(components), calculation, total, currency
 
 
 def _price_history_synthesis(

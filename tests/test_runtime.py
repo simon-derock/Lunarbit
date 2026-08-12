@@ -292,3 +292,33 @@ def test_merchant_order_answer_uses_the_consistent_graph_aggregate() -> None:
     assert result.status is RuntimeStatus.VERIFIED
     assert result.fact_count == 3
     assert result.direct_answer == "The graph links this merchant to 3 source-backed orders."
+
+
+def test_large_financial_calculations_are_bounded_and_content_addressed() -> None:
+    rows = tuple(
+        {
+            "component_id": f"money:{index:02d}",
+            "amount": "1.00",
+            "currency": "INR",
+            "chunk_id": f"chunk:{index:02d}",
+            "source_id": f"document:{index:02d}",
+            "source_hash": f"{index % 16:x}" * 64,
+        }
+        for index in range(30)
+    )
+
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How much platform fee did I pay?",
+            slots=QuerySlots(platform="swiggy", component_type="platform_fee"),
+        ),
+        StubReader(rows),
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.calculation is not None
+    assert len(result.calculation) < 300
+    assert result.calculation.startswith(
+        "Decimal sum of 30 distinct source-backed components = INR 30.00; "
+    )
+    assert "ordered-term SHA-256=" in result.calculation

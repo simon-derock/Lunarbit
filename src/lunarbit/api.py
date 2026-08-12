@@ -54,7 +54,7 @@ class PrivateAnswerRequest(ContractModel):
 class PrivateGroundedAnswer(ContractModel):
     status: str
     direct_answer: str | None
-    calculation: str | None
+    calculation: str | None = Field(default=None, max_length=2_000)
     fact_count: int = Field(ge=0)
     citation_ids: tuple[str, ...]
     verification_status: str
