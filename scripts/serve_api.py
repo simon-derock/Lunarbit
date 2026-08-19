@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from lunarbit.api import create_app
 from lunarbit.cohere import CohereClient
 from lunarbit.hybrid import HybridRetriever, Neo4jHybridGraph
+from lunarbit.public_projection import AggregateSnapshotSource, Neo4jAggregateReader
 from lunarbit.runtime import Neo4jGraphReader
 from lunarbit.service import GovernedAnswerBackend, HybridRetrievalBackend
 
@@ -53,17 +54,25 @@ def main() -> int:
         username=username,
         password=password,
     )
+    public_reader = Neo4jAggregateReader.connect(
+        uri,
+        database=database,
+        username=username,
+        password=password,
+    )
     try:
         cohere = CohereClient(cohere_key, embedding_dimension=1536)
         retrieval_backend = HybridRetrievalBackend(HybridRetriever(graph, cohere))
         answer_backend = GovernedAnswerBackend(reader)
         app = create_app(
+            public_snapshot_source=AggregateSnapshotSource(public_reader),
             private_backend=retrieval_backend,
             private_answer_backend=answer_backend,
             private_api_token=private_token,
         )
         uvicorn.run(app, host=args.host, port=args.port)
     finally:
+        public_reader.close()
         reader.close()
         graph.close()
     return 0

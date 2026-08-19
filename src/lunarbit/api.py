@@ -16,6 +16,7 @@ from lunarbit.public import (
     assert_public_payload,
     build_demo_snapshot,
 )
+from lunarbit.public_projection import PublicProjectionUnavailable
 from lunarbit.runtime import QuerySlots, RuntimeRequest
 
 API_VERSION = "1.0.0"
@@ -64,6 +65,12 @@ class PrivateGroundedAnswer(ContractModel):
 
 class PrivateAnswerBackend(Protocol):
     def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer: ...
+
+
+class PublicSnapshotSource(Protocol):
+    """Produce a browser-safe snapshot without exposing canonical graph records."""
+
+    def snapshot(self) -> PublicSnapshot: ...
 
 
 class PublicQueryPlan(ContractModel):
@@ -167,7 +174,12 @@ def _default_snapshot() -> PublicSnapshot:
 def create_app(
     *,
     snapshot: PublicSnapshot | None = None,
-    allowed_origins: Sequence[str] = ("http://localhost:3000",),
+    public_snapshot_source: PublicSnapshotSource | None = None,
+    allowed_origins: Sequence[str] = (
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ),
     private_backend: PrivateRetrievalBackend | None = None,
     private_answer_backend: PrivateAnswerBackend | None = None,
     private_api_token: str | None = None,
@@ -209,7 +221,15 @@ def create_app(
 
     @app.get("/v1/public/snapshot", response_model=PublicSnapshot)
     def public_snapshot_endpoint() -> PublicSnapshot:
-        return public_snapshot
+        if public_snapshot_source is None:
+            return public_snapshot
+        try:
+            projected = public_snapshot_source.snapshot()
+        except PublicProjectionUnavailable:
+            # A safe demo projection is preferable to exposing partial private topology.
+            projected = public_snapshot
+        assert_public_payload(projected.model_dump(mode="json"))
+        return projected
 
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)
     def query_plan(request: QueryPlanRequest) -> PublicQueryPlan:

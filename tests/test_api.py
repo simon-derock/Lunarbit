@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from lunarbit.api import PrivateGroundedAnswer, PrivateRetrievalTrace, create_app
-from lunarbit.public import PublicMetric, assert_public_payload, build_demo_snapshot
+from lunarbit.public import PublicMetric, PublicSnapshot, assert_public_payload, build_demo_snapshot
 from lunarbit.runtime import RuntimeRequest
 
 
@@ -28,6 +28,31 @@ def test_health_and_snapshot_endpoints_publish_only_reviewed_state() -> None:
     assert snapshot.status_code == 200
     assert snapshot.json()["mode"] == "synthetic_mirror"
     assert_public_payload(snapshot.json())
+
+
+def test_public_api_allows_the_local_nexus_development_origin() -> None:
+    response = _client().get(
+        "/v1/public/snapshot",
+        headers={"Origin": "http://127.0.0.1:5173"},
+    )
+
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
+def test_public_snapshot_endpoint_refreshes_the_configured_safe_projection() -> None:
+    expected = build_demo_snapshot(
+        metrics=(PublicMetric(label="Graph nodes", value="18"),)
+    ).model_copy(update={"mode": "neo4j_aggregate_projection"})
+
+    class Source:
+        def snapshot(self) -> PublicSnapshot:
+            return expected
+
+    response = TestClient(create_app(public_snapshot_source=Source())).get("/v1/public/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "neo4j_aggregate_projection"
+    assert response.json()["metrics"] == [{"label": "Graph nodes", "value": "18", "detail": None}]
 
 
 def test_query_plan_does_not_echo_user_input_or_expose_cypher() -> None:
