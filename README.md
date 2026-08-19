@@ -13,7 +13,7 @@ The hard problem is not generating a fluent summary. It is preserving document s
 > **Project thesis:** trustworthy GraphRAG is not just retrieval plus an LLM. It separates source claims, normalized facts, deterministic calculations, identity decisions, unresolved uncertainty, and analytical findings—and makes each layer auditable.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-47%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/tests-186%20passing-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/source%20data-private%20by%20design-6f42c1)](#privacy-and-data-boundaries)
@@ -37,18 +37,20 @@ Lunarbit treats the archive as an evidence reconstruction problem:
 | --- | --- |
 | Document intelligence | Native PDF extraction, layout and table preservation, page coordinates, quality profiles, email parsing, and document-role classification |
 | Data contracts | Strict Pydantic contracts, content-addressed IDs, deterministic manifests, source hashes, provenance spans, and atomic validation boundaries |
-| Agentic AI | Cloudflare Workers AI with Gemma 4, streamed tool calls, typed JSON Schema, bounded context, evidence-constrained candidates, and safe failure diagnostics |
-| Financial correctness | Exact source amounts, scoped money components, deterministic reconciliation, residual visibility, and no model arithmetic |
-| Graph readiness | Order bundles, merchant/legal-entity/delivery evidence, temporal metadata, candidate relationships, query families, and reversible resolution decisions |
-| Production judgment | Sequential calls, hard token budgets, no private data in Git, `0600` private artifacts, TDD commits, and explicit quality gates before scaling |
+| Agentic AI | Provider-adapted structured generation, bounded semantic regions, exact source and money coverage, typed validation, deterministic repair, and resumable quarantine |
+| Financial correctness | Exact source amounts, scoped money components, temporal financial events, deterministic reconciliation, residual visibility, and no model arithmetic |
+| Knowledge graph | 53,983 typed nodes and 85,607 closed-reference relationships across evidence, commerce, identity, product, financial-event, reconciliation, and provenance layers |
+| Retrieval systems | Neo4j HNSW, Lucene/BM25, Cohere Embed v4, RRF, bounded graph expansion, Cohere Rerank v4, source authority, and citation-level abstention |
+| Product engineering | Six interactive intelligence routes, four isolated commerce profiles, five independent rendering systems, responsive evidence replay, and shareable profile state |
+| Production judgment | Rate-governed resumable jobs, hard context budgets, no private data in Git, `0600` artifacts, visible red/green TDD, and measured gates before claims |
 
 ### Adaptive retrieval and vector systems
 
 Lunarbit treats retrieval as a systems-design problem, not a generic vector-store integration:
 
-- **MRL — adaptive representation resolution:** Cohere Embed v4 dimensions of 256, 512, 1024, and 1536 support cost-aware candidate search and precision reranking from one embedding model.
-- **HNSW — navigable dense retrieval graph:** hierarchical approximate-nearest-neighbor search provides tunable recall, latency, graph degree, and memory behavior across evidence, item, entity, and finding indexes.
-- **RaBitQ — compact quantized ANN search:** quantized distance estimation reduces vector-memory and distance-computation cost while retaining full-precision vectors for reranking and evidence audits.
+- **MRL — adaptive representation resolution:** all 24,675 evidence nodes have a native 1,536-dimensional Cohere Embed v4 reference vector plus explicitly labelled 256/512/1024 normalized Matryoshka-prefix ablation indexes.
+- **HNSW — navigable dense retrieval graph:** Neo4j HNSW indexes use cosine similarity, scalar quantization, `M=16`, and construction effort `100`; every index passed exact corpus-coverage and online-state checks.
+- **RaBitQ — portable compression extension:** the retrieval boundary is designed to admit a native RaBitQ backend such as Milvus/Zilliz without changing graph truth or evidence contracts. Neo4j scalar quantization is used today and is not mislabelled as RaBitQ.
 
 The retrieval path combines these capabilities with exact identifiers, Lucene/BM25, graph traversal, metadata filters, and evidence verification. Index parameters, embedding dimensions, quantization settings, recall, grounding, latency, and storage are benchmarked and versioned in the retrieval plan.
 
@@ -59,23 +61,46 @@ These are measurements from the local private corpus and deterministic pipeline.
 - 456 relevant source emails and 763 PDFs across 857 PDF pages;
 - 454 current reconstructed order records under the documented counting policy;
 - 24,675 deterministic evidence chunks across 456 order-evidence bundles;
-- 423 planned Gemma enrichment calls with sequential concurrency of one;
-- 79,351 maximum estimated input tokens in the current plan, below the 80,000 hard input limit;
-- 24,000 completion tokens reserved per call inside Gemma 4's 256,000-token context window;
-- zero input chunks skipped or quarantined in the latest dry run;
-- 47 automated tests passing, plus Ruff lint/format and strict mypy checks.
+- 13,597 final deterministic agentic regions with exact coverage of all 24,675 chunks and 5,199 money components;
+- a 48,784-node/70,010-relationship canonical source graph extended to 53,983 nodes and 85,607 relationships by 5,199 temporal financial events;
+- 11,368 multi-resolution financial-intelligence chunks: evidence cells, events, transaction bundles, 529 entity histories, and seven annual research windows;
+- 24,675/24,675 native Cohere Embed v4 vectors at 1,536 dimensions, generated in 258 resumable calls;
+- complete 256/512/1024 MRL-prefix and 1,536 native HNSW indexes, while retaining the earlier 1,024-dimensional Mistral embedding baseline for ablation;
+- a live hybrid smoke path of 30 dense + 30 lexical candidates, RRF, graph expansion, Cohere reranking, 10/10 citations, and verified evidence status;
+- an authenticated FastAPI runtime that serves evidence-verified Decimal calculations and temporal comparisons without exposing private evidence text;
+- a 24-case canonical-oracle answer evaluation with 100% status, answer, calculation, fact-count, citation-support, and abstention accuracy; P50 15.87 ms and P95 256.19 ms locally;
+- 170 backend and 16 frontend tests passing, plus Ruff, ESLint, strict MyPy, strict TypeScript, and a production Next.js build.
 
-The agentic stage is intentionally gated. A structurally valid response is not considered high quality unless it covers every source chunk and every deterministic money component with source-linked interpretations. Corpus-scale inference will begin only after the bounded financial pilot passes that gate.
+The corrected balanced relevance-set MRL benchmark reports 97.5% Hit@1/5/10 and 0.975 MRR at every tested dimension. The 256-dimensional prefix reduced median local HNSW latency from 10.99 ms to 6.75 ms, making it the provisional candidate-search index; the native 1,536-dimensional index remains the serving reference until a human-reviewed natural-language golden set confirms the switch. The superseded exact-chunk artifact remains published as a diagnostic example of how duplicate evidence can invalidate a naive metric.
+
+The 24-case answer suite uses an independent deterministic oracle built from immutable inventory, finance, and graph archives. It proves runtime agreement with canonical truth for nine financial aggregates, five price histories, five merchant counts, two delivery-mention histories, and three abstentions. It is deliberately reported separately from human review: it validates system correctness and evidence coverage, not subjective answer style or universal semantic understanding.
 
 ### What is already proven
 
 - Deterministic ingestion handles both PDF-backed orders and mail-only orders.
 - Layout-aware extraction preserves page geometry, reading order, tables, and source spans.
 - Rich chunks carry facts, entities, money candidates, graph candidates, confidence, completeness, and privacy metadata.
-- The Gemma transport has been tested with streamed typed tool calls, truncation handling, safe error categories, and atomic quarantine.
-- The full dry-run planner covers every current chunk under the hard input budget without silently skipping evidence.
+- Deterministic resolution preserves duplicate evidence, provisional identities, merchant-scoped products, and explicit uncertainty instead of forcing unsafe merges.
+- All 5,199 source amounts are Decimal-backed and reconciled only within valid document and commercial scopes.
+- Every money component compiles into exactly one source-backed temporal financial event and one evidence cell; higher-resolution chunks retain closed child lineage.
+- The canonical graph rebuild is closed-reference and idempotent; vector properties are versioned so experiments never overwrite the serving or baseline representation.
+- The online path performs read-only parameterized retrieval, exact/Lucene/dense fusion, bounded graph expansion, reranking, source-authority scoring, evidence verification, and explicit degradation.
+- Large aggregates page until complete under an action budget, use Decimal arithmetic, and abstain rather than present a partial result as a lifetime total.
+- The private API requires server-side bearer configuration; credentials and raw source evidence never enter its response contract.
 
-The remaining work is deliberately visible: complete the bounded financial quality gate, then build deterministic resolution, reconciliation, graph loading, retrieval benchmarks, and the public evidence experience.
+The core local backend is complete through deterministic extraction, economic-corpus compilation, temporal Neo4j ingestion, hybrid retrieval, evidence-bound answer synthesis, and canonical-oracle evaluation. The public frontend now implements the agreed dark-chromatic product direction across overview, graph, economics, transactions, evidence, and benchmark routes. Human-reviewed natural-language evaluation, live API integration, Aura deployment, and the public privacy review remain release gates.
+
+### Public intelligence workspace
+
+The Next.js application is a privacy-safe product surface, not a decorative dashboard. Its two profile dimensions are deliberately independent:
+
+- **four synthetic commerce profiles** replace the complete graph, metrics, findings, transactions, and suggested questions without crossing profile boundaries;
+- **five visual profiles**—Dark Chromatic, Monochrome Wireframe, Spectral Bloom, Signal Noir, and Economic Terrain—change palette, geometry, depth, and signal treatment without mutating the selected data;
+- **six navigable workspaces** expose graph topology, personal-price terrain, exact spending decomposition, reconciled transaction bundles, claim-to-proof replay, and versioned MRL benchmarks;
+- **a governed query console** replays reviewed questions through visible route/retrieve/expand/verify stages and abstains before traversal for requests outside the public projection;
+- selections persist locally and in shareable query parameters, producing 20 valid data/render combinations from the same governed interface contract.
+
+All currently rendered records are explicit synthetic mirrors. Private source text, personal identifiers, document bytes, and credentials never enter the web bundle.
 
 ## What the finished system will demonstrate
 
@@ -97,17 +122,19 @@ flowchart LR
     C --> D[Layout-aware extraction]
     D --> E[Order evidence bundles]
     E --> F[Deterministic rich chunks]
-    F --> G[Bounded Gemma enrichment]
+    F --> G[Bounded semantic enrichment]
     G --> H[Typed validation and quarantine]
     H --> I[Entity and order resolution]
     I --> J[Financial reconciliation]
-    J --> K[Neo4j temporal graph]
-    K --> L[Exact, lexical, dense, and graph retrieval]
-    L --> M[Evidence-grounded answer workflow]
-    M --> N[Privacy-reviewed public projection]
+    J --> K[Temporal financial events]
+    K --> L[Neo4j temporal graph]
+    L --> M[Exact, lexical, dense, and graph retrieval]
+    M --> N[Deterministic answer and evidence gates]
+    N --> O[Privacy-reviewed public projection]
+    O --> P[Next.js intelligence workspace]
 ```
 
-The implemented foundation currently covers ingestion, extraction, chunk contracts, order-evidence bundling, and the guarded agentic enrichment boundary. Neo4j loading, hybrid retrieval, public projection, and the live application are planned stages with explicit acceptance criteria in [`PLAN.md`](PLAN.md).
+The implementation covers ingestion, extraction, chunking, guarded semantic enrichment, reversible resolution, deterministic finance, multi-resolution economic compilation, temporal graph extension, local Neo4j loading, Cohere/Mistral embeddings, hybrid retrieval, reranking, citation verification, deterministic answer synthesis, canonical-oracle evaluation, a synthetic public projection, an authenticated FastAPI surface, and an interactive Next.js intelligence workspace. Live public API integration and deployment remain behind explicit acceptance gates in [`PLAN.md`](PLAN.md).
 
 ## What the system preserves
 
@@ -126,29 +153,25 @@ This metadata is not decorative. It enables reproducibility, source replay, dete
 
 ## Agentic enrichment: bounded, typed, and evidence-first
 
-Lunarbit uses `@cf/google/gemma-4-26b-a4b-it` through Cloudflare's streamed REST interface for candidate semantic enrichment. The model receives relevant order bundles rather than the entire corpus or one isolated request per chunk.
+Lunarbit packs template-compatible order bundles into medium-sized calls rather than issuing one request per chunk or dumping the whole archive into one context. Provider adapters share the same evidence contract, and accepted output passes deterministic schema, coverage, provenance, financial-reference, cross-bundle, and privacy checks before entering a separate repaired archive.
 
-The current contract provides:
+The production boundary provides:
 
-- the pinned official Gemma tokenizer for input accounting;
-- a 64k target and 80k hard input ceiling;
-- 24k reserved completion tokens;
-- sequential execution with concurrency `1`;
-- a 600-second socket and wall-clock deadline;
-- one required `submit_agentic_regions` tool call;
-- an exact ordered source-chunk coverage manifest;
-- an exact ordered money-component coverage manifest;
-- batch-scoped bundle and chunk identifiers;
-- source-backed entity and money reference constraints;
+- deterministic batch plans with explicit context and output ceilings;
+- exact ordered source-chunk and money-component coverage manifests;
+- batch-, bundle-, chunk-, fact-, entity-, and money-scoped reference constraints;
 - bounded region counts, narrative lengths, and candidate arrays;
-- atomic quarantine for incomplete, truncated, cross-bundle, unsupported, or malformed proposals;
-- privacy-safe diagnostics that retain error categories and numeric provider codes, never private model messages.
+- deterministic persistent IDs—never model-generated IDs;
+- resumable provider calls with rate governance, retry classification, and atomic checkpoints;
+- separate accepted, quarantined, repaired, retried, and final canonical archives;
+- privacy-safe diagnostics that retain categories and numeric codes, not private provider messages;
+- a final evidence-risk selector that accepts retries only when complete-bundle quality improves.
 
-The model may propose semantic regions, retrieval text, facts, entities, money interpretations, relationships, conflicts, and uncertainty. It may not create canonical IDs, perform authoritative arithmetic, resolve identities, or write graph state.
+Models may propose semantic regions, retrieval text, query families, interpretations, relationships, conflicts, and uncertainty. They cannot perform authoritative arithmetic, resolve canonical identity, write Cypher, or mutate graph truth.
 
-### Planned production stack
+### Runtime stack
 
-The implementation is being staged toward the architecture defined in [`PLAN.md`](PLAN.md): Python and Pydantic contracts for the offline pipeline; Neo4j AuraDB for the temporal graph; FastAPI and LangGraph for the query workflow; Next.js and Vercel for the public application; Cohere embeddings selected by benchmark; and Cloudflare Workers AI for bounded semantic enrichment.
+The backend uses Python 3.12+, strict Pydantic contracts, Neo4j 5.26, Lucene full text, Neo4j HNSW, Cohere Embed v4 and Rerank v4, application-owned RRF, deterministic verification, and FastAPI. The public workspace uses Next.js 16, React 19, strict TypeScript, code-native SVG visualization, and isolated synthetic profile contracts. The serving dimension is 1,536 pending the corrected golden evaluation; Mistral 1,024-d vectors remain an ablation baseline. Vercel and Aura deployment follow the live integration and public privacy review.
 
 ## Graph and truth model
 
@@ -199,62 +222,121 @@ The project follows visible test-driven development. Contract tests are written 
 Run the local checks:
 
 ```bash
-.venv/bin/pytest -q
-.venv/bin/ruff check src scripts tests
-.venv/bin/ruff format --check src scripts tests
-.venv/bin/mypy src scripts
+uv run pytest -q
+uv run ruff check src scripts tests
+uv run ruff format --check src scripts tests
+uv run mypy src/lunarbit
+
+cd web
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+Run the public synthetic workspace:
+
+```bash
+cd web
+npm install
+npm run dev
 ```
 
 Build the deterministic private pipeline:
 
 ```bash
-.venv/bin/python scripts/build_json.py --input data --output data/processed
-.venv/bin/python scripts/build_chunks.py --input data/processed
+uv run python scripts/build_json.py --input data --output data/processed
+uv run python scripts/build_chunks.py --input data/processed
 ```
 
 Inspect the agentic plan without sending private data to a model:
 
 ```bash
-.venv/bin/python scripts/run_agentic_chunking.py --input data/processed
+uv run python scripts/run_agentic_chunking.py --input data/processed
 ```
 
-Live inference is deliberately capped and sequential:
+Build or inspect the current retrieval layers:
 
 ```bash
-.venv/bin/python scripts/run_agentic_chunking.py \
-  --input data/processed \
-  --execute \
-  --max-calls 1
+uv run python scripts/embed_graph_cohere.py \
+  --graph-root data/processed/_graph/canonical_v1_20260811 \
+  --output data/processed/_embeddings/cohere_embed_v4_1536
+
+uv run python scripts/derive_mrl_indexes.py \
+  --archive data/processed/_embeddings/cohere_embed_v4_1536
+
+uv run python scripts/benchmark_mrl_retrieval.py --queries 40 --top-k 10
 ```
 
-Set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` through the ignored `.env` file before live execution. Start with a bounded pilot and inspect quarantine reasons before increasing the call cap.
+Build, load, and evaluate the private financial-intelligence graph:
+
+```bash
+uv run python scripts/build_economic_intelligence.py \
+  --inventory-root data/processed/_inventory \
+  --finance-root data/processed/_resolution/finance_v1_20260811 \
+  --graph-root data/processed/_graph/canonical_v1_20260811 \
+  --output data/processed/_economic/financial_intelligence_v1_20260812
+
+uv run python scripts/ingest_graph.py \
+  --graph-root data/processed/_economic/financial_intelligence_v1_20260812
+
+uv run python scripts/build_answer_goldens.py \
+  --inventory-root data/processed/_inventory \
+  --finance-root data/processed/_resolution/finance_v1_20260811 \
+  --graph-root data/processed/_economic/financial_intelligence_v1_20260812 \
+  --output data/processed/_economic/financial_intelligence_v1_20260812/answer_goldens.jsonl
+
+uv run python scripts/evaluate_answer_runtime.py \
+  --goldens data/processed/_economic/financial_intelligence_v1_20260812/answer_goldens.jsonl \
+  --output data/processed/_economic/financial_intelligence_v1_20260812/answer_evaluation.json
+```
+
+All live provider execution is opt-in. Put credentials only in ignored `.env`; begin with a bounded smoke run and inspect deterministic validation output before scaling.
 
 ## Repository map
 
 ```text
 src/lunarbit/
-├── models.py       # strict source, chunk, candidate, and validation contracts
-├── extract.py      # deterministic email/document ingestion primitives
-├── pdf.py          # native PDF/layout extraction and quality handling
-├── chunk.py        # deterministic layout-aware rich chunk construction
-└── agentic.py      # Gemma batching, SSE transport, typed tool output, validation
+├── models.py              # strict immutable source and pipeline contracts
+├── extract.py / pdf.py    # deterministic email, PDF, layout, table, and quality extraction
+├── chunk.py / agentic.py  # rich chunks, bounded enrichment, validation, and quarantine
+├── resolve.py / finance.py# reversible identity/product resolution and Decimal truth
+├── graph.py               # typed canonical nodes, relationships, and invariants
+├── retrieval.py           # governed Cypher, RRF, authority, and evidence verification
+├── cohere.py              # typed Embed v4 and Rerank v4 transport boundary
+├── hybrid.py              # HNSW + Lucene + RRF + graph expansion + reranking
+├── runtime.py             # read-only governed analytical execution
+├── economic_pipeline.py   # temporal events and multi-resolution financial corpus
+├── economic_metrics.py    # price, spending, fee, discount, and membership economics
+├── economic_research.py   # signals, anomalies, change points, and counterfactuals
+├── answer_goldens.py      # independent canonical-oracle answer cases
+├── evaluation.py / answer_evaluation.py # retrieval and answer metric contracts
+└── api.py / service.py    # public demo and authenticated private retrieval API
 
 scripts/
-├── build_json.py               # private deterministic archive construction
-├── build_chunks.py             # private chunk archive construction
-└── run_agentic_chunking.py     # dry-run planning and capped live enrichment
+├── build_json.py / build_chunks.py       # private deterministic evidence archives
+├── build_graph.py / ingest_graph.py      # canonical graph compilation and Neo4j load
+├── embed_graph.py                         # retained Mistral ablation baseline
+├── embed_graph_cohere.py                  # resumable native Embed v4 corpus vectors
+├── derive_mrl_indexes.py                  # explicit normalized MRL ablation indexes
+├── benchmark_mrl_retrieval.py             # privacy-safe aggregate retrieval benchmark
+├── build_economic_intelligence.py          # deterministic temporal financial archive
+├── build_answer_goldens.py                 # private canonical-oracle evaluation cases
+├── evaluate_answer_runtime.py              # end-to-end governed-answer benchmark
+└── serve_api.py                           # local FastAPI + Neo4j + Cohere runtime
 
-tests/
-├── test_extract.py
-├── test_pdf_processing.py
-├── test_chunk.py
-├── test_agentic.py
-└── test_privacy.py
+tests/          # 170 extraction, graph, finance, retrieval, API, privacy, and TDD checks
+benchmarks/     # aggregate-only evaluation artifacts; never source evidence
+
+web/
+├── app/         # six responsive intelligence routes
+├── components/  # graph, terrain, evidence, profile, and signal primitives
+├── lib/         # isolated synthetic data and visual-profile contracts
+└── tests/       # 16 interaction, isolation, governance, route, and arithmetic checks
 
 PLAN.md       # complete architecture, ontology, acceptance criteria, and roadmap
 MEMORY.md     # append-only engineering handoff and decisions
 cypher/       # graph design assets and future migrations
-web/          # public application surface under construction
 ```
 
 ## Delivery roadmap and proof gates
@@ -265,27 +347,27 @@ Completed foundation: source ingestion, PDF and email extraction, layout-aware c
 
 ### Phase 2 — Guarded semantic enrichment
 
-Current stage: complete the bounded financial pilot, validate golden entity and money cases, then run controlled enrichment over the corpus. Candidate output remains source-linked and quarantinable.
+Completed: 13,597 final regions cover all 24,675 chunks and 5,199 money components exactly once after validation, deterministic repair, selective retries, and complete-bundle evidence-risk selection.
 
 ### Phase 3 — Reversible resolution
 
-Resolve document bundles, merchants, legal entities, delivery evidence, item hierarchies, aliases, and uncertainty through reversible deterministic decisions.
+Completed: 454 orders, platform-scoped merchants, provisional outlets, legal entities, delivery mentions, item observations, merchant items, aliases, duplicate evidence, and uncertainty are represented without unsafe global merges.
 
 ### Phase 4 — Deterministic financial truth
 
-Compile exact money components, reconcile invoice scopes, expose unexplained residuals, and derive governed economic metrics without model arithmetic.
+Completed: all 5,199 source amounts use Decimal semantics; 256 scoped reconciliations retain both exact results and explicit conflicts without model arithmetic.
 
 ### Phase 5 — Temporal graph and indexes
 
-Load an idempotent temporal graph with constraints, exact indexes, full-text indexes, vector indexes, and invariant checks.
+Completed locally: the canonical source graph extends deterministically to 53,983 nodes and 85,607 relationships, loads idempotently with constraints and exact/Lucene indexes, preserves four Cohere HNSW representations, and retains the Mistral baseline.
 
 ### Phase 6 — Hybrid GraphRAG retrieval
 
-Route questions across exact lookup, lexical retrieval, dense retrieval, graph expansion, reranking, and answer verification. Every showcased answer must expose its graph path and evidence.
+Completed locally: governed exact queries and hybrid HNSW/Lucene retrieval use RRF, bounded graph expansion, Cohere reranking, authority scoring, verification, and explicit fallback. Authenticated answer synthesis performs coverage-aware pagination and Decimal calculation, and the independent 24-case canonical-oracle suite passes every measured correctness gate.
 
 ### Phase 7–8 — Economic intelligence and public product
 
-Add price and fee indices, membership ROI, spending decomposition, a privacy-reviewed public projection, an evidence laboratory, benchmark pages, and the live evidence demo.
+The financial core includes 5,199 temporal events, five chunk resolutions, personal-price/spending/platform metrics, economic signals, safe simulations, and a governed hypothesis-to-finding loop. The deterministic public projection and synthetic demo contracts drive implemented graph, evidence, benchmark, transaction, and economic-intelligence pages with independent data and rendering profiles. Live API integration, public evidence review, and deployment are the remaining product gates.
 
 ## Evaluation and definition of done
 
@@ -302,19 +384,15 @@ The project is not complete when a model produces plausible prose. Each stage ha
 - deployment is stable and documented;
 - resume claims match measured results rather than aspirations.
 
-Planned benchmark reporting includes extraction accuracy, chunking coverage, entity-resolution precision/recall/F1, monetary accuracy and reconciliation rate, retrieval Hit@1 and MRR, end-to-end answer quality, evidence-support rate, latency, and cost.
+Benchmark reporting includes extraction and coverage invariants, entity and order resolution, reconciliation state, retrieval Hit@K/MRR/latency, end-to-end answer quality, citation support, abstention accuracy, and cost. Exact-chunk diagnostics are kept separate from relevance-set and user-query evaluation so duplicate evidence cannot create false failures.
 
-## Professional positioning
+## Measured engineering outcome
 
-The final resume entry should use measured results rather than adjectives:
-
-> Built Lunarbit, a privacy-safe, evidence-verifiable personal-commerce GraphRAG system that reconstructed **454 orders** from **500+ private Zomato and Swiggy documents**, preserving layout, source spans, deterministic financial components, and temporal provenance; implemented strict Pydantic contracts, bounded Gemma tool-calling enrichment, and TDD validation for privacy-safe graph construction.
-
-The final version will add measured reconciliation accuracy, entity-resolution F1, retrieval Hit@1, latency, and public-demo reliability only after those benchmarks are implemented and published.
+Lunarbit currently reconstructs 454 orders from 456 relevant emails and 763 private PDFs; compiles 24,675 source-addressable evidence chunks into a 53,983-node temporal knowledge graph; preserves 5,199 deterministic financial components as 5,199 source-backed events; and executes verified GraphRAG answers through Neo4j, Cohere, RRF, graph traversal, Decimal calculation, and citation gates. Private source artifacts remain outside Git by construction.
 
 ## Project status
 
-Lunarbit is an active portfolio build. The deterministic evidence foundation and guarded agentic contract are implemented. The full public claim remains intentionally gated on the financial quality pilot, deterministic resolution, graph construction, retrieval benchmarks, privacy-reviewed projection, and deployment.
+Lunarbit is an active evidence-systems build. The private data pipeline, temporal economic graph, vector and lexical indexes, hybrid retrieval, reranking, evidence-bound answer synthesis, deterministic economic engines, canonical-oracle evaluation, public-safe synthetic projection, authenticated API, and multi-profile frontend are implemented locally. Human-reviewed natural-language evaluation, live frontend/API integration, cloud deployment, and public privacy review remain open.
 
 That distinction is part of the project: a trustworthy AI engineer should know exactly which results are measured, which are private, which are candidates, and which are still hypotheses.
 

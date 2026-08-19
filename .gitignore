@@ -38,6 +38,7 @@ node_modules/
 .next/
 .vercel/
 coverage/
+*.tsbuildinfo
 
 # Local tooling and operating-system files.
 .DS_Store

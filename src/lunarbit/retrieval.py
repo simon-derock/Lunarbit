@@ -204,8 +204,13 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "MATCH (merchant:Merchant)<-[:OUTLET_OF]-(outlet:Outlet)"
         "<-[:ORDERED_FROM]-(order:Order) "
         "WHERE merchant.normalized_name_private = $normalized_name "
-        "RETURN count(DISTINCT order) AS order_count, "
-        "collect(DISTINCT merchant.node_id)[..$limit] AS merchant_ids",
+        "MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
+        "(chunk:EvidenceChunk) "
+        "WITH count(DISTINCT order) AS order_count, "
+        "collect(DISTINCT {chunk_id: chunk.node_id, source_id: source.node_id, "
+        "source_hash: chunk.source_hash})[..$limit] AS evidence "
+        "UNWIND evidence AS item RETURN order_count, item.chunk_id AS chunk_id, "
+        "item.source_id AS source_id, item.source_hash AS source_hash",
         frozenset({"normalized_name", "limit"}),
     ),
     QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: (
@@ -214,42 +219,61 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
         "WHERE merchant.normalized_name_private = $merchant_name "
         "AND item.normalized_name_private CONTAINS $item_name "
+        "MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
         "RETURN order.node_id AS order_id, observation.observed_amount AS amount, "
-        "observation.currency AS currency ORDER BY order.node_id LIMIT $limit",
+        "observation.currency AS currency, min(message.occurred_at) AS occurred_at, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, "
+        "source.node_id AS source_id ORDER BY occurred_at, order.node_id LIMIT $limit",
         frozenset({"merchant_name", "item_name", "limit"}),
     ),
     QueryTemplate.DELIVERY_MENTION_COUNT: (
         "MATCH (order:Order)-[:HAS_DELIVERY_MENTION]->(mention:PersonMention) "
+        "MATCH (mention)-[:MENTIONED_IN]->(chunk:EvidenceChunk) "
+        "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "WHERE mention.normalized_value_private = $normalized_name "
-        "RETURN count(DISTINCT order) AS delivery_mentions, "
-        "collect(DISTINCT mention.node_id)[..$limit] AS mention_ids",
+        "RETURN order.node_id AS order_id, mention.node_id AS mention_id, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, "
+        "source.node_id AS source_id LIMIT $limit",
         frozenset({"normalized_name", "limit"}),
     ),
     QueryTemplate.FINANCIAL_COMPONENT_SUM: (
         "MATCH (order:Order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
         "WHERE component.component_type = $component_type "
         "AND order.platform = $platform "
+        "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "RETURN component.node_id AS component_id, component.amount AS amount, "
-        "component.currency AS currency "
-        "LIMIT $limit",
-        frozenset({"component_type", "platform", "limit"}),
+        "component.currency AS currency, chunk.node_id AS chunk_id, "
+        "chunk.source_hash AS source_hash, source.node_id AS source_id "
+        "ORDER BY component.node_id SKIP $offset LIMIT $limit",
+        frozenset({"component_type", "platform", "offset", "limit"}),
     ),
     QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: (
         "MATCH (component:MoneyComponent)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
         "WHERE component.node_id = $component_id "
         "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
-        "RETURN component, chunk, source LIMIT $limit",
+        "RETURN component.node_id AS component_id, component.amount AS amount, "
+        "component.currency AS currency, chunk.node_id AS chunk_id, "
+        "chunk.source_hash AS source_hash, source.node_id AS source_id LIMIT $limit",
         frozenset({"component_id", "limit"}),
     ),
     QueryTemplate.ORDER_RECONSTRUCTION: (
         "MATCH (order:Order) WHERE order.node_id = $order_id "
         "OPTIONAL MATCH (order)-[relationship]->(neighbor:LunarbitNode) "
-        "RETURN order, type(relationship) AS relationship_type, neighbor LIMIT $limit",
+        "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)"
+        "-[:HAS_CHUNK]->(chunk:EvidenceChunk) "
+        "RETURN order.node_id AS order_id, type(relationship) AS relationship_type, "
+        "neighbor.node_id AS neighbor_id, chunk.node_id AS chunk_id, "
+        "chunk.source_hash AS source_hash, source.node_id AS source_id LIMIT $limit",
         frozenset({"order_id", "limit"}),
     ),
     QueryTemplate.FULLTEXT_EVIDENCE: (
         "CALL db.index.fulltext.queryNodes('evidence_lexical', $query) "
-        "YIELD node, score RETURN node, score LIMIT $limit",
+        "YIELD node, score MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(node) "
+        "RETURN node.node_id AS chunk_id, node.source_hash AS source_hash, "
+        "source.node_id AS source_id, score ORDER BY score DESC LIMIT $limit",
         frozenset({"query", "limit"}),
     ),
 }

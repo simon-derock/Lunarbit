@@ -83,6 +83,7 @@ class PublicEdge(ContractModel):
     source: str = Field(pattern=r"^pub:[a-z0-9:-]+$")
     target: str = Field(pattern=r"^pub:[a-z0-9:-]+$")
     relationship: str = Field(pattern=r"^[A-Z_]+$")
+    properties: dict[str, PublicScalar] = Field(default_factory=dict)
 
 
 class PublicSnapshot(ContractModel):

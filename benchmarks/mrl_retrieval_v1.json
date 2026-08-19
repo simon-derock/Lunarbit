@@ -1,0 +1,60 @@
+{
+  "status": "diagnostic_superseded_by_relevance_set_v2",
+  "corpus_nodes": 24675,
+  "limitation": "This measures dimensional retention on deterministic semantic-summary self-retrieval; it does not replace the user-query golden set.",
+  "metrics": {
+    "256": {
+      "hit_at_1": 0.425,
+      "hit_at_5": 0.475,
+      "hit_at_10": 0.525,
+      "mrr": 0.4491666666666666,
+      "p50_latency_ms": 5.798981990665197,
+      "p95_latency_ms": 8.576210995670408,
+      "queries": 40
+    },
+    "512": {
+      "hit_at_1": 0.375,
+      "hit_at_5": 0.45,
+      "hit_at_10": 0.475,
+      "mrr": 0.41083333333333333,
+      "p50_latency_ms": 4.832249484024942,
+      "p95_latency_ms": 6.954576005227864,
+      "queries": 40
+    },
+    "1024": {
+      "hit_at_1": 0.35,
+      "hit_at_5": 0.45,
+      "hit_at_10": 0.475,
+      "mrr": 0.39479166666666665,
+      "p50_latency_ms": 6.274253493756987,
+      "p95_latency_ms": 9.209026989992708,
+      "queries": 40
+    },
+    "1536": {
+      "hit_at_1": 0.425,
+      "hit_at_5": 0.525,
+      "hit_at_10": 0.575,
+      "mrr": 0.4704761904761905,
+      "p50_latency_ms": 9.783417015569285,
+      "p95_latency_ms": 13.391346990829334,
+      "queries": 40
+    }
+  },
+  "model": "embed-v4.0",
+  "noninferior_to_1536": {
+    "256": false,
+    "512": false,
+    "1024": false,
+    "1536": true
+  },
+  "protocol": "semantic-summary-self-retrieval-v1",
+  "query_count": 40,
+  "representations": {
+    "256": "normalized_1536_prefix",
+    "512": "normalized_1536_prefix",
+    "1024": "normalized_1536_prefix",
+    "1536": "native_api_output"
+  },
+  "selected_serving_dimension_at_time_of_run": 1536,
+  "top_k": 10
+}

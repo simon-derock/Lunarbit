@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from lunarbit.api import create_app
-from lunarbit.public import PublicMetric, assert_public_payload, build_demo_snapshot
+from lunarbit.api import PrivateGroundedAnswer, PrivateRetrievalTrace, create_app
+from lunarbit.public import PublicMetric, PublicSnapshot, assert_public_payload, build_demo_snapshot
+from lunarbit.runtime import RuntimeRequest
 
 
 def _client() -> TestClient:
@@ -27,6 +28,31 @@ def test_health_and_snapshot_endpoints_publish_only_reviewed_state() -> None:
     assert snapshot.status_code == 200
     assert snapshot.json()["mode"] == "synthetic_mirror"
     assert_public_payload(snapshot.json())
+
+
+def test_public_api_allows_the_local_nexus_development_origin() -> None:
+    response = _client().get(
+        "/v1/public/snapshot",
+        headers={"Origin": "http://127.0.0.1:5173"},
+    )
+
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
+def test_public_snapshot_endpoint_refreshes_the_configured_safe_projection() -> None:
+    expected = build_demo_snapshot(
+        metrics=(PublicMetric(label="Graph nodes", value="18"),)
+    ).model_copy(update={"mode": "neo4j_aggregate_projection"})
+
+    class Source:
+        def snapshot(self) -> PublicSnapshot:
+            return expected
+
+    response = TestClient(create_app(public_snapshot_source=Source())).get("/v1/public/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "neo4j_aggregate_projection"
+    assert response.json()["metrics"] == [{"label": "Graph nodes", "value": "18", "detail": None}]
 
 
 def test_query_plan_does_not_echo_user_input_or_expose_cypher() -> None:
@@ -64,3 +90,122 @@ def test_unknown_demo_answer_is_a_stable_not_found_contract() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "demo answer not found"}
+
+
+class StubPrivateBackend:
+    def retrieve(self, question: str) -> PrivateRetrievalTrace:
+        assert question == "historic meal price"
+        return PrivateRetrievalTrace(
+            status="verified",
+            dense_candidates=30,
+            lexical_candidates=30,
+            evidence_count=10,
+            citation_count=10,
+            reranking_status="applied",
+            verification_status="verified",
+            degradations=(),
+        )
+
+
+def test_private_retrieval_requires_constant_time_bearer_authentication() -> None:
+    client = TestClient(
+        create_app(
+            private_backend=StubPrivateBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    missing = client.post("/v1/private/retrieval", json={"question": "historic meal price"})
+    wrong = client.post(
+        "/v1/private/retrieval",
+        json={"question": "historic meal price"},
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+    accepted = client.post(
+        "/v1/private/retrieval",
+        json={"question": "historic meal price"},
+        headers={"Authorization": "Bearer local-secret-token"},
+    )
+
+    assert missing.status_code == 401
+    assert missing.headers["www-authenticate"] == "Bearer"
+    assert wrong.status_code == 403
+    assert accepted.status_code == 200
+    assert accepted.json()["verification_status"] == "verified"
+    assert "historic meal price" not in accepted.text
+
+
+def test_private_retrieval_is_unavailable_without_server_side_configuration() -> None:
+    response = _client().post(
+        "/v1/private/retrieval",
+        json={"question": "historic meal price"},
+        headers={"Authorization": "Bearer anything"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "private retrieval is not configured"}
+
+
+class StubPrivateAnswerBackend:
+    def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer:
+        assert request.slots.component_type == "platform_fee"
+        assert request.slots.platform == "swiggy"
+        return PrivateGroundedAnswer(
+            status="verified",
+            direct_answer="The evidence-backed total is INR 10.30.",
+            calculation="INR 10.10 + INR 0.20 = INR 10.30",
+            fact_count=2,
+            citation_ids=("runtime:citation:1", "runtime:citation:2"),
+            verification_status="verified",
+            limitations=("Not a bank-confirmed debit.",),
+            abstention_reason=None,
+        )
+
+
+def test_private_answer_returns_verified_calculation_without_raw_evidence() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/answer",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={
+            "question": "How much platform fee did I pay?",
+            "slots": {"platform": "swiggy", "component_type": "platform_fee"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["direct_answer"] == "The evidence-backed total is INR 10.30."
+    assert response.json()["citation_ids"] == [
+        "runtime:citation:1",
+        "runtime:citation:2",
+    ]
+    assert "source_hash" not in response.text
+    assert "evidence_text" not in response.text
+
+
+def test_private_answer_uses_the_same_bearer_security_boundary() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    missing = client.post(
+        "/v1/private/answer",
+        json={"question": "How much?", "slots": {}},
+    )
+    wrong = client.post(
+        "/v1/private/answer",
+        headers={"Authorization": "Bearer wrong-token"},
+        json={"question": "How much?", "slots": {}},
+    )
+
+    assert missing.status_code == 401
+    assert wrong.status_code == 403

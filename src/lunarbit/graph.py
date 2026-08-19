@@ -33,6 +33,7 @@ class NodeLabel(StrEnum):
     COMPARABLE_ITEM_GROUP = "ComparableItemGroup"
     MONEY_COMPONENT = "MoneyComponent"
     RECONCILIATION_RUN = "ReconciliationRun"
+    FINANCIAL_EVENT = "FinancialEvent"
 
 
 class RelationshipType(StrEnum):
@@ -56,6 +57,9 @@ class RelationshipType(StrEnum):
     EVIDENCED_BY = "EVIDENCED_BY"
     RECONCILED_BY = "RECONCILED_BY"
     USED = "USED"
+    HAS_FINANCIAL_EVENT = "HAS_FINANCIAL_EVENT"
+    EVENT_FOR_COMPONENT = "EVENT_FOR_COMPONENT"
+    SUPERSEDES = "SUPERSEDES"
 
 
 class GraphNode(ContractModel):
