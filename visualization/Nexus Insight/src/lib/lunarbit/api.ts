@@ -51,6 +51,31 @@ export interface QueryPlanDto {
   verification_required: boolean;
 }
 
+export interface PublicEvidenceCardDto {
+  id: string;
+  title: string;
+  authority: string;
+  truth_scope: string;
+  disclosure: string;
+}
+
+export interface PublicDemoAnswerDto {
+  status: "verified";
+  direct_answer: string;
+  calculation: string;
+  confidence_scope: string;
+  graph_path: string[];
+  evidence: PublicEvidenceCardDto[];
+  limitations: string[];
+}
+
+export interface PublicShowcaseAnswerDto {
+  status: "verified" | "abstained";
+  plan: QueryPlanDto;
+  answer: PublicDemoAnswerDto | null;
+  limitations: string[];
+}
+
 // Lovable's sandbox intentionally strips Vite proxies. In development we therefore
 // use FastAPI directly (CORS is allowlisted); deployed builds use `/api` unless an
 // explicit public API origin is supplied at build time.
@@ -167,6 +192,15 @@ export function fetchPublicSnapshot(signal?: AbortSignal) {
 
 export function fetchQueryPlan(question: string, signal?: AbortSignal) {
   return getJson<QueryPlanDto>("/v1/query/plan", {
+    signal,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: question.slice(0, 500) }),
+  });
+}
+
+export function fetchPublicShowcaseAnswer(question: string, signal?: AbortSignal) {
+  return getJson<PublicShowcaseAnswerDto>("/v1/public/showcase-answer", {
     signal,
     method: "POST",
     headers: { "Content-Type": "application/json" },

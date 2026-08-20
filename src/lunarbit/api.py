@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from secrets import compare_digest
-from typing import Annotated, Protocol
+from typing import Annotated, Literal, Protocol
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -101,6 +101,20 @@ class PublicDemoAnswer(ContractModel):
     limitations: tuple[str, ...]
 
 
+class PublicShowcaseAnswer(ContractModel):
+    """A bounded, public-only answer for one reviewed synthetic scenario.
+
+    This intentionally is not a general-purpose answer surface.  It keeps the
+    public demonstration honest: a question either maps to a reviewed scenario
+    with a deterministic calculation and evidence path, or it abstains.
+    """
+
+    status: Literal["verified", "abstained"]
+    plan: PublicQueryPlan
+    answer: PublicDemoAnswer | None = None
+    limitations: tuple[str, ...]
+
+
 _DEMO_ANSWERS: dict[str, PublicDemoAnswer] = {
     "price-history": PublicDemoAnswer(
         direct_answer=(
@@ -158,6 +172,34 @@ _DEMO_ANSWERS: dict[str, PublicDemoAnswer] = {
         limitations=("The equation does not claim a bank-settled amount.",),
     ),
 }
+
+
+def _public_query_plan(question: str) -> PublicQueryPlan:
+    plan = build_query_plan(question)
+    return PublicQueryPlan(
+        intent=plan.classification.intent.value,
+        selected_tools=tuple(template.value for template in plan.selected_templates),
+        actions=tuple(step.action.value for step in plan.traversal),
+        action_budget=plan.policy.maximum_actions,
+        maximum_depth=plan.policy.maximum_depth,
+        candidate_paths_per_step=plan.policy.candidate_paths_per_step,
+    )
+
+
+def _showcase_answer_key(question: str) -> str | None:
+    """Match only the two reviewed public scenarios; everything else abstains."""
+    normalized = question.casefold()
+
+    def has_any(terms: tuple[str, ...]) -> bool:
+        return any(term in normalized for term in terms)
+
+    if has_any(("discount", "promotion")) and has_any(("fee", "delivery")):
+        return "fee-offset"
+    if has_any(("price", "cost", "amount")) and has_any(
+        ("change", "history", "historic", "year", "period", "comparable")
+    ):
+        return "price-history"
+    return None
 
 
 def _default_snapshot() -> PublicSnapshot:
@@ -233,15 +275,43 @@ def create_app(
 
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)
     def query_plan(request: QueryPlanRequest) -> PublicQueryPlan:
-        plan = build_query_plan(request.question)
-        response = PublicQueryPlan(
-            intent=plan.classification.intent.value,
-            selected_tools=tuple(template.value for template in plan.selected_templates),
-            actions=tuple(step.action.value for step in plan.traversal),
-            action_budget=plan.policy.maximum_actions,
-            maximum_depth=plan.policy.maximum_depth,
-            candidate_paths_per_step=plan.policy.candidate_paths_per_step,
-        )
+        response = _public_query_plan(request.question)
+        assert_public_payload(response.model_dump(mode="json"))
+        return response
+
+    @app.post("/v1/public/showcase-answer", response_model=PublicShowcaseAnswer)
+    def public_showcase_answer(request: QueryPlanRequest) -> PublicShowcaseAnswer:
+        """Return a reviewed synthetic answer or abstain without invoking private retrieval."""
+        plan = _public_query_plan(request.question)
+        answer_key = _showcase_answer_key(request.question)
+        if answer_key is None:
+            response = PublicShowcaseAnswer(
+                status="abstained",
+                plan=plan,
+                limitations=(
+                    "This public console answers only reviewed synthetic showcase scenarios.",
+                    (
+                        "Private GraphRAG retrieval and source records are never available "
+                        "in the browser."
+                    ),
+                ),
+            )
+        else:
+            response = PublicShowcaseAnswer(
+                status="verified",
+                plan=plan,
+                answer=_DEMO_ANSWERS[answer_key],
+                limitations=(
+                    (
+                        "The result is a reviewed synthetic demonstration, not a query over "
+                        "personal records."
+                    ),
+                    (
+                        "Private GraphRAG retrieval and source records are never available "
+                        "in the browser."
+                    ),
+                ),
+            )
         assert_public_payload(response.model_dump(mode="json"))
         return response
 

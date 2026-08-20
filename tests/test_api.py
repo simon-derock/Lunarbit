@@ -85,6 +85,36 @@ def test_demo_answer_returns_calculation_path_and_public_evidence() -> None:
     assert_public_payload(payload)
 
 
+def test_public_showcase_answer_returns_only_a_reviewed_synthetic_scenario() -> None:
+    client = _client()
+    question = "Did discounts offset the rise in platform and delivery fees?"
+
+    response = client.post("/v1/public/showcase-answer", json={"question": question})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "verified"
+    assert payload["answer"]["direct_answer"].startswith("The synthetic INR 80.00 promotion")
+    assert payload["plan"]["verification_required"] is True
+    assert question not in response.text
+    assert "cypher" not in response.text.casefold()
+    assert_public_payload(payload)
+
+
+def test_public_showcase_answer_abstains_outside_the_reviewed_scope() -> None:
+    question = "Which restaurant should I order from tomorrow?"
+
+    response = _client().post("/v1/public/showcase-answer", json={"question": question})
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "abstained"
+    assert payload["answer"] is None
+    assert "reviewed synthetic showcase scenarios" in payload["limitations"][0]
+    assert question not in response.text
+    assert_public_payload(payload)
+
+
 def test_unknown_demo_answer_is_a_stable_not_found_contract() -> None:
     response = _client().get("/v1/demo/answers/not-a-query")
 
