@@ -568,6 +568,7 @@ agent = [
 ]
 api = [
     { name = "fastapi" },
+    { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
 dev = [
@@ -598,6 +599,7 @@ requires-dist = [
     { name = "pymupdf", specifier = ">=1.26,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9,<10" },
     { name = "python-dotenv", marker = "extra == 'agent'", specifier = ">=1.1,<2" },
+    { name = "python-dotenv", marker = "extra == 'api'", specifier = ">=1.1,<2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12,<1" },
     { name = "tokenizers", marker = "extra == 'agent'", specifier = ">=0.22,<1" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.35,<1" },

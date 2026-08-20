@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+FROM ghcr.io/astral-sh/uv:0.8.22 AS uv
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+COPY --from=uv /uv /uvx /bin/
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --extra api --extra graph --no-install-project
+
+COPY src ./src
+RUN uv sync --locked --no-dev --extra api --extra graph
+COPY scripts/serve_public_api.py ./scripts/serve_public_api.py
+
+RUN useradd --create-home --uid 10001 lunarbit
+USER lunarbit
+
+EXPOSE 8000
+
+CMD ["python", "scripts/serve_public_api.py", "--host", "0.0.0.0"]

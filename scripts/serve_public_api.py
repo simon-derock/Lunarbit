@@ -22,7 +22,7 @@ from lunarbit.public_projection import AggregateSnapshotSource, Neo4jAggregateRe
 def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     parser.add_argument("--neo4j-uri", default=None)
     parser.add_argument("--neo4j-database", default=None)
     return parser.parse_args()

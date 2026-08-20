@@ -1,0 +1,9 @@
+# Build only the public serving surface. Private corpus data, local artifacts,
+# credentials, and unrelated frontends never enter the container context.
+*
+!pyproject.toml
+!uv.lock
+!src/
+!src/**
+!scripts/
+!scripts/serve_public_api.py
