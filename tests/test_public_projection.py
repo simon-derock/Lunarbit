@@ -84,6 +84,48 @@ def test_aggregate_snapshot_source_builds_from_a_read_only_aggregate_reader() ->
     assert snapshot.edges[0].relationship == "DOCUMENTED_BY"
 
 
+def test_aggregate_snapshot_source_caches_only_the_safe_aggregate_projection() -> None:
+    class Reader:
+        calls = 0
+
+        def graph_totals(self) -> tuple[int, int]:
+            self.calls += 1
+            return (18, 27)
+
+        def node_counts(self) -> dict[PublicNodeLabel, int]:
+            return {
+                PublicNodeLabel.ORDER: 4,
+                PublicNodeLabel.EVIDENCE: 9,
+            }
+
+        def relationship_counts(self, limit: int) -> tuple[AggregateRelationship, ...]:
+            return (
+                AggregateRelationship(
+                    source_label=PublicNodeLabel.ORDER,
+                    target_label=PublicNodeLabel.EVIDENCE,
+                    relationship="DOCUMENTED_BY",
+                    count=4,
+                ),
+            )
+
+    reader = Reader()
+    now = [100.0]
+    source = AggregateSnapshotSource(
+        reader,
+        refresh_seconds=15,
+        clock=lambda: now[0],
+    )
+
+    first = source.snapshot()
+    second = source.snapshot()
+    now[0] = 115.0
+    refreshed = source.snapshot()
+
+    assert first is second
+    assert refreshed is not first
+    assert reader.calls == 2
+
+
 def test_aggregate_queries_never_select_canonical_ids_or_properties() -> None:
     query_text = " ".join(
         (_GRAPH_TOTALS_CYPHER, _NODE_COUNTS_CYPHER, _RELATIONSHIP_COUNTS_CYPHER)

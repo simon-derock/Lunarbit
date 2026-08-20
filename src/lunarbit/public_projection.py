@@ -9,8 +9,10 @@ useful for explaining the architecture without publishing commerce records.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from threading import Lock
+from time import monotonic
 from typing import Protocol, Self
 
 from neo4j import READ_ACCESS, Driver, GraphDatabase
@@ -269,15 +271,49 @@ def build_aggregate_snapshot(
 
 
 class AggregateSnapshotSource:
-    """Refresh the bounded public aggregate snapshot for each API request."""
+    """Serve a short-lived, bounded public aggregate snapshot.
 
-    def __init__(self, reader: AggregateReader, *, relationship_limit: int = 40) -> None:
+    The cache contains only the already-safe aggregate projection. A lock avoids
+    concurrent browser requests multiplying the three count queries at refresh
+    boundaries.
+    """
+
+    def __init__(
+        self,
+        reader: AggregateReader,
+        *,
+        relationship_limit: int = 40,
+        refresh_seconds: float = 15.0,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
         if not 1 <= relationship_limit <= 100:
             raise ValueError("relationship projection limit must be between 1 and 100")
+        if not 0 <= refresh_seconds <= 3_600:
+            raise ValueError("public projection refresh must be between 0 and 3600 seconds")
         self._reader = reader
         self._relationship_limit = relationship_limit
+        self._refresh_seconds = refresh_seconds
+        self._clock = clock
+        self._snapshot: PublicSnapshot | None = None
+        self._expires_at = 0.0
+        self._lock = Lock()
 
     def snapshot(self) -> PublicSnapshot:
+        now = self._clock()
+        cached = self._snapshot
+        if cached is not None and now < self._expires_at:
+            return cached
+        with self._lock:
+            now = self._clock()
+            cached = self._snapshot
+            if cached is not None and now < self._expires_at:
+                return cached
+            snapshot = self._build_snapshot()
+            self._snapshot = snapshot
+            self._expires_at = now + self._refresh_seconds
+            return snapshot
+
+    def _build_snapshot(self) -> PublicSnapshot:
         graph_node_count, graph_relationship_count = self._reader.graph_totals()
         return build_aggregate_snapshot(
             node_counts=self._reader.node_counts(),
