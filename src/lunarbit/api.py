@@ -20,6 +20,23 @@ from lunarbit.public_projection import PublicProjectionUnavailable
 from lunarbit.runtime import QuerySlots, RuntimeRequest
 
 API_VERSION = "1.0.0"
+DEFAULT_PUBLIC_ORIGINS = (
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
+
+
+def parse_public_origins(value: str | None) -> tuple[str, ...]:
+    """Parse an explicit public CORS allowlist and reject wildcard deployment."""
+    if value is None:
+        return DEFAULT_PUBLIC_ORIGINS
+    origins = tuple(origin.strip() for origin in value.split(",") if origin.strip())
+    if not origins:
+        raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS must contain at least one origin")
+    if "*" in origins:
+        raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS cannot contain a wildcard")
+    return origins
 
 
 class HealthResponse(ContractModel):
@@ -217,14 +234,11 @@ def create_app(
     *,
     snapshot: PublicSnapshot | None = None,
     public_snapshot_source: PublicSnapshotSource | None = None,
-    allowed_origins: Sequence[str] = (
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ),
+    allowed_origins: Sequence[str] = DEFAULT_PUBLIC_ORIGINS,
     private_backend: PrivateRetrievalBackend | None = None,
     private_answer_backend: PrivateAnswerBackend | None = None,
     private_api_token: str | None = None,
+    include_private_routes: bool = True,
 ) -> FastAPI:
     public_snapshot = snapshot or _default_snapshot()
     assert_public_payload(public_snapshot.model_dump(mode="json"))
@@ -323,27 +337,29 @@ def create_app(
         assert_public_payload(answer.model_dump(mode="json"))
         return answer
 
-    @app.post("/v1/private/retrieval", response_model=PrivateRetrievalTrace)
-    def private_retrieval(
-        request: QueryPlanRequest,
-        authorization: Annotated[str | None, Header()] = None,
-    ) -> PrivateRetrievalTrace:
-        if private_backend is None or private_api_token is None:
-            raise HTTPException(status_code=503, detail="private retrieval is not configured")
-        authorize_private(authorization)
-        return private_backend.retrieve(request.question)
+    if include_private_routes:
 
-    @app.post("/v1/private/answer", response_model=PrivateGroundedAnswer)
-    def private_answer(
-        request: PrivateAnswerRequest,
-        authorization: Annotated[str | None, Header()] = None,
-    ) -> PrivateGroundedAnswer:
-        if private_answer_backend is None or private_api_token is None:
-            raise HTTPException(status_code=503, detail="private answer is not configured")
-        authorize_private(authorization)
-        return private_answer_backend.answer(
-            RuntimeRequest(question=request.question, slots=request.slots)
-        )
+        @app.post("/v1/private/retrieval", response_model=PrivateRetrievalTrace)
+        def private_retrieval(
+            request: QueryPlanRequest,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> PrivateRetrievalTrace:
+            if private_backend is None or private_api_token is None:
+                raise HTTPException(status_code=503, detail="private retrieval is not configured")
+            authorize_private(authorization)
+            return private_backend.retrieve(request.question)
+
+        @app.post("/v1/private/answer", response_model=PrivateGroundedAnswer)
+        def private_answer(
+            request: PrivateAnswerRequest,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> PrivateGroundedAnswer:
+            if private_answer_backend is None or private_api_token is None:
+                raise HTTPException(status_code=503, detail="private answer is not configured")
+            authorize_private(authorization)
+            return private_answer_backend.answer(
+                RuntimeRequest(question=request.question, slots=request.slots)
+            )
 
     return app
 

@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
-from lunarbit.api import PrivateGroundedAnswer, PrivateRetrievalTrace, create_app
+from lunarbit.api import (
+    DEFAULT_PUBLIC_ORIGINS,
+    PrivateGroundedAnswer,
+    PrivateRetrievalTrace,
+    create_app,
+    parse_public_origins,
+)
 from lunarbit.public import PublicMetric, PublicSnapshot, assert_public_payload, build_demo_snapshot
 from lunarbit.runtime import RuntimeRequest
 
@@ -37,6 +44,18 @@ def test_public_api_allows_the_local_nexus_development_origin() -> None:
     )
 
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
+def test_public_cors_origins_are_explicit_and_never_wildcarded() -> None:
+    assert parse_public_origins(None) == DEFAULT_PUBLIC_ORIGINS
+    assert parse_public_origins("https://demo.example, https://staging.example ") == (
+        "https://demo.example",
+        "https://staging.example",
+    )
+    with pytest.raises(ValueError, match="at least one origin"):
+        parse_public_origins(" , ")
+    with pytest.raises(ValueError, match="cannot contain a wildcard"):
+        parse_public_origins("https://demo.example, *")
 
 
 def test_public_snapshot_endpoint_refreshes_the_configured_safe_projection() -> None:
@@ -174,6 +193,22 @@ def test_private_retrieval_is_unavailable_without_server_side_configuration() ->
 
     assert response.status_code == 503
     assert response.json() == {"detail": "private retrieval is not configured"}
+
+
+def test_public_only_api_does_not_mount_private_graphrag_routes() -> None:
+    client = TestClient(create_app(include_private_routes=False))
+
+    retrieval = client.post("/v1/private/retrieval", json={"question": "historic meal price"})
+    answer = client.post("/v1/private/answer", json={"question": "How much?", "slots": {}})
+    showcase = client.post(
+        "/v1/public/showcase-answer",
+        json={"question": "Did discounts offset delivery fees?"},
+    )
+
+    assert retrieval.status_code == 404
+    assert answer.status_code == 404
+    assert showcase.status_code == 200
+    assert "/v1/private/retrieval" not in client.get("/openapi.json").json()["paths"]
 
 
 class StubPrivateAnswerBackend:
