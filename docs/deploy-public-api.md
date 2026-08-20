@@ -61,3 +61,15 @@ curl --output /dev/null --write-out '%{http_code}\n' \
 The last command must return `404`. Review the snapshot and answer response
 with the public-payload leakage tests before each new public fixture or schema
 class is released.
+
+Use the repeatable audit in the release pipeline or immediately after deployment:
+
+```sh
+uv run python scripts/verify_public_release.py \
+  --api-url https://your-public-api.example \
+  --origin https://your-nexus-insight.example
+```
+
+It checks the documented route surface, exact CORS origin, public-payload
+validator, reviewed showcase trace, and absence of private retrieval routes. It
+does not print API response bodies.

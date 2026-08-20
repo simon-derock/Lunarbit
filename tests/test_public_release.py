@@ -36,7 +36,7 @@ def test_public_release_audit_rejects_private_routes_and_payload_leaks() -> None
             health={"status": "ok", "service": "lunarbit-api", "version": "1.0.0"},
             snapshot={"mode": "synthetic_mirror"},
             snapshot_cors_origin="https://demo.example",
-            showcase={"status": "verified"},
+            showcase={"status": "verified", "answer": {"safe": "value"}},
             private_route_status=404,
             expected_origin="https://demo.example",
         )
@@ -55,7 +55,7 @@ def test_public_release_audit_rejects_private_routes_and_payload_leaks() -> None
             health={"status": "ok", "service": "lunarbit-api", "version": "1.0.0"},
             snapshot={"source_hash": "a" * 64},
             snapshot_cors_origin="https://demo.example",
-            showcase={"status": "verified"},
+            showcase={"status": "verified", "answer": {"safe": "value"}},
             private_route_status=404,
             expected_origin="https://demo.example",
         )
