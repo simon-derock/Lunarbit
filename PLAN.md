@@ -8,7 +8,7 @@
 **Repository:** `lunarbit`  
 **Primary objective:** Produce an exceptional live public demo and a defensible AI Engineer portfolio project.  
 **Primary data:** Approximately 500+ Zomato, Swiggy Food, and Swiggy Instamart PDFs collected over several years.  
-**Primary deployment:** Neo4j AuraDB + Python/FastAPI/LangGraph + Next.js + Vercel.  
+**Primary deployment:** Neo4j AuraDB + Python/FastAPI/LangGraph + Nexus Insight (TanStack Start) + Vercel.
 **Primary embedding model:** Cohere `embed-v4.0`, with dimension selected by benchmark.  
 
 ---

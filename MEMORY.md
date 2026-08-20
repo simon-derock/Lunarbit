@@ -2,12 +2,12 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-12
-- Active phase: The local backend is complete through canonical-oracle evaluation, and the privacy-safe multi-profile frontend is implemented across six routes. Next gates are live API integration, public privacy review, and deployment.
-- Current branch: `backend-runtime`, pushed to remote `main`
+- Last updated: 2026-08-20
+- Active phase: The local backend is complete through canonical-oracle evaluation. Nexus Insight is live-wired to the privacy-safe public FastAPI contract; remaining gates are public privacy review and cloud deployment.
+- Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `1928be2` (`feat(web): add a governed evidence query console`), pushed to `main`.
-- Last passing checks: Ruff lint, strict mypy across 33 source modules, 170 pytest tests, 16 Vitest tests, ESLint, strict TypeScript, production Next.js build, desktop visual QA across five rendering/data combinations, mobile evidence QA, byte-stable private economic rebuild, two-pass Neo4j idempotence, and a 24-case canonical-oracle evaluation.
+- Last verified implementation commit: `101ce5a` (`perf(public): cache safe aggregate graph projections`), pushed to `main`.
+- Last passing checks: 180 committed Python tests, Ruff lint, strict MyPy, Nexus Insight ESLint (six inherited fast-refresh warnings only), and a production Nexus Insight build. The public-only service was smoke-tested with `200` health/showcase responses and absent private routes.
 
 ## Current state
 
@@ -78,8 +78,13 @@
   - Translated the reviewed Dark Chromatic references into code-native constellation, terrain, signal, receipt, proof, and benchmark visual systems without committing the private sample directory.
   - Verified all six routes through interaction tests, strict TypeScript, ESLint, production build, and headless desktop/mobile visual review.
   - Added a keyboard-accessible governed query console with 16 question-matched synthetic answers, explicit calculations, profile-closed graph traces, and pre-traversal abstention for unreviewed requests.
-- In progress: Documentation and frontend/API integration planning. The current UI intentionally consumes synthetic public contracts only.
-- Pending external input: Public deployment target and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
+  - Added Nexus Insight as the active public topology console, connected only to the public FastAPI contract and never directly to Neo4j.
+  - Added a live Neo4j aggregate projection that exposes only graph classes, relationship types, and counts; canonical IDs, properties, source text, and private records remain unavailable to the browser.
+  - Added a bounded public showcase-answer endpoint: reviewed synthetic scenarios return a deterministic calculation, graph path, and public evidence card; all other prompts explicitly abstain.
+  - Added a public-only FastAPI launcher that omits private GraphRAG routes, requires an explicit non-wildcard CORS allowlist, works with a synthetic fallback, and can attach to the aggregate Neo4j projection with read-only queries.
+  - Added a thread-safe 15-second cache around the already-safe aggregate projection to prevent concurrent public requests from multiplying Neo4j count queries.
+- In progress: Public privacy review and cloud deployment preparation. The current public UI consumes only the reviewed FastAPI contract.
+- Pending external input: Public deployment target, Aura read-only credentials, and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
   capabilities. The design retains full-precision vectors for reranking and
@@ -396,6 +401,16 @@
 - Do not vectorize IDs, dates, or standalone amounts.
 - Do not implement custom BM25 using Neo4j dense vectors.
 - Do not label invoice settlement assertions as bank-confirmed.
+- Do not mount private GraphRAG routes in a browser-facing service; use `scripts/serve_public_api.py` and an explicit non-wildcard CORS allowlist.
+
+### 2026-08-20 — Isolate the public GraphRAG boundary
+
+- Decision: The public API is a separate process from authenticated private GraphRAG. It may return a synthetic mirror or aggregate Neo4j topology, but it never mounts private retrieval or answer routes.
+- Rationale: A browser deployment must not acquire private-model credentials, source records, canonical graph properties, or an authenticated path merely to render the public demonstration.
+- Alternatives rejected: Running the shared private launcher for public traffic; redacting individual canonical nodes in the browser; wildcard CORS; returning a plausible answer for arbitrary public questions.
+- Files/contracts affected: `src/lunarbit/api.py`, `src/lunarbit/public_projection.py`, `scripts/serve_public_api.py`, and the Nexus Insight FastAPI adapter.
+- Validation performed: Public payload validation, route-absence tests, deterministic verified/abstained showcase tests, projection-query inspection, bounded-cache expiry tests, 180 committed Python tests, and a local public-service smoke check.
+- Revisit trigger: A manually privacy-reviewed public fixture or a new aggregate class needs exposure; extend the allowlisted public contract first and add a leakage regression before serving it.
 
 ## Open questions
 

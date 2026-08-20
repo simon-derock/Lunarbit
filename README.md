@@ -106,7 +106,7 @@ The retained Next.js synthetic workspace has two profile dimensions that remain 
 - **a governed query console** replays reviewed questions through visible route/retrieve/expand/verify stages and abstains before traversal for requests outside the public projection;
 - selections persist locally and in shareable query parameters, producing 20 valid data/render combinations from the same governed interface contract.
 
-All currently rendered records are explicit synthetic mirrors. Private source text, personal identifiers, document bytes, and credentials never enter the web bundle.
+The commerce instances in public answer traces are explicit synthetic mirrors. When the aggregate projection is configured, the topology contains only class and relationship counts—not individual graph records. Private source text, personal identifiers, document bytes, and credentials never enter the web bundle.
 
 ## What the finished system will demonstrate
 
