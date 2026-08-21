@@ -10,7 +10,13 @@ from pydantic import Field
 from starlette.responses import Response
 
 from lunarbit.agent import build_query_plan
-from lunarbit.guardrails import InMemoryRateLimiter, RateLimitDecision
+from lunarbit.guardrails import (
+    InMemoryRateLimiter,
+    QuestionGuardrailError,
+    RateLimitDecision,
+    validate_slot_text,
+    validate_user_question,
+)
 from lunarbit.models import ContractModel
 from lunarbit.public import (
     PublicMetric,
@@ -77,12 +83,18 @@ class PrivateAnswerRequest(ContractModel):
     slots: QuerySlots
 
 
+type RuntimeCitationId = Annotated[
+    str,
+    Field(pattern=r"^(?:runtime:)?citation:[1-9][0-9]*$"),
+]
+
+
 class PrivateGroundedAnswer(ContractModel):
     status: str
     direct_answer: str | None
     calculation: str | None = Field(default=None, max_length=2_000)
     fact_count: int = Field(ge=0)
-    citation_ids: tuple[str, ...]
+    citation_ids: tuple[RuntimeCitationId, ...]
     verification_status: str
     limitations: tuple[str, ...]
     abstention_reason: str | None
@@ -293,6 +305,26 @@ def create_app(
                 },
             )
 
+    def enforce_question_guardrail(question: str) -> str:
+        try:
+            return validate_user_question(question)
+        except QuestionGuardrailError as error:
+            raise HTTPException(
+                status_code=400,
+                detail="question rejected by input guardrail",
+            ) from error
+
+    def enforce_slot_guardrail(slots: QuerySlots) -> None:
+        try:
+            for value in slots.model_dump(mode="python").values():
+                if isinstance(value, str):
+                    validate_slot_text(value)
+        except QuestionGuardrailError as error:
+            raise HTTPException(
+                status_code=400,
+                detail="slot rejected by input guardrail",
+            ) from error
+
     def authorize_private(authorization: str | None) -> None:
         prefix = "Bearer "
         if authorization is None or not authorization.startswith(prefix):
@@ -329,7 +361,8 @@ def create_app(
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)
     def query_plan(request: QueryPlanRequest, http_request: Request) -> PublicQueryPlan:
         enforce_rate_limit(http_request, public_limiter)
-        response = _public_query_plan(request.question)
+        question = enforce_question_guardrail(request.question)
+        response = _public_query_plan(question)
         assert_public_payload(response.model_dump(mode="json"))
         return response
 
@@ -340,8 +373,9 @@ def create_app(
     ) -> PublicShowcaseAnswer:
         """Return a reviewed synthetic answer or abstain without invoking private retrieval."""
         enforce_rate_limit(http_request, public_limiter)
-        plan = _public_query_plan(request.question)
-        answer_key = _showcase_answer_key(request.question)
+        question = enforce_question_guardrail(request.question)
+        plan = _public_query_plan(question)
+        answer_key = _showcase_answer_key(question)
         if answer_key is None:
             response = PublicShowcaseAnswer(
                 status="abstained",
@@ -394,7 +428,8 @@ def create_app(
             if private_backend is None or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private retrieval is not configured")
             authorize_private(authorization)
-            return private_backend.retrieve(request.question)
+            question = enforce_question_guardrail(request.question)
+            return private_backend.retrieve(question)
 
         @app.post("/v1/private/answer", response_model=PrivateGroundedAnswer)
         def private_answer(
@@ -406,8 +441,10 @@ def create_app(
             if private_answer_backend is None or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private answer is not configured")
             authorize_private(authorization)
+            question = enforce_question_guardrail(request.question)
+            enforce_slot_guardrail(request.slots)
             return private_answer_backend.answer(
-                RuntimeRequest(question=request.question, slots=request.slots)
+                RuntimeRequest(question=question, slots=request.slots)
             )
 
     return app
