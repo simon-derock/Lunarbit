@@ -42,6 +42,11 @@ an unprivileged container user.
   Neo4j read sessions and returns classes, relationship types, and counts only.
 - Configure the Nexus Insight build with
   `VITE_API_BASE_URL=https://your-public-api.example`.
+- The API applies process-local limits of 60 public requests/minute and 30
+  private requests/minute per client address. A rejected request returns `429`
+  with `Retry-After`; use a shared edge limiter when running multiple replicas.
+- API responses are not cacheable and include `nosniff`, `no-referrer`, and a
+  restrictive `Permissions-Policy` header.
 
 ## Release checks
 

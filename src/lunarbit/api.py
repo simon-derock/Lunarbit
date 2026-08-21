@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from secrets import compare_digest
 from typing import Annotated, Literal, Protocol
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field
+from starlette.responses import Response
 
 from lunarbit.agent import build_query_plan
+from lunarbit.guardrails import InMemoryRateLimiter, RateLimitDecision
 from lunarbit.models import ContractModel
 from lunarbit.public import (
     PublicMetric,
@@ -32,11 +34,17 @@ def parse_public_origins(value: str | None) -> tuple[str, ...]:
     if value is None:
         return DEFAULT_PUBLIC_ORIGINS
     origins = tuple(origin.strip() for origin in value.split(",") if origin.strip())
-    if not origins:
+    return validate_public_origins(origins)
+
+
+def validate_public_origins(origins: Sequence[str]) -> tuple[str, ...]:
+    """Validate CORS at the app boundary, not only in the launcher."""
+    normalized = tuple(origin.strip() for origin in origins if origin.strip())
+    if not normalized:
         raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS must contain at least one origin")
-    if "*" in origins:
+    if "*" in normalized:
         raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS cannot contain a wildcard")
-    return origins
+    return normalized
 
 
 class HealthResponse(ContractModel):
@@ -239,7 +247,10 @@ def create_app(
     private_answer_backend: PrivateAnswerBackend | None = None,
     private_api_token: str | None = None,
     include_private_routes: bool = True,
+    public_rate_limiter: InMemoryRateLimiter | None = None,
+    private_rate_limiter: InMemoryRateLimiter | None = None,
 ) -> FastAPI:
+    cors_origins = validate_public_origins(allowed_origins)
     public_snapshot = snapshot or _default_snapshot()
     assert_public_payload(public_snapshot.model_dump(mode="json"))
     app = FastAPI(
@@ -249,11 +260,38 @@ def create_app(
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(allowed_origins),
+        allow_origins=list(cors_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type", "Authorization"],
     )
+    public_limiter = public_rate_limiter or InMemoryRateLimiter(limit=60, window_seconds=60)
+    private_limiter = private_rate_limiter or InMemoryRateLimiter(limit=30, window_seconds=60)
+
+    @app.middleware("http")
+    async def security_headers(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
+    def enforce_rate_limit(request: Request, limiter: InMemoryRateLimiter) -> None:
+        client_host = request.client.host if request.client is not None else "unknown"
+        decision: RateLimitDecision = limiter.allow(client_host)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="request rate limit exceeded",
+                headers={
+                    "Retry-After": str(decision.retry_after_seconds),
+                    "Cache-Control": "no-store",
+                },
+            )
 
     def authorize_private(authorization: str | None) -> None:
         prefix = "Bearer "
@@ -276,7 +314,8 @@ def create_app(
         return HealthResponse()
 
     @app.get("/v1/public/snapshot", response_model=PublicSnapshot)
-    def public_snapshot_endpoint() -> PublicSnapshot:
+    def public_snapshot_endpoint(request: Request) -> PublicSnapshot:
+        enforce_rate_limit(request, public_limiter)
         if public_snapshot_source is None:
             return public_snapshot
         try:
@@ -288,14 +327,19 @@ def create_app(
         return projected
 
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)
-    def query_plan(request: QueryPlanRequest) -> PublicQueryPlan:
+    def query_plan(request: QueryPlanRequest, http_request: Request) -> PublicQueryPlan:
+        enforce_rate_limit(http_request, public_limiter)
         response = _public_query_plan(request.question)
         assert_public_payload(response.model_dump(mode="json"))
         return response
 
     @app.post("/v1/public/showcase-answer", response_model=PublicShowcaseAnswer)
-    def public_showcase_answer(request: QueryPlanRequest) -> PublicShowcaseAnswer:
+    def public_showcase_answer(
+        request: QueryPlanRequest,
+        http_request: Request,
+    ) -> PublicShowcaseAnswer:
         """Return a reviewed synthetic answer or abstain without invoking private retrieval."""
+        enforce_rate_limit(http_request, public_limiter)
         plan = _public_query_plan(request.question)
         answer_key = _showcase_answer_key(request.question)
         if answer_key is None:
@@ -330,7 +374,8 @@ def create_app(
         return response
 
     @app.get("/v1/demo/answers/{answer_key}", response_model=PublicDemoAnswer)
-    def demo_answer(answer_key: str) -> PublicDemoAnswer:
+    def demo_answer(answer_key: str, request: Request) -> PublicDemoAnswer:
+        enforce_rate_limit(request, public_limiter)
         answer = _DEMO_ANSWERS.get(answer_key)
         if answer is None:
             raise HTTPException(status_code=404, detail="demo answer not found")
@@ -342,8 +387,10 @@ def create_app(
         @app.post("/v1/private/retrieval", response_model=PrivateRetrievalTrace)
         def private_retrieval(
             request: QueryPlanRequest,
+            http_request: Request,
             authorization: Annotated[str | None, Header()] = None,
         ) -> PrivateRetrievalTrace:
+            enforce_rate_limit(http_request, private_limiter)
             if private_backend is None or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private retrieval is not configured")
             authorize_private(authorization)
@@ -352,8 +399,10 @@ def create_app(
         @app.post("/v1/private/answer", response_model=PrivateGroundedAnswer)
         def private_answer(
             request: PrivateAnswerRequest,
+            http_request: Request,
             authorization: Annotated[str | None, Header()] = None,
         ) -> PrivateGroundedAnswer:
+            enforce_rate_limit(http_request, private_limiter)
             if private_answer_backend is None or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private answer is not configured")
             authorize_private(authorization)
