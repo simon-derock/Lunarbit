@@ -2,12 +2,12 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-20
+- Last updated: 2026-08-21
 - Active phase: The local backend is complete through canonical-oracle evaluation. Nexus Insight is live-wired to the privacy-safe public FastAPI contract; remaining gates are public privacy review and cloud deployment.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `101ce5a` (`perf(public): cache safe aggregate graph projections`), pushed to `main`.
-- Last passing checks: 180 committed Python tests, Ruff lint, strict MyPy, Nexus Insight ESLint (six inherited fast-refresh warnings only), and a production Nexus Insight build. The public-only service was smoke-tested with `200` health/showcase responses and absent private routes.
+- Last verified implementation commit: `a9c3c8f` (`ci(repo): enforce public release boundaries`), pushed to `main`.
+- Last passing checks: 184 committed Python tests, Ruff lint, strict MyPy across 36 modules, repository hygiene, Nexus Insight ESLint (six inherited fast-refresh warnings only), and a production Nexus Insight build. The public-only service and release audit passed with `200` health/showcase responses and absent private routes.
 
 ## Current state
 
@@ -83,6 +83,7 @@
   - Added a bounded public showcase-answer endpoint: reviewed synthetic scenarios return a deterministic calculation, graph path, and public evidence card; all other prompts explicitly abstain.
   - Added a public-only FastAPI launcher that omits private GraphRAG routes, requires an explicit non-wildcard CORS allowlist, works with a synthetic fallback, and can attach to the aggregate Neo4j projection with read-only queries.
   - Added a thread-safe 15-second cache around the already-safe aggregate projection to prevent concurrent public requests from multiplying Neo4j count queries.
+  - Added repository hygiene contracts and GitHub Actions CI covering Python tests, strict typing, Nexus Insight build, public-container audit, and private-artifact exclusion on pull requests and pushes to `main`.
 - In progress: Public privacy review and cloud deployment preparation. The current public UI consumes only the reviewed FastAPI contract.
 - Pending external input: Public deployment target, Aura read-only credentials, and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
