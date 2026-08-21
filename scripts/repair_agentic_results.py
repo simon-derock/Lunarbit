@@ -86,9 +86,7 @@ def main() -> int:
             {
                 "restored_fact_candidates": report.restored_fact_candidates,
                 "restored_entity_candidates": report.restored_entity_candidates,
-                "removed_unsupported_fact_candidates": (
-                    report.removed_unsupported_fact_candidates
-                ),
+                "removed_unsupported_fact_candidates": (report.removed_unsupported_fact_candidates),
                 "removed_unsupported_entity_candidates": (
                     report.removed_unsupported_entity_candidates
                 ),
@@ -122,8 +120,7 @@ def main() -> int:
         written_paths.append(write_agentic_result(repaired, output_root))
 
     retry_content = "".join(
-        f"{json.dumps(record, sort_keys=True, separators=(',', ':'))}\n"
-        for record in retry_records
+        f"{json.dumps(record, sort_keys=True, separators=(',', ':'))}\n" for record in retry_records
     )
     _atomic_private_write(output_root / "_llm_retry.jsonl", retry_content.encode())
     manifest = {

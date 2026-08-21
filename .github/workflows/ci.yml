@@ -1,0 +1,74 @@
+name: Lunarbit CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lunarbit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.22"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --extra dev --extra api --extra graph
+      - run: uv run ruff format --check src scripts tests
+      - run: uv run ruff check src scripts tests
+      - run: uv run mypy --strict src
+      - run: uv run pytest -q
+      - run: uv run python scripts/verify_repository_hygiene.py
+
+  nexus:
+    name: Nexus Insight build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: visualization/Nexus Insight
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: visualization/Nexus Insight/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  public-container:
+    name: Public container boundary
+    needs: python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.22"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --extra api --extra graph
+      - run: docker build --file Dockerfile.public --tag lunarbit-public-api:ci .
+      - run: docker run --detach --rm --name lunarbit-public-api --publish 127.0.0.1:8012:8000 lunarbit-public-api:ci
+      - name: Audit the browser-facing boundary
+        run: |
+          for attempt in {1..20}; do
+            if uv run python scripts/verify_public_release.py --api-url http://127.0.0.1:8012 --origin http://127.0.0.1:5173; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - if: always()
+        run: docker stop lunarbit-public-api || true

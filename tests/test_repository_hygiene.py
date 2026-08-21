@@ -10,15 +10,18 @@ from lunarbit.repository_hygiene import (
 
 
 def test_repository_hygiene_allows_only_reviewed_data_entrypoints() -> None:
-    assert prohibited_tracked_paths(
-        (
-            "README.md",
-            "MEMORY.md",
-            ".env.example",
-            "data/public/README.md",
-            "data/evals/README.md",
+    assert (
+        prohibited_tracked_paths(
+            (
+                "README.md",
+                "MEMORY.md",
+                ".env.example",
+                "data/public/README.md",
+                "data/evals/README.md",
+            )
         )
-    ) == ()
+        == ()
+    )
 
 
 def test_repository_hygiene_rejects_private_artifacts_and_configuration() -> None:

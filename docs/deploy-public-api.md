@@ -73,3 +73,7 @@ uv run python scripts/verify_public_release.py \
 It checks the documented route surface, exact CORS origin, public-payload
 validator, reviewed showcase trace, and absence of private retrieval routes. It
 does not print API response bodies.
+
+The same audit, public container build, repository-hygiene check, Python suite,
+and Nexus Insight build run in [the GitHub Actions workflow](../.github/workflows/ci.yml)
+for every pull request and push to `main`.
