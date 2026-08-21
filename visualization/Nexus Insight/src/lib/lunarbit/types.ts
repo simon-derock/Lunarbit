@@ -60,6 +60,7 @@ export interface EvidenceCard {
 }
 
 export interface Snapshot {
+  projection_mode: string;
   metrics: Metric[];
   graph_nodes: GraphNode[];
   graph_edges: GraphEdge[];

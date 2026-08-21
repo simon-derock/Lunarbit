@@ -168,6 +168,7 @@ function normalizeSnapshot(payload: PublicSnapshotDto): Snapshot {
     }));
 
   return {
+    projection_mode: payload.mode,
     metrics,
     graph_nodes,
     graph_edges,

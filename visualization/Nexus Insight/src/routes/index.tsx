@@ -51,6 +51,12 @@ function Console() {
   const theme = THEMES.find((t) => t.id === themeId)!;
   const profile = GRAPH_PROFILES.find((p) => p.id === profileId)!;
   const viz = VIZ_PROFILES.find((v) => v.id === vizId)!;
+  const isAggregateProjection = snapshot?.projection_mode === "neo4j_aggregate_projection";
+  const projectionLabel = isAggregateProjection
+    ? "neo4j aggregate live"
+    : snapshot
+      ? "synthetic mirror"
+      : "connecting";
 
   const availableRelationships = useMemo(() => {
     if (profile.id !== "full") return profile.relationships;
@@ -148,14 +154,14 @@ function Console() {
         <div className="pointer-events-auto flex flex-wrap items-start justify-end gap-2">
           <div className="panel hidden items-center gap-2 px-3 py-2 md:flex">
             <span
-              className={`size-1.5 rounded-full ${snapshot ? "bg-emerald-300" : "bg-amber-300"}`}
+              className={`size-1.5 rounded-full ${isAggregateProjection ? "bg-emerald-300" : "bg-amber-300"}`}
               style={{
-                boxShadow: snapshot
+                boxShadow: isAggregateProjection
                   ? "0 0 12px rgba(110,255,190,.9)"
                   : "0 0 12px rgba(255,200,100,.8)",
               }}
             />
-            <span className="label-mono">{snapshot ? "api projection live" : "connecting"}</span>
+            <span className="label-mono">{projectionLabel}</span>
           </div>
           <PresetMenu
             eyebrow="graph profile"
