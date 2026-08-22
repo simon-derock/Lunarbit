@@ -36,37 +36,17 @@ The runtime uses governed templates, exact identifiers, Lucene/BM25, dense retri
 ## Evidence to graph to answer
 
 ```mermaid
-flowchart LR
-    A["Private evidence"] --> B["Deterministic extraction"]
-    B --> C["Evidence bundles"]
-    C --> D["Rich chunks"]
-    D --> E["Bounded enrichment"]
-    E --> F["Validation and quarantine"]
-    F --> G["Resolution and finance"]
-    G --> H["Temporal events"]
-    H --> I["Neo4j graph"]
-    I --> J["Exact BM25 HNSW graph retrieval"]
-    J --> K["RRF reranking verification"]
-    K --> L["FastAPI answer contract"]
-    L --> M["Privacy-safe public projection"]
+flowchart TB
+    A["Evidence foundation<br/>PDFs, mailboxes, layout-aware extraction"]
+    B["Semantic corpus<br/>order bundles, rich chunks, agentic enrichment"]
+    C["Canonical truth<br/>validation, reversible resolution, Decimal finance"]
+    D["Temporal knowledge graph<br/>events, Neo4j, evidence relationships"]
+    E["Governed GraphRAG<br/>exact, BM25, HNSW, RRF, reranking, verification"]
+    F["Product boundary<br/>FastAPI, privacy-safe projection, Nexus Insight"]
+    A --> B --> C --> D --> E --> F
 ```
 
-If a Markdown host does not render Mermaid, this equivalent text map remains readable:
-
-```text
-private evidence
-  -> deterministic extraction
-  -> order bundles and rich chunks
-  -> bounded agentic enrichment
-  -> typed validation / quarantine
-  -> reversible resolution + deterministic finance
-  -> temporal financial events
-  -> Neo4j graph
-  -> exact + BM25 + HNSW + graph retrieval
-  -> RRF + reranking + verification
-  -> FastAPI answer contract
-  -> privacy-safe public projection
-```
+The complete stage contracts, graph ontology, and acceptance gates are specified in [`PLAN.md`](PLAN.md).
 
 ### The graph model
 
