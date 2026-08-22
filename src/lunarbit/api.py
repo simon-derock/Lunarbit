@@ -3,14 +3,30 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from secrets import compare_digest
 from time import monotonic
-from typing import Annotated, Literal, Protocol
+from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import Field
 from starlette.responses import Response
 
 from lunarbit.agent import build_query_plan
+from lunarbit.api_contracts import (
+    API_VERSION,
+    HealthResponse,
+    PrivateAnswerBackend,
+    PrivateAnswerRequest,
+    PrivateChatRequest,
+    PrivateChatResponse,
+    PrivateGroundedAnswer,
+    PrivateRetrievalBackend,
+    PrivateRetrievalTrace,
+    PublicDemoAnswer,
+    PublicEvidenceCard,
+    PublicQueryPlan,
+    PublicShowcaseAnswer,
+    PublicSnapshotSource,
+    QueryPlanRequest,
+)
 from lunarbit.conversation import (
     ConversationStore,
     SessionNotFoundError,
@@ -24,7 +40,6 @@ from lunarbit.guardrails import (
     validate_slot_text,
     validate_user_question,
 )
-from lunarbit.models import ContractModel
 from lunarbit.observability import InMemoryTraceSink, TraceSink, elapsed_milliseconds, new_trace_id
 from lunarbit.public import (
     PublicMetric,
@@ -35,7 +50,14 @@ from lunarbit.public import (
 from lunarbit.public_projection import PublicProjectionUnavailable
 from lunarbit.runtime import QuerySlots, RuntimeRequest
 
-API_VERSION = "1.0.0"
+__all__ = [
+    "PrivateGroundedAnswer",
+    "PrivateRetrievalTrace",
+    "create_app",
+    "parse_public_origins",
+    "validate_public_origins",
+]
+
 DEFAULT_PUBLIC_ORIGINS = (
     "http://localhost:3000",
     "http://localhost:5173",
@@ -59,124 +81,6 @@ def validate_public_origins(origins: Sequence[str]) -> tuple[str, ...]:
     if "*" in normalized:
         raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS cannot contain a wildcard")
     return normalized
-
-
-class HealthResponse(ContractModel):
-    status: str = "ok"
-    service: str = "lunarbit-api"
-    version: str = API_VERSION
-
-
-class QueryPlanRequest(ContractModel):
-    question: str = Field(min_length=3, max_length=500)
-
-
-class PrivateRetrievalTrace(ContractModel):
-    status: str
-    dense_candidates: int = Field(ge=0)
-    lexical_candidates: int = Field(ge=0)
-    evidence_count: int = Field(ge=0)
-    citation_count: int = Field(ge=0)
-    reranking_status: str | None
-    verification_status: str
-    degradations: tuple[str, ...]
-
-
-class PrivateRetrievalBackend(Protocol):
-    def retrieve(self, question: str) -> PrivateRetrievalTrace: ...
-
-
-class PrivateAnswerRequest(ContractModel):
-    question: str = Field(min_length=3, max_length=500)
-    slots: QuerySlots
-
-
-type ConversationSessionId = Annotated[
-    str,
-    Field(pattern=r"^session:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
-]
-
-
-class PrivateChatRequest(ContractModel):
-    session_id: ConversationSessionId | None = None
-    question: str = Field(min_length=3, max_length=500)
-    slots: QuerySlots | None = None
-
-
-type RuntimeCitationId = Annotated[
-    str,
-    Field(pattern=r"^(?:runtime:)?citation:[1-9][0-9]*$"),
-]
-
-
-class PrivateGroundedAnswer(ContractModel):
-    status: str
-    direct_answer: str | None
-    calculation: str | None = Field(default=None, max_length=2_000)
-    fact_count: int = Field(ge=0)
-    citation_ids: tuple[RuntimeCitationId, ...]
-    verification_status: str
-    limitations: tuple[str, ...]
-    abstention_reason: str | None
-
-
-class PrivateChatResponse(ContractModel):
-    session_id: ConversationSessionId
-    turn_index: int = Field(ge=1)
-    context_reused: bool
-    answer: PrivateGroundedAnswer
-
-
-class PrivateAnswerBackend(Protocol):
-    def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer: ...
-
-
-class PublicSnapshotSource(Protocol):
-    """Produce a browser-safe snapshot without exposing canonical graph records."""
-
-    def snapshot(self) -> PublicSnapshot: ...
-
-
-class PublicQueryPlan(ContractModel):
-    intent: str
-    selected_tools: tuple[str, ...]
-    actions: tuple[str, ...]
-    action_budget: int
-    maximum_depth: int
-    candidate_paths_per_step: int
-    verification_required: bool = True
-
-
-class PublicEvidenceCard(ContractModel):
-    id: str = Field(pattern=r"^pub:evidence:[a-z0-9-]+$")
-    title: str
-    authority: str
-    truth_scope: str
-    disclosure: str
-
-
-class PublicDemoAnswer(ContractModel):
-    status: str = "verified"
-    direct_answer: str
-    calculation: str
-    confidence_scope: str
-    graph_path: tuple[str, ...] = Field(min_length=1)
-    evidence: tuple[PublicEvidenceCard, ...] = Field(min_length=1)
-    limitations: tuple[str, ...]
-
-
-class PublicShowcaseAnswer(ContractModel):
-    """A bounded, public-only answer for one reviewed synthetic scenario.
-
-    This intentionally is not a general-purpose answer surface.  It keeps the
-    public demonstration honest: a question either maps to a reviewed scenario
-    with a deterministic calculation and evidence path, or it abstains.
-    """
-
-    status: Literal["verified", "abstained"]
-    plan: PublicQueryPlan
-    answer: PublicDemoAnswer | None = None
-    limitations: tuple[str, ...]
 
 
 _DEMO_ANSWERS: dict[str, PublicDemoAnswer] = {

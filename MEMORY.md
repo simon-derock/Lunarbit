@@ -175,7 +175,24 @@
   - Canonical-oracle answer cases: 24
   - Answer status, exact answer, exact calculation, fact-count, citation-support, and abstention accuracy: 100%
   - Governed-answer local latency: P50 15.87 ms, P95 256.19 ms
-  - Passing automated tests: 170
+  - Passing automated tests: 231 committed tests; the untracked `tests/test_mistral_runner.py` is excluded from the committed TDD gate.
+
+## Compact agent transfer prompt
+
+```xml
+<lunarbit_handoff>
+  <repo path="/home/simon/Lunarbit" branch="main" remote="https://github.com/simon-derock/Lunarbit.git" />
+  <mission>Maintain Lunarbit as a privacy-safe, evidence-verifiable personal commerce GraphRAG and financial-intelligence engine.</mission>
+  <truth>Deterministic code owns extraction, IDs, money, graph truth, privacy, validation, retrieval budgets, and abstention; LLMs propose only.</truth>
+  <corpus orders="454" evidence_chunks="24675" money_components="5199" graph_nodes="53983" graph_relationships="85607" />
+  <backend>FastAPI contracts and guarded private chat/answer/retrieval routes; Neo4j read-only governed traversal; exact+BM25+dense+RRF+graph retrieval; citation verification; bounded sessions and privacy-safe traces.</backend>
+  <frontend>Nexus Insight consumes only the public-safe FastAPI projection; never expose private Neo4j records, source text, IDs, or credentials.</frontend>
+  <state>Canonical archives and private artifacts are ignored, local, mode 0600. Do not commit PDFs, mail, secrets, .env, memory files containing private data, or multi-key LLM runners.</state>
+  <verification>Run: UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q --ignore=tests/test_mistral_runner.py. Expected: clean gates and 231 committed tests.</verification>
+  <workflow>Inspect git status and MEMORY.md first; preserve unrelated dirty files; use TDD red/green commits; stage only reviewed files; keep main synchronized with origin/main; use professional human commit messages.</workflow>
+  <next>Finish/review the API contract isolation, then public privacy review and cloud deployment preparation. Ask the user before frontend visual changes or external deployment.</next>
+</lunarbit_handoff>
+```
 
 ## Next actions — ordered
 
