@@ -5,7 +5,7 @@
 > **Reconstructing six years of food commerce into an auditable personal economic-intelligence graph.**
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/backend%20tests-217%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/backend%20tests-231%20passing-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/private%20corpus-never%20committed-6f42c1)](#privacy-by-design)
@@ -166,7 +166,7 @@ This makes questions such as “why did spending rise?” executable rather than
 - private embeddings, source text, personal identifiers, credentials, and raw invoices stay server-side;
 - the visual system supports isolated synthetic commerce profiles and independent visual profiles without crossing data boundaries.
 
-The authenticated private API provides typed retrieval and evidence-grounded answers through `/v1/private/retrieval` and `/v1/private/answer`. Public planning and reviewed demonstrations are available through `/v1/query/plan` and `/v1/public/showcase-answer`.
+The authenticated private API provides typed retrieval, evidence-grounded answers, and bounded follow-up context through `/v1/private/retrieval`, `/v1/private/answer`, and `/v1/private/chat`. Public planning and reviewed demonstrations are available through `/v1/query/plan` and `/v1/public/showcase-answer`.
 
 ## Privacy by design
 
@@ -185,6 +185,7 @@ The public repository is intentionally not a copy of the personal archive:
 - strict Pydantic contracts, content-addressed IDs, source hashes, and atomic archives protect provenance;
 - input guardrails reject prompt/secret extraction, control-character obfuscation, arbitrary Cypher/SQL/tool commands, and explicit off-scope model use without blocking ordinary food questions;
 - bearer-protected private routes, rate limiting, security headers, non-wildcard CORS, and public/private process separation are enforced at the API boundary;
+- private chat state is process-local, TTL-bound, turn-limited, and stores only normalized question/slot context plus answer status; operational traces retain scalar metadata only;
 - public identifiers are aliases, not platform order IDs or invoice numbers;
 - no private PDFs, mailboxes, processed JSON, provider responses, API keys, or `.env` files are committed.
 

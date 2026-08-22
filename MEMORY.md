@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-08-22
-- Active phase: The local backend is complete through canonical-oracle evaluation and runtime safety hardening. Nexus Insight is live-wired to the privacy-safe public FastAPI contract; remaining gates are public privacy review and cloud deployment.
+- Active phase: The local backend is complete through canonical-oracle evaluation, runtime safety hardening, bounded private conversation state, and privacy-safe operational tracing. Nexus Insight is live-wired to the privacy-safe public FastAPI contract; remaining gates are public privacy review and cloud deployment.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `0088e4d` (`feat(api): broaden precise input guardrails`), pushed to `main`.
-- Last passing checks: 217 committed Python tests, Ruff lint, strict MyPy across 37 modules, repository hygiene, Nexus Insight ESLint (six inherited fast-refresh warnings only), and a production Nexus Insight build. The public-only service and release audit passed with `200` health/showcase responses and absent private routes.
+- Last verified implementation commit: `14848f3` (`feat(api): add bounded private conversation runtime`), pushed to `main`.
+- Last passing checks: 231 committed Python tests, Ruff lint, strict MyPy across 39 modules, repository hygiene, Nexus Insight ESLint (six inherited fast-refresh warnings only), and a production Nexus Insight build. The public-only service and release audit passed with `200` health/showcase responses and absent private routes.
 
 ## Current state
 
@@ -86,6 +86,8 @@
   - Added repository hygiene contracts and GitHub Actions CI covering Python tests, strict typing, Nexus Insight build, public-container audit, and private-artifact exclusion on pull requests and pushes to `main`.
   - Corrected Nexus Insight status disclosure so synthetic fallback and live aggregate Neo4j projection are visibly distinct.
   - Added deterministic question and slot guardrails that normalize Unicode, reject control/format obfuscation, prompt/secret extraction, arbitrary Cypher/SQL/tool commands, and explicit off-scope model-use tasks while regression-testing ordinary food-commerce phrasing.
+  - Added a private `/v1/private/chat` contract with TTL-bound process-local sessions, bounded follow-up context, explicit slot carry-forward, high-confidence platform/fee inference, safe missing-scope abstention, and generic expired-session handling.
+  - Added generated request correlation IDs and a bounded privacy-safe trace sink for routing, retrieval, verification, abstention, latency, and chat-turn metadata; trace attributes cannot contain raw questions, answers, evidence, secrets, or Cypher.
 - In progress: Public privacy review and cloud deployment preparation. The current public UI consumes only the reviewed FastAPI contract.
 - Pending external input: Public deployment target, Aura read-only credentials, and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
