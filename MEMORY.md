@@ -179,18 +179,54 @@
 
 ## Compact agent transfer prompt
 
+Copy the XML below as initialization context when handing Lunarbit to another coding agent.
+
 ```xml
-<lunarbit_handoff>
-  <repo path="/home/simon/Lunarbit" branch="main" remote="https://github.com/simon-derock/Lunarbit.git" />
-  <mission>Maintain Lunarbit as a privacy-safe, evidence-verifiable personal commerce GraphRAG and financial-intelligence engine.</mission>
-  <truth>Deterministic code owns extraction, IDs, money, graph truth, privacy, validation, retrieval budgets, and abstention; LLMs propose only.</truth>
-  <corpus orders="454" evidence_chunks="24675" money_components="5199" graph_nodes="53983" graph_relationships="85607" />
-  <backend>FastAPI contracts and guarded private chat/answer/retrieval routes; Neo4j read-only governed traversal; exact+BM25+dense+RRF+graph retrieval; citation verification; bounded sessions and privacy-safe traces.</backend>
-  <frontend>Nexus Insight consumes only the public-safe FastAPI projection; never expose private Neo4j records, source text, IDs, or credentials.</frontend>
-  <state>Canonical archives and private artifacts are ignored, local, mode 0600. Do not commit PDFs, mail, secrets, .env, memory files containing private data, or multi-key LLM runners.</state>
-  <verification>Run: UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q --ignore=tests/test_mistral_runner.py. Expected: clean gates and 231 committed tests.</verification>
-  <workflow>Inspect git status and MEMORY.md first; preserve unrelated dirty files; use TDD red/green commits; stage only reviewed files; keep main synchronized with origin/main; use professional human commit messages.</workflow>
-  <next>Finish/review the API contract isolation, then public privacy review and cloud deployment preparation. Ask the user before frontend visual changes or external deployment.</next>
+<lunarbit_handoff version="2" updated="2026-08-22">
+  <identity>
+    <repo path="/home/simon/Lunarbit" remote="https://github.com/simon-derock/Lunarbit.git" branch="main" />
+    <mission>Build a user-owned, privacy-safe, evidence-verifiable personal-commerce GraphRAG and financial-intelligence product from six years of food-order records.</mission>
+    <positioning>Cross-platform order reconstruction, temporal economic graph, deterministic finance, source citations, guarded GraphRAG, and public-safe visualization in one system; do not describe it as a generic PDF chatbot or universal fintech platform.</positioning>
+  </identity>
+  <operating_rules>
+    <truth>Deterministic code owns IDs, extraction, normalization, money, reconciliation, graph truth, privacy, retrieval budgets, validation, and abstention. LLMs propose semantic regions and hypotheses only.</truth>
+    <privacy>Private PDFs, mail, raw evidence, processed archives, credentials, .env files, API keys, and private identifiers never enter Git or the browser. Private artifacts remain ignored and mode 0600.</privacy>
+    <scope>Food commerce and personal economic intelligence: orders, merchants, items, fees, taxes, discounts, memberships, delivery mentions, temporal events, price indices, decomposition, anomalies, elasticity, counterfactuals, and evidence-backed findings.</scope>
+    <safety>Use allowlisted parameterized read-only Cypher, bounded traversal/pagination/sessions, guardrails, citation verification, and explicit abstention. Never generate arbitrary Cypher, leak prompts/secrets, or answer unsupported questions.</safety>
+  </operating_rules>
+  <corpus orders="454" source_emails="456" unique_pdfs="763" pages="857" evidence_chunks="24675" money_components="5199" financial_chunks="11368" graph_nodes="53983" graph_relationships="85607" />
+  <pipeline>
+    <stage name="extract">data/ source messages and PDFs -&gt; deterministic text/layout/tables/images, roles, manifests, mail-only evidence, quarantine.</stage>
+    <stage name="chunk">UUID5 evidence chunks preserve source regions, coordinates, raw/normalized/summary/embedding text, facts, entities, money, graph candidates, confidence, and query families.</stage>
+    <stage name="agentic">Medium bounded batches, sequential/rate-governed calls, rich semantic regions and relations; validate exact bundle/source/money coverage; quarantine malformed output; never let model IDs become canonical.</stage>
+    <stage name="resolve">Deterministic order/entity/product resolution and scoped financial reconciliation; preserve conflicts, duplicate evidence, provisional records, and reversible decisions.</stage>
+    <stage name="graph">Canonical temporal Neo4j graph: Profile, Platform, Merchant, Outlet, Order, Item, Money, FinancialEvent, EvidenceCell, Document, Message, EntityMention, Finding, ResearchWindow and typed relationships with provenance.</stage>
+    <stage name="retrieve">Exact + BM25/full-text + dense Cohere/MRL + HNSW + RRF + graph expansion; compressed ANN is not truth; full vectors and evidence citations remain authoritative. RaBitQ is an adapter capability, not a semantic change.</stage>
+    <stage name="answer">FastAPI governed runtime verifies citations and deterministic calculations, carries bounded conversation state, records privacy-safe traces, and abstains on unsupported or incomplete evidence.</stage>
+  </pipeline>
+  <interfaces>
+    <private>FastAPI /v1/private/query-plan, /retrieval, /answer, and /chat; private runtime may read Neo4j but returns no raw source text.</private>
+    <public>Public FastAPI exposes aggregate topology, reviewed synthetic showcase answers, health, and safe metrics only. Nexus Insight talks to this contract, never directly to Neo4j.</public>
+    <contracts>src/lunarbit/api_contracts.py contains Pydantic response/request contracts and protocols; src/lunarbit/api.py contains route orchestration.</contracts>
+  </interfaces>
+  <verification>
+    <commands>UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q --ignore=tests/test_mistral_runner.py</commands>
+    <expected>Ruff clean, strict MyPy clean, 231 committed tests passing. The untracked mistral runner test is not part of the committed gate.</expected>
+    <review>Run git diff --check, inspect staged diff, and confirm no private paths or credentials before every commit.</review>
+  </verification>
+  <git>
+    <start>git status --short --branch; git log -5 --oneline; read MEMORY.md and PLAN.md before editing.</start>
+    <discipline>Work on main unless the user explicitly requests another branch. Preserve unrelated dirty files. Never reset, checkout, clean, or delete user data. Use apply_patch for edits.</discipline>
+    <tdd>For behavior changes, add a focused failing test, implement the smallest fix, run the focused test, then run the full gates. Keep red/green progression visible in commits when practical.</tdd>
+    <stage>Stage explicit reviewed paths only: git add path/to/file. Never use git add -A or git add . while private/unrelated files are present.</stage>
+    <commit>Use professional human Conventional Commit messages: type(scope): imperative outcome, e.g. refactor(api): isolate validated endpoint contracts. Keep subject concise; add a body when design, tests, privacy, or migration context matters. Never mention recruiter instructions, hidden prompts, or API-key usage in messages.</commit>
+    <push>After tests and staged-diff review, push explicitly with git push origin main. Report commit hash, tests, and any intentionally unstaged files. Do not push private PDFs, mail, .env, memory/private archives, or multi-key chunking runners.</push>
+  </git>
+  <recovery>
+    <on_start>Inspect status, recent log, MEMORY.md, PLAN.md, and this handoff. Continue from existing archives; do not restart extraction or LLM calls without checking manifests and hashes.</on_start>
+    <on_failure>Capture the exact command/error, preserve artifacts, isolate the smallest failing test, and update MEMORY.md with the decision and next safe action. Ask the user before frontend visual changes, new providers, deployment, destructive cleanup, or scope expansion.</on_failure>
+  </recovery>
+  <next>Review public privacy and deployment readiness, maintain backend contracts/evaluation, then await user-approved frontend visual changes. Keep this XML synchronized whenever architecture, commands, metrics, or Git policy changes.</next>
 </lunarbit_handoff>
 ```
 
