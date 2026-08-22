@@ -4,7 +4,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from lunarbit.api import PrivateGroundedAnswer, create_app
-from lunarbit.conversation import ConversationStore, SessionNotFoundError, merge_query_slots
+from lunarbit.conversation import (
+    ConversationStore,
+    SessionNotFoundError,
+    infer_query_slots,
+    merge_query_slots,
+)
 from lunarbit.runtime import QuerySlots, RuntimeRequest
 
 
@@ -44,6 +49,14 @@ def test_session_store_evicts_expired_state_without_leaking_previous_turns() -> 
 
     with pytest.raises(SessionNotFoundError):
         store.contextual_question(session_id, "What about last month?")
+
+
+def test_slot_inference_only_extracts_high_precision_financial_terms() -> None:
+    slots = infer_query_slots("How much platform fee did I pay on Swiggy?")
+
+    assert slots.platform == "swiggy"
+    assert slots.component_type == "platform_fee"
+    assert slots.merchant_name is None
 
 
 class StubConversationBackend:
@@ -97,6 +110,26 @@ def test_private_chat_carries_context_and_slots_across_follow_up_turns() -> None
     assert "How much platform fee did I pay?" in backend.requests[1].question
     assert backend.requests[1].slots.platform == "swiggy"
     assert backend.requests[1].slots.component_type == "platform_fee"
+
+
+def test_private_chat_infers_only_high_precision_slots_when_none_are_supplied() -> None:
+    backend = StubConversationBackend()
+    client = TestClient(
+        create_app(
+            private_answer_backend=backend,
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/chat",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={"question": "How much platform fee did I pay on Swiggy?"},
+    )
+
+    assert response.status_code == 200
+    assert backend.requests[0].slots.platform == "swiggy"
+    assert backend.requests[0].slots.component_type == "platform_fee"
 
 
 def test_private_chat_rejects_unknown_session_without_echoing_identifier() -> None:

@@ -10,6 +10,7 @@ from lunarbit.api import (
     create_app,
     parse_public_origins,
 )
+from lunarbit.observability import InMemoryTraceSink
 from lunarbit.public import PublicMetric, PublicSnapshot, assert_public_payload, build_demo_snapshot
 from lunarbit.runtime import RuntimeRequest
 
@@ -35,6 +36,32 @@ def test_health_and_snapshot_endpoints_publish_only_reviewed_state() -> None:
     assert snapshot.status_code == 200
     assert snapshot.json()["mode"] == "synthetic_mirror"
     assert_public_payload(snapshot.json())
+
+
+def test_default_snapshot_uses_the_current_private_corpus_rollup() -> None:
+    response = TestClient(create_app()).get("/v1/public/snapshot")
+    metrics = {item["label"]: item["value"] for item in response.json()["metrics"]}
+
+    assert metrics["Orders reconstructed"] == "454"
+    assert metrics["Evidence chunks"] == "24,675"
+    assert metrics["Graph nodes"] == "53,983"
+    assert metrics["Graph relationships"] == "85,607"
+
+
+def test_api_emits_a_request_id_and_privacy_safe_plan_trace() -> None:
+    traces = InMemoryTraceSink()
+    response = TestClient(create_app(trace_sink=traces)).post(
+        "/v1/query/plan",
+        json={"question": "How much platform fee did I pay?"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-request-id"].startswith("trace:")
+    events = traces.snapshot()
+    assert len(events) == 1
+    assert events[0].event_type == "query.plan"
+    assert events[0].attributes["intent"] == "financial_aggregation"
+    assert "question" not in events[0].attributes
 
 
 def test_public_api_allows_the_local_nexus_development_origin() -> None:

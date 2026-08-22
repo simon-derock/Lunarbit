@@ -39,3 +39,19 @@ def test_governed_answer_backend_exposes_only_verified_answer_contract() -> None
     )
     assert answer.citation_ids == ("runtime:citation:1",)
     assert answer.verification_status == "verified"
+
+
+def test_governed_answer_backend_abstains_when_a_scope_slot_is_missing() -> None:
+    backend = GovernedAnswerBackend(StubReader())
+
+    answer = backend.answer(
+        RuntimeRequest(
+            question="How much platform fee did I pay?",
+            slots=QuerySlots(),
+        )
+    )
+
+    assert answer.status == "abstained"
+    assert answer.direct_answer is None
+    assert answer.citation_ids == ()
+    assert answer.abstention_reason == "missing_query_slot:component_type"

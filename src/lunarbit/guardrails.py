@@ -146,8 +146,7 @@ _IN_SCOPE_TERMS: Final[re.Pattern[str]] = re.compile(
 def _normalise_text(text: str) -> str:
     normalised = unicodedata.normalize("NFKC", text)
     if any(
-        unicodedata.category(character) in {"Cc", "Cf"}
-        and character not in "\t\n\r"
+        unicodedata.category(character) in {"Cc", "Cf"} and character not in "\t\n\r"
         for character in normalised
     ):
         raise QuestionGuardrailError("control or format character rejected")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
 from secrets import compare_digest
+from time import monotonic
 from typing import Annotated, Literal, Protocol
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -10,6 +11,12 @@ from pydantic import Field
 from starlette.responses import Response
 
 from lunarbit.agent import build_query_plan
+from lunarbit.conversation import (
+    ConversationStore,
+    SessionNotFoundError,
+    infer_query_slots,
+    merge_query_slots,
+)
 from lunarbit.guardrails import (
     InMemoryRateLimiter,
     QuestionGuardrailError,
@@ -18,6 +25,7 @@ from lunarbit.guardrails import (
     validate_user_question,
 )
 from lunarbit.models import ContractModel
+from lunarbit.observability import InMemoryTraceSink, TraceSink, elapsed_milliseconds, new_trace_id
 from lunarbit.public import (
     PublicMetric,
     PublicSnapshot,
@@ -83,6 +91,18 @@ class PrivateAnswerRequest(ContractModel):
     slots: QuerySlots
 
 
+type ConversationSessionId = Annotated[
+    str,
+    Field(pattern=r"^session:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+]
+
+
+class PrivateChatRequest(ContractModel):
+    session_id: ConversationSessionId | None = None
+    question: str = Field(min_length=3, max_length=500)
+    slots: QuerySlots | None = None
+
+
 type RuntimeCitationId = Annotated[
     str,
     Field(pattern=r"^(?:runtime:)?citation:[1-9][0-9]*$"),
@@ -98,6 +118,13 @@ class PrivateGroundedAnswer(ContractModel):
     verification_status: str
     limitations: tuple[str, ...]
     abstention_reason: str | None
+
+
+class PrivateChatResponse(ContractModel):
+    session_id: ConversationSessionId
+    turn_index: int = Field(ge=1)
+    context_reused: bool
+    answer: PrivateGroundedAnswer
 
 
 class PrivateAnswerBackend(Protocol):
@@ -244,8 +271,8 @@ def _default_snapshot() -> PublicSnapshot:
         metrics=(
             PublicMetric(label="Orders reconstructed", value="454"),
             PublicMetric(label="Evidence chunks", value="24,675"),
-            PublicMetric(label="Graph nodes", value="48,784"),
-            PublicMetric(label="Graph relationships", value="70,010"),
+            PublicMetric(label="Graph nodes", value="53,983"),
+            PublicMetric(label="Graph relationships", value="85,607"),
         )
     )
 
@@ -261,6 +288,8 @@ def create_app(
     include_private_routes: bool = True,
     public_rate_limiter: InMemoryRateLimiter | None = None,
     private_rate_limiter: InMemoryRateLimiter | None = None,
+    conversation_store: ConversationStore | None = None,
+    trace_sink: TraceSink | None = None,
 ) -> FastAPI:
     cors_origins = validate_public_origins(allowed_origins)
     public_snapshot = snapshot or _default_snapshot()
@@ -279,18 +308,37 @@ def create_app(
     )
     public_limiter = public_rate_limiter or InMemoryRateLimiter(limit=60, window_seconds=60)
     private_limiter = private_rate_limiter or InMemoryRateLimiter(limit=30, window_seconds=60)
+    sessions = conversation_store or ConversationStore()
+    traces = trace_sink or InMemoryTraceSink()
 
     @app.middleware("http")
     async def security_headers(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
+        request.state.trace_id = new_trace_id()
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["X-Request-ID"] = request.state.trace_id
         return response
+
+    def record_trace(
+        request: Request,
+        event_type: str,
+        attributes: dict[str, str | int | bool],
+    ) -> None:
+        try:
+            traces.record(
+                event_type,
+                trace_id=request.state.trace_id,
+                attributes=attributes,
+            )
+        except ValueError:
+            # Diagnostics must never turn a verified answer into an API error.
+            return
 
     def enforce_rate_limit(request: Request, limiter: InMemoryRateLimiter) -> None:
         client_host = request.client.host if request.client is not None else "unknown"
@@ -361,8 +409,18 @@ def create_app(
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)
     def query_plan(request: QueryPlanRequest, http_request: Request) -> PublicQueryPlan:
         enforce_rate_limit(http_request, public_limiter)
+        started = monotonic()
         question = enforce_question_guardrail(request.question)
         response = _public_query_plan(question)
+        record_trace(
+            http_request,
+            "query.plan",
+            {
+                "intent": response.intent,
+                "action_count": len(response.actions),
+                "duration_ms": elapsed_milliseconds(started),
+            },
+        )
         assert_public_payload(response.model_dump(mode="json"))
         return response
 
@@ -373,6 +431,7 @@ def create_app(
     ) -> PublicShowcaseAnswer:
         """Return a reviewed synthetic answer or abstain without invoking private retrieval."""
         enforce_rate_limit(http_request, public_limiter)
+        started = monotonic()
         question = enforce_question_guardrail(request.question)
         plan = _public_query_plan(question)
         answer_key = _showcase_answer_key(question)
@@ -405,6 +464,15 @@ def create_app(
                 ),
             )
         assert_public_payload(response.model_dump(mode="json"))
+        record_trace(
+            http_request,
+            "public.showcase",
+            {
+                "status": response.status,
+                "intent": response.plan.intent,
+                "duration_ms": elapsed_milliseconds(started),
+            },
+        )
         return response
 
     @app.get("/v1/demo/answers/{answer_key}", response_model=PublicDemoAnswer)
@@ -429,7 +497,21 @@ def create_app(
                 raise HTTPException(status_code=503, detail="private retrieval is not configured")
             authorize_private(authorization)
             question = enforce_question_guardrail(request.question)
-            return private_backend.retrieve(question)
+            started = monotonic()
+            result = private_backend.retrieve(question)
+            record_trace(
+                http_request,
+                "private.retrieval",
+                {
+                    "status": result.status,
+                    "dense_candidates": result.dense_candidates,
+                    "lexical_candidates": result.lexical_candidates,
+                    "evidence_count": result.evidence_count,
+                    "citation_count": result.citation_count,
+                    "duration_ms": elapsed_milliseconds(started),
+                },
+            )
+            return result
 
         @app.post("/v1/private/answer", response_model=PrivateGroundedAnswer)
         def private_answer(
@@ -443,8 +525,78 @@ def create_app(
             authorize_private(authorization)
             question = enforce_question_guardrail(request.question)
             enforce_slot_guardrail(request.slots)
-            return private_answer_backend.answer(
+            started = monotonic()
+            result = private_answer_backend.answer(
                 RuntimeRequest(question=question, slots=request.slots)
+            )
+            record_trace(
+                http_request,
+                "private.answer",
+                {
+                    "status": result.status,
+                    "fact_count": result.fact_count,
+                    "citation_count": len(result.citation_ids),
+                    "verification_status": result.verification_status,
+                    "duration_ms": elapsed_milliseconds(started),
+                },
+            )
+            return result
+
+        @app.post("/v1/private/chat", response_model=PrivateChatResponse)
+        def private_chat(
+            request: PrivateChatRequest,
+            http_request: Request,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> PrivateChatResponse:
+            enforce_rate_limit(http_request, private_limiter)
+            if private_answer_backend is None or private_api_token is None:
+                raise HTTPException(status_code=503, detail="private answer is not configured")
+            authorize_private(authorization)
+            question = enforce_question_guardrail(request.question)
+            if request.slots is not None:
+                enforce_slot_guardrail(request.slots)
+            session_id = request.session_id or sessions.create()
+            try:
+                inferred = infer_query_slots(question)
+                inferred_slots = merge_query_slots(
+                    inferred if inferred.model_fields_set else None,
+                    request.slots,
+                )
+                prepared = sessions.prepare(
+                    session_id,
+                    question=question,
+                    slots=inferred_slots,
+                )
+            except SessionNotFoundError as error:
+                raise HTTPException(
+                    status_code=404,
+                    detail="conversation session not found",
+                ) from error
+            answer = private_answer_backend.answer(
+                RuntimeRequest(question=prepared.contextual_question, slots=prepared.slots)
+            )
+            turn_index = sessions.append(
+                session_id,
+                question=question,
+                slots=prepared.slots,
+                status=answer.status,
+            )
+            record_trace(
+                http_request,
+                "private.chat",
+                {
+                    "status": answer.status,
+                    "turn_index": turn_index,
+                    "context_reused": prepared.context_reused,
+                    "fact_count": answer.fact_count,
+                    "citation_count": len(answer.citation_ids),
+                },
+            )
+            return PrivateChatResponse(
+                session_id=session_id,
+                turn_index=turn_index,
+                context_reused=prepared.context_reused,
+                answer=answer,
             )
 
     return app

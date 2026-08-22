@@ -36,6 +36,10 @@ class QuerySlots(ContractModel):
     limit: int = Field(default=50, ge=1, le=200)
 
 
+class MissingQuerySlotError(ValueError):
+    """Raised when a governed template needs an explicit runtime slot."""
+
+
 class RuntimeRequest(ContractModel):
     question: str = Field(min_length=3, max_length=500)
     slots: QuerySlots
@@ -43,7 +47,7 @@ class RuntimeRequest(ContractModel):
 
 def _require(value: str | None, name: str) -> str:
     if value is None:
-        raise ValueError(f"{name} is required for the selected governed query")
+        raise MissingQuerySlotError(f"{name} is required for the selected governed query")
     return value
 
 

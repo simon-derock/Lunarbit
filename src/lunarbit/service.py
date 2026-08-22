@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from lunarbit.api import PrivateGroundedAnswer, PrivateRetrievalTrace
 from lunarbit.hybrid import HybridRetriever
-from lunarbit.runtime import GraphReader, RuntimeRequest, retrieve_grounded_context
+from lunarbit.runtime import (
+    GraphReader,
+    MissingQuerySlotError,
+    RuntimeRequest,
+    retrieve_grounded_context,
+)
 
 
 class HybridRetrievalBackend:
@@ -32,7 +37,19 @@ class GovernedAnswerBackend:
         self._reader = reader
 
     def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer:
-        context = retrieve_grounded_context(request, self._reader)
+        try:
+            context = retrieve_grounded_context(request, self._reader)
+        except MissingQuerySlotError as error:
+            return PrivateGroundedAnswer(
+                status="abstained",
+                direct_answer=None,
+                calculation=None,
+                fact_count=0,
+                citation_ids=(),
+                verification_status="abstained",
+                limitations=("The request needs a more specific governed scope or slot.",),
+                abstention_reason=f"missing_query_slot:{str(error).split()[0]}",
+            )
         return PrivateGroundedAnswer(
             status=context.status.value,
             direct_answer=context.direct_answer,
