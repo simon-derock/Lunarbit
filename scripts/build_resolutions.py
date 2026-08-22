@@ -300,7 +300,7 @@ def _financial_archive(
     order_archive: OrderResolutionArchive,
     *,
     executed_at: datetime,
-) -> FinancialArchive:
+) -> tuple[FinancialArchive, int]:
     order_ids_by_region: dict[UUID, set[UUID]] = {}
     for bundle in order_archive.bundles:
         for region_id in bundle.agentic_region_ids:
@@ -311,10 +311,15 @@ def _financial_archive(
         for component in chunk.candidate_money_components
     }
     components: list[MoneyComponent] = []
+    skipped_missing_sources = 0
     for record in records:
         order_ids = tuple(sorted(order_ids_by_region.get(record.region_id, set()), key=str))
         for interpretation in record.region.money_interpretations:
-            source, chunk = candidates[interpretation.source_component_id]
+            source_chunk = candidates.get(interpretation.source_component_id)
+            if source_chunk is None:
+                skipped_missing_sources += 1
+                continue
+            source, chunk = source_chunk
             components.append(
                 normalize_money_component(
                     source,
@@ -346,7 +351,7 @@ def _financial_archive(
                 run.status is ReconciliationStatus.CONFLICTING for run in runs
             ),
         ),
-    )
+    ), skipped_missing_sources
 
 
 def _write_financial_archive(
@@ -354,6 +359,7 @@ def _write_financial_archive(
     output_root: Path,
     *,
     product_archive_sha256: str,
+    skipped_missing_sources: int,
 ) -> dict[str, object]:
     files = {
         "money_components.jsonl": _jsonl(archive.components),
@@ -371,6 +377,7 @@ def _write_financial_archive(
         "archive_sha256": archive_digest,
         "product_archive_sha256": product_archive_sha256,
         "files": file_hashes,
+        "skipped_missing_source_components": skipped_missing_sources,
         **archive.summary.model_dump(mode="json"),
     }
     _atomic_private_write(
@@ -430,7 +437,7 @@ def main() -> int:
         args.product_output.resolve(),
         entity_archive_sha256=str(entity_manifest["archive_sha256"]),
     )
-    financial_archive = _financial_archive(
+    financial_archive, skipped_missing_sources = _financial_archive(
         records,
         chunks_by_id,
         archive,
@@ -440,6 +447,7 @@ def main() -> int:
         financial_archive,
         args.finance_output.resolve(),
         product_archive_sha256=str(product_manifest["archive_sha256"]),
+        skipped_missing_sources=skipped_missing_sources,
     )
     print(
         json.dumps(

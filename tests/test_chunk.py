@@ -175,6 +175,27 @@ def test_document_chunks_are_deterministic_and_source_supported() -> None:
     assert money.source_precision == 2
 
 
+def test_total_quantity_rows_are_not_invoice_totals() -> None:
+    processed = _processed_document(
+        text=(
+            "Order ID: 1234567890\n"
+            "Restaurant: Test Kitchen\n"
+            "Item Table: total 1 x chicken burger\n"
+            "Tax Table: total 0% | taxable amount\n"
+            "Fee Table: total 1 | platform fee\n"
+            "Invoice total: INR 123.40"
+        )
+    )
+
+    result = chunk_document(processed)
+
+    amounts = result.chunks[0].candidate_money_components
+    assert tuple(component.amount for component in amounts) == (Decimal("123.40"),)
+    assert all(
+        component.component_type is CandidateMoneyType.INVOICE_TOTAL for component in amounts
+    )
+
+
 def test_table_chunker_preserves_rows_headers_and_item_amounts() -> None:
     table = TableRecord(
         table_id="table_001_000",

@@ -5,6 +5,7 @@ import os
 import re
 import tempfile
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
@@ -144,7 +145,8 @@ _MONEY_PATTERNS = (
         CandidateMoneyType.INVOICE_TOTAL,
         re.compile(
             r"\b(?:Grand\s+total|Invoice\s+total|Total(?:\s+amount)?)\s*[:-]?\s*"
-            r"(?:₹|INR|Rs\.?)?\s*(?P<amount>-?\d[\d,]*(?:\.\d+)?)",
+            r"(?:₹|INR|Rs\.?)?\s*(?P<amount>-?\d[\d,]*(?:\.\d+)?)"
+            r"(?!\s*(?:x|item(?:s)?|qty|quantity)\b|\s*[|%])",
             re.IGNORECASE,
         ),
     ),
@@ -894,12 +896,21 @@ def _inventory_sources(
     return documents, messages
 
 
-def build_chunk_archive(processed_root: Path) -> ChunkArchiveSummary:
+def build_chunk_archive(processed_root: Path, *, workers: int = 1) -> ChunkArchiveSummary:
+    if workers < 1:
+        raise ValueError("workers must be positive")
     documents, messages = _inventory_sources(processed_root)
-    results = tuple(
-        chunk_document(read_processed_document(processed_root / document.document_id))
-        for document in documents
-    ) + tuple(chunk_message(message) for message in messages)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        document_results = tuple(
+            executor.map(
+                lambda document: chunk_document(
+                    read_processed_document(processed_root / document.document_id)
+                ),
+                documents,
+            )
+        )
+        message_results = tuple(executor.map(chunk_message, messages))
+    results = document_results + message_results
     for result in results:
         write_chunk_result(result, processed_root)
     chunks = tuple(chunk for result in results for chunk in result.chunks)
