@@ -10,7 +10,7 @@
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/private%20corpus-never%20committed-6f42c1)](#privacy-by-design)
 
-Lunarbit turns a private archive of Zomato and Swiggy food-delivery and grocery records—emails, order summaries, merchant invoices, fee invoices, delivery evidence, and history exports—into a provenance-first temporal Neo4j knowledge graph.
+Lunarbit turns a private archive of Zomato and Swiggy food-delivery and grocery records—emails, order summaries, merchant invoices, fee invoices, delivery evidence, and history exports—into a provenance-first temporal Neo4j knowledge graph and finance-first intelligence engine.
 
 It is a product-minded GraphRAG system for difficult questions about orders, prices, merchants, fees, discounts, taxes, payments, delivery evidence, and spending change. Every answer is designed to distinguish what a source asserted, what deterministic code normalized, what was calculated, what remains uncertain, and which evidence supports the claim.
 
@@ -37,19 +37,35 @@ The runtime uses governed templates, exact identifiers, Lucene/BM25, dense retri
 
 ```mermaid
 flowchart LR
-    A[Private PDFs and mailboxes] --> B[Deterministic ingestion]
-    B --> C[Layout and email extraction]
-    C --> D[Order evidence bundles]
-    D --> E[Rich deterministic chunks]
-    E --> F[Bounded agentic enrichment]
-    F --> G[Typed validation and quarantine]
-    G --> H[Resolution and reconciliation]
-    H --> I[Temporal financial events]
-    I --> J[Neo4j knowledge graph]
-    J --> K[Exact + BM25 + HNSW + graph retrieval]
-    K --> L[RRF + reranking + verification]
-    L --> M[FastAPI answer contract]
-    M --> N[Privacy-safe public projection]
+    A["Private evidence"] --> B["Deterministic extraction"]
+    B --> C["Evidence bundles"]
+    C --> D["Rich chunks"]
+    D --> E["Bounded enrichment"]
+    E --> F["Validation and quarantine"]
+    F --> G["Resolution and finance"]
+    G --> H["Temporal events"]
+    H --> I["Neo4j graph"]
+    I --> J["Exact BM25 HNSW graph retrieval"]
+    J --> K["RRF reranking verification"]
+    K --> L["FastAPI answer contract"]
+    L --> M["Privacy-safe public projection"]
+```
+
+If a Markdown host does not render Mermaid, this equivalent text map remains readable:
+
+```text
+private evidence
+  -> deterministic extraction
+  -> order bundles and rich chunks
+  -> bounded agentic enrichment
+  -> typed validation / quarantine
+  -> reversible resolution + deterministic finance
+  -> temporal financial events
+  -> Neo4j graph
+  -> exact + BM25 + HNSW + graph retrieval
+  -> RRF + reranking + verification
+  -> FastAPI answer contract
+  -> privacy-safe public projection
 ```
 
 ### The graph model
@@ -121,11 +137,12 @@ These measurements come from the local private corpus. The source archive and ge
 
 The graph rebuild is closed-reference and idempotent. Financial amounts use Decimal semantics. Large aggregates page to completion under action budgets; partial results are never presented as lifetime totals. The corpus is private by construction.
 
-## Financial and economic intelligence
+## Finance-first intelligence engine
 
-The financial layer is a deterministic economic engine, not model-generated arithmetic. It includes:
+Finance is not a report added after retrieval; it is a first-class graph and evaluation boundary. The financial layer is a deterministic economic engine, not model-generated arithmetic. Each amount retains its source scope, precision, lineage, and reconciliation state:
 
 - multi-document reconciliation with explicit truth scopes and residuals;
+- separate customer-payable, merchant-invoice, platform-assertion, and settlement-unknown views;
 - a temporal financial-event graph with immutable component lineage;
 - personal food price indices and comparable-basket history;
 - spending-change decomposition by frequency, basket, price, fee, discount, and membership effects;
@@ -134,6 +151,10 @@ The financial layer is a deterministic economic engine, not model-generated arit
 - robust anomaly and change-point detection;
 - bounded counterfactual simulations;
 - a governed hypothesis → experiment → evidence → finding loop.
+
+Governed metrics include `effective_order_cost`, `fee_burden_ratio`, `discount_capture_rate`, `delivery_burden_ratio`, `membership_net_benefit`, `unexplained_discount_share`, and personal food/grocery price indices. Every observation carries its period, formula version, evidence coverage, comparability level, and confidence.
+
+This makes questions such as “why did spending rise?” executable rather than rhetorical: the system decomposes the change into frequency, basket, price, merchant mix, item mix, fees, taxes, discounts, and residuals, then links each contribution back to evidence. Counterfactuals expose assumptions and unsupported elements instead of presenting causal guesses as facts.
 
 ## Public product surface
 
@@ -166,6 +187,18 @@ The public repository is intentionally not a copy of the personal archive:
 - bearer-protected private routes, rate limiting, security headers, non-wildcard CORS, and public/private process separation are enforced at the API boundary;
 - public identifiers are aliases, not platform order IDs or invoice numbers;
 - no private PDFs, mailboxes, processed JSON, provider responses, API keys, or `.env` files are committed.
+
+## Verification loop
+
+Lunarbit follows test-first development as an engineering control, not as a badge. Every material capability moves through the same loop:
+
+1. **Specify the failure** — write a contract or invariant test for the behavior, privacy boundary, or financial edge case.
+2. **Make it fail** — keep the red test visible so the intended gap is reviewable.
+3. **Implement the smallest safe path** — preserve immutable inputs, typed contracts, and deterministic ownership boundaries.
+4. **Replay the corpus invariants** — run focused tests, the full suite, strict MyPy, Ruff, privacy/hygiene checks, and relevant frontend builds.
+5. **Record the proof** — commit the red/green progression with a precise engineering message and update the handoff only with measured facts.
+
+The test surface covers extraction coordinates, mail-only orders, chunk and money coverage, source provenance, reversible resolution, Decimal reconciliation, graph idempotence, retrieval fusion, citation support, abstention, API authorization, input guardrails, public privacy projection, and UI profile isolation. A plausible model response is never accepted as a passing test.
 
 ## Stack
 
