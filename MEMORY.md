@@ -491,3 +491,10 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 .venv/bin/python scripts/run_agentic_chunking.py --input data/processed --execute --max-calls 3
 .venv/bin/python scripts/run_evals.py --suite chunking --input data/processed
 ```
+
+### 2026-08-23 — Final bounded semantic retry and graph refresh
+
+- Decision: Retry only quality-flagged chunks with ten independently rate-limited Mistral keys; preserve deterministic fallbacks where semantic evidence does not improve.
+- Validation: 24,675 valid chunks, 0 quarantined, 4,820 money candidates, unsupported-candidate rate 0; final semantic archive flags 557 chunks (551 deterministic fallbacks, 6 uncited-conflict associations).
+- Graph state: Neo4j refreshed from the final archive with 48,518 nodes and 69,527 relationships; suspicious quantity/rate invoice totals = 0.
+- Privacy/operations: Retry outputs and API keys remain private and uncommitted; public API serves only the aggregate projection.
