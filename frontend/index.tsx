@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { GraphSurface } from "@/components/GraphSurface";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { GraphSurface } from "./GraphSurface";
+import { fetchPublicSnapshot, fetchQueryPlan, mapPublicSnapshot } from "./api";
 import {
   GRAPH_PROFILES,
   SORTS,
@@ -10,29 +10,7 @@ import {
   type GraphNode,
   type LayerId,
   type SortId,
-} from "@/lib/lunarbit/graph";
-
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Lunarbit — Graph Retrieval Console" },
-      {
-        name: "description",
-        content:
-          "Flat editorial console for graph-native retrieval: bounded traversal, citation-gated findings and evidence lineage over a public projection.",
-      },
-      { property: "og:title", content: "Lunarbit — Graph Retrieval Console" },
-      {
-        property: "og:description",
-        content:
-          "Switch graph profiles, drawing profiles and ink/paper gamuts over a validated knowledge-graph projection.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: Console,
-});
+} from "./graph";
 
 /* ---------------------------------------------------------------- *
  * Minimal flat menu — a rule-bordered plate, no glass, no radius
@@ -158,7 +136,7 @@ const STATUS: Record<string, string> = {
   abstained: "text-muted-foreground",
 };
 
-function Console() {
+export function Console() {
   const [themeId, setThemeId] = useState(THEMES[0]!.id);
   const [profileId, setProfileId] = useState(GRAPH_PROFILES[0]!.id);
   const [vizId, setVizId] = useState(VIZ_PROFILES[0]!.id);
@@ -169,11 +147,30 @@ function Console() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [panel, setPanel] = useState<"filters" | "findings" | null>("findings");
   const [ask, setAsk] = useState("");
+  const [snapshot, setSnapshot] = useState(() => buildSnapshot(GRAPH_PROFILES[0]!));
+  const [apiState, setApiState] = useState<"loading" | "live" | "fallback">("loading");
+  const [queryState, setQueryState] = useState<string | null>(null);
 
   const theme = THEMES.find((t) => t.id === themeId)!;
   const profile = GRAPH_PROFILES.find((p) => p.id === profileId)!;
   const viz = VIZ_PROFILES.find((v) => v.id === vizId)!;
-  const snapshot = useMemo(() => buildSnapshot(profile), [profile]);
+  useEffect(() => {
+    let active = true;
+    setApiState("loading");
+    fetchPublicSnapshot()
+      .then((payload) => {
+        if (active) {
+          setSnapshot(mapPublicSnapshot(payload));
+          setApiState("live");
+        }
+      })
+      .catch(() => {
+        if (active) setApiState("fallback");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activeLayers = profile.layers.filter((l) => !mutedLayers.includes(l));
   const activeRels = profile.relationships.filter((r) => !mutedRels.includes(r));
@@ -209,7 +206,7 @@ function Console() {
 
   return (
     <main
-      style={theme.vars as React.CSSProperties}
+      style={theme.vars as CSSProperties}
       className="relative h-screen w-full overflow-hidden bg-background text-foreground"
     >
       <GraphSurface
@@ -232,7 +229,7 @@ function Console() {
         <div className="pointer-events-auto flex items-baseline gap-2.5 px-1 pt-1">
           <h1 className="brandmark text-[15px] text-foreground">lunarbit</h1>
           <span className="text-[9px] tracking-[0.18em] text-muted-foreground">
-            by Philip Simon Derock
+            {apiState === "live" ? "neo4j aggregate live" : apiState === "loading" ? "connecting" : "local projection"}
           </span>
         </div>
 
@@ -463,11 +460,19 @@ function Console() {
           <input
             value={ask}
             onChange={(e) => setAsk(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !ask.trim()) return;
+              e.preventDefault();
+              setQueryState("planning");
+              fetchQueryPlan(ask)
+                .then((plan) => setQueryState(`${plan.intent} · ${plan.actions.length} actions`))
+                .catch(() => setQueryState("public scope abstained"));
+            }}
             placeholder="reconcile delivery fees for ORD-4821"
             className="h-full flex-1 bg-transparent text-[11.5px] text-foreground outline-none placeholder:text-muted-foreground/80"
           />
           <span className="text-[9.5px] tracking-[0.12em] text-foreground/60">
-            {ask ? "depth 4 · rerank" : "↵"}
+            {queryState ?? (ask ? "enter · plan" : "↵")}
           </span>
         </div>
 

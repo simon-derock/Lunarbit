@@ -552,3 +552,14 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Privacy/licensing: `samples/` remains untracked. The images have no clear
   repository provenance or license metadata, so they must not be committed
   until ownership or redistribution rights are confirmed.
+
+### 2026-08-25 — Make `/frontend` runnable and connect public contracts
+
+- Decision: Turn `/frontend` into the sole Vite/React/Tailwind application.
+  Added a typed public API client and adapter for `/v1/public/snapshot` and
+  `/v1/query/plan`; the graph console now prefers the live aggregate
+  projection and falls back to its deterministic local frame when unavailable.
+- Safety: Browser code never receives the private bearer token or private
+  source records. Private chat remains a server-authenticated FastAPI route.
+- Validation: TypeScript production build passed; one Vitest snapshot-adapter
+  test passed; the generated `dist/` and `node_modules/` remain ignored.

@@ -2639,6 +2639,12 @@ source and will be connected to the authenticated/public API contracts after
 its build shell and API client are finalized. Unlicensed or provenance-unknown
 visual samples are not publishable assets.
 
+The first frontend integration slice is complete: Vite/React/Tailwind build
+shell, typed public snapshot/query-plan client, privacy-safe DTO adapter,
+live-aggregate status, deterministic fallback, and graph-console smoke tests.
+Private chat remains server-authenticated and is not bundled with browser
+credentials; it will be added through an explicit session/auth boundary.
+
 ---
 
 ## 23. Compact repository structure

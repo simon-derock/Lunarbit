@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formationTargets } from "@/lib/lunarbit/graph";
-import type { GraphEdge, GraphNode, Palette, VizProfile } from "@/lib/lunarbit/graph";
+import { formationTargets } from "./graph";
+import type { GraphEdge, GraphNode, Palette, VizProfile } from "./graph";
 
 const ForceGraph2D = lazy(() => import("react-force-graph-2d"));
 
