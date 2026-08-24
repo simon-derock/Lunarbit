@@ -2623,7 +2623,9 @@ owns state transitions and resumability; the existing planner, read-only
 Cypher templates, deterministic financial calculations, citation contracts,
 and abstention policy remain authoritative. Each node must be independently
 testable, and no model-generated value may directly mutate canonical graph or
-financial truth.
+financial truth. The public workflow boundary translates guardrail, input,
+checkpoint, state, and execution failures into typed exceptions so API layers
+can expose safe status codes without leaking database details or source data.
 
 ---
 

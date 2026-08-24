@@ -516,3 +516,15 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Next gate: wire the workflow into the authenticated FastAPI chat endpoint,
   add streamed trace events and LangGraph-specific evaluation fixtures, then
   integrate the reviewed frontend against the stable API contract.
+
+### 2026-08-25 — Harden LangGraph exception boundaries
+
+- Decision: Translate guardrail, malformed-input, checkpoint, incomplete-state,
+  and node-execution failures into typed `LangGraph*Error` classes at the
+  workflow boundary. Preserve exception chaining for internal diagnostics but
+  expose only safe messages to callers.
+- Validation: Four workflow tests pass, including prompt rejection, invalid
+  input, missing checkpoint, and database-failure sanitization; Ruff and strict
+  mypy pass.
+- Rationale: FastAPI can now map failure classes to stable HTTP responses
+  without leaking private database errors, credentials, or source content.

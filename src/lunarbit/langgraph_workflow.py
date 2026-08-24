@@ -9,8 +9,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, TypedDict, cast
 
+from pydantic import ValidationError
+
 from lunarbit.agent import build_query_plan
-from lunarbit.guardrails import validate_user_question
+from lunarbit.guardrails import QuestionGuardrailError, validate_user_question
 from lunarbit.retrieval import QueryClassification
 from lunarbit.runtime import (
     GraphReader,
@@ -42,6 +44,26 @@ StateGraph = _StateGraph
 
 class LangGraphUnavailableError(RuntimeError):
     """Raised when the optional LangGraph dependency has not been installed."""
+
+
+class LangGraphInputError(ValueError):
+    """Raised when a workflow request or thread identifier is invalid."""
+
+
+class LangGraphGuardrailError(LangGraphInputError):
+    """Raised when a question is rejected by Lunarbit's request guardrails."""
+
+
+class LangGraphExecutionError(RuntimeError):
+    """Raised when a workflow node fails during execution."""
+
+
+class LangGraphStateError(RuntimeError):
+    """Raised when a compiled graph returns an invalid or incomplete state."""
+
+
+class LangGraphCheckpointError(LookupError):
+    """Raised when a requested conversation checkpoint does not exist."""
 
 
 class WorkflowState(TypedDict, total=False):
@@ -125,11 +147,39 @@ class GraphRAGWorkflow:
         thread_id: str = "default",
     ) -> GroundedContext:
         """Execute one turn and return only the verified runtime context."""
+        if not isinstance(question, str) or not question.strip():
+            raise LangGraphInputError("question must be a non-empty string")
+        if not isinstance(thread_id, str) or not thread_id.strip():
+            raise LangGraphInputError("thread_id must be a non-empty string")
+        if slots is not None and not isinstance(slots, QuerySlots):
+            raise LangGraphInputError("slots must be a QuerySlots instance")
         initial: WorkflowState = {"question": question, "slots": slots or QuerySlots()}
-        result = self._graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
-        return cast(GroundedContext, result["context"])
+        try:
+            result = self._graph.invoke(
+                initial,
+                config={"configurable": {"thread_id": thread_id}},
+            )
+        except QuestionGuardrailError as error:
+            raise LangGraphGuardrailError(str(error)) from error
+        except ValidationError as error:
+            raise LangGraphInputError("workflow state validation failed") from error
+        except (LangGraphInputError, LangGraphGuardrailError, LangGraphStateError):
+            raise
+        except Exception as error:
+            raise LangGraphExecutionError("workflow execution failed") from error
+        context = result.get("context")
+        if not isinstance(context, GroundedContext):
+            raise LangGraphStateError("workflow completed without grounded context")
+        return context
 
     def state(self, *, thread_id: str = "default") -> Mapping[str, object] | None:
         """Expose checkpoint metadata for observability without raw evidence."""
-        snapshot = self._graph.get_state({"configurable": {"thread_id": thread_id}})
-        return snapshot.values if snapshot is not None else None
+        if not isinstance(thread_id, str) or not thread_id.strip():
+            raise LangGraphInputError("thread_id must be a non-empty string")
+        try:
+            snapshot = self._graph.get_state({"configurable": {"thread_id": thread_id}})
+        except Exception as error:
+            raise LangGraphCheckpointError("conversation checkpoint not found") from error
+        if snapshot is None or not snapshot.values:
+            raise LangGraphCheckpointError("conversation checkpoint not found")
+        return cast(Mapping[str, object], snapshot.values)
