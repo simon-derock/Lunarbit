@@ -2641,7 +2641,8 @@ visual samples are not publishable assets.
 
 The first frontend integration slice is complete: Vite/React/Tailwind build
 shell, typed public snapshot/query-plan client, privacy-safe DTO adapter,
-live-aggregate status, deterministic fallback, and graph-console smoke tests.
+live-aggregate status, explicit unavailable state, and graph-console smoke
+tests. Synthetic graph nodes are never rendered on API failure.
 Private chat remains server-authenticated and is not bundled with browser
 credentials; it will be added through an explicit session/auth boundary.
 

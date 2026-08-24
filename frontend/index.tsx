@@ -6,11 +6,19 @@ import {
   SORTS,
   THEMES,
   VIZ_PROFILES,
-  buildSnapshot,
   type GraphNode,
   type LayerId,
   type SortId,
+  type Snapshot,
 } from "./graph";
+
+const EMPTY_SNAPSHOT: Snapshot = {
+  metrics: [],
+  graph_nodes: [],
+  graph_edges: [],
+  findings: [],
+  disclosure: "Waiting for the verified public Neo4j projection.",
+};
 
 /* ---------------------------------------------------------------- *
  * Minimal flat menu — a rule-bordered plate, no glass, no radius
@@ -147,8 +155,8 @@ export function Console() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [panel, setPanel] = useState<"filters" | "findings" | null>("findings");
   const [ask, setAsk] = useState("");
-  const [snapshot, setSnapshot] = useState(() => buildSnapshot(GRAPH_PROFILES[0]!));
-  const [apiState, setApiState] = useState<"loading" | "live" | "fallback">("loading");
+  const [liveSnapshot, setLiveSnapshot] = useState<Snapshot | null>(null);
+  const [apiState, setApiState] = useState<"loading" | "live" | "error">("loading");
   const [queryState, setQueryState] = useState<string | null>(null);
 
   const theme = THEMES.find((t) => t.id === themeId)!;
@@ -160,17 +168,19 @@ export function Console() {
     fetchPublicSnapshot()
       .then((payload) => {
         if (active) {
-          setSnapshot(mapPublicSnapshot(payload));
+          setLiveSnapshot(mapPublicSnapshot(payload));
           setApiState("live");
         }
       })
       .catch(() => {
-        if (active) setApiState("fallback");
+        if (active) setApiState("error");
       });
     return () => {
       active = false;
     };
   }, []);
+
+  const snapshot = liveSnapshot ?? EMPTY_SNAPSHOT;
 
   const activeLayers = profile.layers.filter((l) => !mutedLayers.includes(l));
   const activeRels = profile.relationships.filter((r) => !mutedRels.includes(r));
@@ -218,6 +228,16 @@ export function Console() {
         onSelect={setSelected}
       />
 
+      {apiState === "error" && (
+        <div className="pointer-events-auto absolute inset-x-0 top-1/2 mx-auto w-[min(34rem,calc(100%-2rem))] -translate-y-1/2 border border-[color:var(--destructive)] bg-background p-5 text-center">
+          <div className="tag text-[color:var(--destructive)]">live graph unavailable</div>
+          <p className="serif mt-2 text-[18px]">Start the FastAPI + Neo4j service to load Lunarbit data.</p>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            No synthetic nodes are rendered. The console is waiting for the verified public projection.
+          </p>
+        </div>
+      )}
+
       {/* HDR pass: luminance lift, vignette, fine grain */}
       <div className="hdr pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
@@ -229,7 +249,7 @@ export function Console() {
         <div className="pointer-events-auto flex items-baseline gap-2.5 px-1 pt-1">
           <h1 className="brandmark text-[15px] text-foreground">lunarbit</h1>
           <span className="text-[9px] tracking-[0.18em] text-muted-foreground">
-            {apiState === "live" ? "neo4j aggregate live" : apiState === "loading" ? "connecting" : "local projection"}
+            {apiState === "live" ? "neo4j aggregate live" : apiState === "loading" ? "connecting" : "live graph unavailable"}
           </span>
         </div>
 

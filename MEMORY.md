@@ -563,3 +563,14 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   source records. Private chat remains a server-authenticated FastAPI route.
 - Validation: TypeScript production build passed; one Vitest snapshot-adapter
   test passed; the generated `dist/` and `node_modules/` remain ignored.
+
+### 2026-08-25 — Remove misleading frontend synthetic fallback
+
+- Decision: The browser no longer renders `buildSnapshot()` data when the
+  public API is unavailable. It renders an empty graph with an explicit
+  service-unavailable state instead.
+- Rationale: Lunarbit's product surface must communicate verified food-commerce
+  data, not resemble a generic demo skeleton. Synthetic fixtures remain
+  useful for tests/public reviewed showcase routes, but are not silently shown
+  as live graph state.
+- Validation: Frontend Vitest and production TypeScript/Vite build pass.
