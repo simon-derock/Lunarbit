@@ -2605,6 +2605,26 @@ A query trace must make it possible to answer:
 
 Logs must never contain raw secrets or unredacted private fields.
 
+### 18.5 Initial implementation gate
+
+The first online LangGraph implementation is intentionally small and
+production-oriented:
+
+```text
+guardrail
+→ governed plan
+→ bounded Neo4j/runtime retrieval
+→ evidence verification
+→ final answer or abstention
+```
+
+`WorkflowState` is typed and checkpointed per conversation thread. LangGraph
+owns state transitions and resumability; the existing planner, read-only
+Cypher templates, deterministic financial calculations, citation contracts,
+and abstention policy remain authoritative. Each node must be independently
+testable, and no model-generated value may directly mutate canonical graph or
+financial truth.
+
 ---
 
 ## 23. Compact repository structure

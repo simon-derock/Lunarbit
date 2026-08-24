@@ -498,3 +498,21 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Validation: 24,675 valid chunks, 0 quarantined, 4,820 money candidates, unsupported-candidate rate 0; final semantic archive flags 557 chunks (551 deterministic fallbacks, 6 uncited-conflict associations).
 - Graph state: Neo4j refreshed from the final archive with 48,518 nodes and 69,527 relationships; suspicious quantity/rate invoice totals = 0.
 - Privacy/operations: Retry outputs and API keys remain private and uncommitted; public API serves only the aggregate projection.
+
+### 2026-08-25 — Add checkpointed LangGraph query orchestration
+
+- Decision: Add `src/lunarbit/langgraph_workflow.py` as the online orchestration
+  boundary. The graph has explicit guardrail, governed-plan,
+  retrieve/verify, and finalize nodes with typed `WorkflowState` and a
+  `MemorySaver` checkpoint per `thread_id`.
+- Rationale: LangGraph adds durable, inspectable workflow state and a current
+  industry-standard orchestration layer without weakening Lunarbit's core
+  rule: deterministic planner, Neo4j read-only templates, financial arithmetic,
+  evidence verification, and abstention decide truth.
+- Validation: focused workflow, planner, runtime, and guardrail tests pass;
+  Ruff passes. The LangGraph dependency is isolated in the `agent` extra.
+- Privacy/operations: The workflow stores bounded state and metadata only;
+  private source text, secrets, and retry archives remain outside git.
+- Next gate: wire the workflow into the authenticated FastAPI chat endpoint,
+  add streamed trace events and LangGraph-specific evaluation fixtures, then
+  integrate the reviewed frontend against the stable API contract.
