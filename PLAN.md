@@ -2631,6 +2631,14 @@ as the LangGraph thread ID and retains bounded slot merging for follow-ups.
 Legacy answer backends remain compatibility adapters only; production
 launchers must configure the LangGraph workflow.
 
+### 18.6 Frontend migration boundary
+
+The retired `web/` and `visualization/Nexus Insight/` applications are not
+part of the target product surface. `/frontend` is the sole retained frontend
+source and will be connected to the authenticated/public API contracts after
+its build shell and API client are finalized. Unlicensed or provenance-unknown
+visual samples are not publishable assets.
+
 ---
 
 ## 23. Compact repository structure

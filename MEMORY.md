@@ -542,3 +542,13 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   pass. Starlette TestClient requests currently hang in this environment with
   the installed FastAPI/Starlette dependency set; this is recorded as an
   environment verification issue, not treated as a passing API smoke test.
+
+### 2026-08-25 — Retire legacy frontend trees
+
+- Decision: Keep `/frontend` as the only target frontend source. The previous
+  `web/` and `visualization/Nexus Insight/` applications were removed from the
+  repository worktree and retained temporarily under
+  `/tmp/lunarbit-retired-frontends-20260825` for recovery.
+- Privacy/licensing: `samples/` remains untracked. The images have no clear
+  repository provenance or license metadata, so they must not be committed
+  until ownership or redistribution rights are confirmed.

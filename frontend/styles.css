@@ -1,0 +1,138 @@
+@import "tailwindcss" source(none);
+@source "../src";
+
+/*
+ * Lunarbit — flat editorial instrument panel.
+ * No glass, no blur, no shadows: solid plates, hairline rules, mono type.
+ * Theme presets swap the whole ink/paper gamut at runtime (lib/lunarbit/graph.ts).
+ */
+
+@theme inline {
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--surface);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--surface);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--primary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+  --font-display: "Fraunces", "Instrument Serif", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "IBM Plex Mono", ui-monospace, monospace;
+
+}
+
+:root {
+  --background: #08090a;
+  --surface: #0e1011;
+  --foreground: #eceded;
+  --muted-foreground: #84898c;
+  --border: #22262a;
+  --primary: #f5f6f6;
+  --primary-foreground: #08090a;
+  --accent: #9aa2a6;
+  --destructive: #c0503c;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Small caps instrument label */
+@utility tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* Solid flat panel — the only surface treatment in the app */
+@utility plate {
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+@utility serif {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Brandmark — quiet lowercase logotype, tight and small (Apple-scale) */
+@utility brandmark {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  line-height: 1;
+}
+
+/* Product wordmark — high-contrast display, optical sizing at display grade */
+@utility wordmark {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+  font-weight: 380;
+  letter-spacing: -0.035em;
+  line-height: 0.86;
+}
+
+@utility subwordmark {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* HDR pass — soft luminance lift, vignette and a fine grain over the canvas */
+@utility hdr {
+  background-image:
+    radial-gradient(120% 90% at 50% 42%, color-mix(in oklab, var(--foreground) 7%, transparent), transparent 62%),
+    radial-gradient(115% 100% at 50% 50%, transparent 52%, color-mix(in oklab, var(--background) 88%, black) 100%);
+  mix-blend-mode: soft-light;
+  opacity: 0.9;
+}
+
+@utility grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+}
