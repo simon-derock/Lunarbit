@@ -528,3 +528,17 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   mypy pass.
 - Rationale: FastAPI can now map failure classes to stable HTTP responses
   without leaking private database errors, credentials, or source content.
+
+### 2026-08-25 — Wire LangGraph into authenticated FastAPI chat
+
+- Decision: Add `PrivateWorkflowBackend` to the API contract and route private
+  chat/answer execution through `GraphRAGWorkflow` when configured. The
+  conversation session ID is reused as the LangGraph checkpoint thread ID;
+  existing slot inference and bounded follow-up context remain in force.
+- Safety: FastAPI maps typed workflow failures to safe 400/422/404/500/503
+  responses. The old deterministic answer backend remains only as a migration
+  fallback and is not selected by the production launcher.
+- Validation: Ruff, strict mypy, and focused workflow/runtime/service tests
+  pass. Starlette TestClient requests currently hang in this environment with
+  the installed FastAPI/Starlette dependency set; this is recorded as an
+  environment verification issue, not treated as a passing API smoke test.

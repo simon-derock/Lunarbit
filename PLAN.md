@@ -2626,6 +2626,10 @@ testable, and no model-generated value may directly mutate canonical graph or
 financial truth. The public workflow boundary translates guardrail, input,
 checkpoint, state, and execution failures into typed exceptions so API layers
 can expose safe status codes without leaking database details or source data.
+The authenticated `/v1/private/chat` route passes its conversation session ID
+as the LangGraph thread ID and retains bounded slot merging for follow-ups.
+Legacy answer backends remain compatibility adapters only; production
+launchers must configure the LangGraph workflow.
 
 ---
 

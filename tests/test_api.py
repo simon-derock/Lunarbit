@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from lunarbit.agent import build_query_plan
 from lunarbit.api import (
     DEFAULT_PUBLIC_ORIGINS,
     PrivateGroundedAnswer,
@@ -10,9 +11,11 @@ from lunarbit.api import (
     create_app,
     parse_public_origins,
 )
+from lunarbit.langgraph_workflow import LangGraphExecutionError
 from lunarbit.observability import InMemoryTraceSink
 from lunarbit.public import PublicMetric, PublicSnapshot, assert_public_payload, build_demo_snapshot
-from lunarbit.runtime import RuntimeRequest
+from lunarbit.retrieval import EvidenceVerification, VerificationStatus
+from lunarbit.runtime import GroundedContext, QuerySlots, RuntimeRequest, RuntimeStatus
 
 
 def _client() -> TestClient:
@@ -279,6 +282,75 @@ def test_private_answer_returns_verified_calculation_without_raw_evidence() -> N
     ]
     assert "source_hash" not in response.text
     assert "evidence_text" not in response.text
+
+
+class StubPrivateWorkflow:
+    def invoke(self, question: str, *, slots: QuerySlots, thread_id: str) -> GroundedContext:
+        assert slots.platform == "swiggy"
+        assert thread_id.startswith("session:") or thread_id.startswith("answer:")
+        return GroundedContext(
+            status=RuntimeStatus.VERIFIED,
+            question=question,
+            plan=build_query_plan(question),
+            fact_count=1,
+            direct_answer="The workflow found one source-backed order.",
+            calculation=None,
+            limitations=(),
+            citations=(),
+            verification=EvidenceVerification(
+                status=VerificationStatus.VERIFIED,
+                covered_claim_ids=("claim:one",),
+                missing_claim_ids=(),
+                citation_ids=("runtime:citation:1",),
+            ),
+            abstention_reason=None,
+        )
+
+
+def test_private_chat_uses_checkpointed_langgraph_workflow() -> None:
+    client = TestClient(
+        create_app(
+            private_workflow=StubPrivateWorkflow(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/chat",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={
+            "question": "How many orders came from Ember Kitchen on Swiggy?",
+            "slots": {"platform": "swiggy", "merchant_name": "ember kitchen"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"]["direct_answer"] == (
+        "The workflow found one source-backed order."
+    )
+
+
+class FailingPrivateWorkflow:
+    def invoke(self, question: str, *, slots: QuerySlots, thread_id: str) -> GroundedContext:
+        raise LangGraphExecutionError("workflow execution failed")
+
+
+def test_private_chat_maps_langgraph_failures_to_safe_http_status() -> None:
+    client = TestClient(
+        create_app(
+            private_workflow=FailingPrivateWorkflow(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/chat",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={"question": "How many orders came from Ember Kitchen?"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "private workflow execution failed"}
 
 
 def test_private_answer_uses_the_same_bearer_security_boundary() -> None:

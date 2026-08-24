@@ -6,7 +6,7 @@ from pydantic import Field
 
 from lunarbit.models import ContractModel
 from lunarbit.public import PublicSnapshot
-from lunarbit.runtime import QuerySlots, RuntimeRequest
+from lunarbit.runtime import GroundedContext, QuerySlots, RuntimeRequest
 
 API_VERSION = "1.0.0"
 
@@ -79,6 +79,16 @@ class PrivateChatResponse(ContractModel):
 
 class PrivateAnswerBackend(Protocol):
     def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer: ...
+
+
+class PrivateWorkflowBackend(Protocol):
+    def invoke(
+        self,
+        question: str,
+        *,
+        slots: QuerySlots,
+        thread_id: str,
+    ) -> GroundedContext: ...
 
 
 class PublicSnapshotSource(Protocol):

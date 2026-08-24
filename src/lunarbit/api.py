@@ -20,6 +20,7 @@ from lunarbit.api_contracts import (
     PrivateGroundedAnswer,
     PrivateRetrievalBackend,
     PrivateRetrievalTrace,
+    PrivateWorkflowBackend,
     PublicDemoAnswer,
     PublicEvidenceCard,
     PublicQueryPlan,
@@ -39,6 +40,13 @@ from lunarbit.guardrails import (
     RateLimitDecision,
     validate_slot_text,
     validate_user_question,
+)
+from lunarbit.langgraph_workflow import (
+    LangGraphCheckpointError,
+    LangGraphExecutionError,
+    LangGraphGuardrailError,
+    LangGraphInputError,
+    LangGraphStateError,
 )
 from lunarbit.observability import InMemoryTraceSink, TraceSink, elapsed_milliseconds, new_trace_id
 from lunarbit.public import (
@@ -188,6 +196,7 @@ def create_app(
     allowed_origins: Sequence[str] = DEFAULT_PUBLIC_ORIGINS,
     private_backend: PrivateRetrievalBackend | None = None,
     private_answer_backend: PrivateAnswerBackend | None = None,
+    private_workflow: PrivateWorkflowBackend | None = None,
     private_api_token: str | None = None,
     include_private_routes: bool = True,
     public_rate_limiter: InMemoryRateLimiter | None = None,
@@ -292,6 +301,52 @@ def create_app(
             or not compare_digest(supplied, private_api_token)
         ):
             raise HTTPException(status_code=403, detail="invalid bearer token")
+
+    def run_private_workflow(
+        question: str,
+        *,
+        slots: QuerySlots,
+        thread_id: str,
+    ) -> PrivateGroundedAnswer:
+        if private_workflow is None:
+            raise HTTPException(status_code=503, detail="private workflow is not configured")
+        try:
+            context = private_workflow.invoke(question, slots=slots, thread_id=thread_id)
+        except LangGraphGuardrailError as error:
+            raise HTTPException(
+                status_code=400,
+                detail="question rejected by input guardrail",
+            ) from error
+        except LangGraphInputError as error:
+            raise HTTPException(
+                status_code=422,
+                detail="invalid private workflow request",
+            ) from error
+        except LangGraphCheckpointError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="conversation checkpoint not found",
+            ) from error
+        except LangGraphExecutionError as error:
+            raise HTTPException(
+                status_code=503,
+                detail="private workflow execution failed",
+            ) from error
+        except LangGraphStateError as error:
+            raise HTTPException(
+                status_code=500,
+                detail="private workflow returned invalid state",
+            ) from error
+        return PrivateGroundedAnswer(
+            status=context.status.value,
+            direct_answer=context.direct_answer,
+            calculation=context.calculation,
+            fact_count=context.fact_count,
+            citation_ids=context.verification.citation_ids,
+            verification_status=context.verification.status.value,
+            limitations=context.limitations,
+            abstention_reason=context.abstention_reason,
+        )
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -424,15 +479,25 @@ def create_app(
             authorization: Annotated[str | None, Header()] = None,
         ) -> PrivateGroundedAnswer:
             enforce_rate_limit(http_request, private_limiter)
-            if private_answer_backend is None or private_api_token is None:
+            if (
+                private_answer_backend is None and private_workflow is None
+            ) or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private answer is not configured")
             authorize_private(authorization)
             question = enforce_question_guardrail(request.question)
             enforce_slot_guardrail(request.slots)
             started = monotonic()
-            result = private_answer_backend.answer(
-                RuntimeRequest(question=question, slots=request.slots)
-            )
+            if private_workflow is not None:
+                result = run_private_workflow(
+                    question,
+                    slots=request.slots,
+                    thread_id=f"answer:{http_request.state.trace_id}",
+                )
+            else:
+                assert private_answer_backend is not None
+                result = private_answer_backend.answer(
+                    RuntimeRequest(question=question, slots=request.slots)
+                )
             record_trace(
                 http_request,
                 "private.answer",
@@ -453,7 +518,9 @@ def create_app(
             authorization: Annotated[str | None, Header()] = None,
         ) -> PrivateChatResponse:
             enforce_rate_limit(http_request, private_limiter)
-            if private_answer_backend is None or private_api_token is None:
+            if (
+                private_answer_backend is None and private_workflow is None
+            ) or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private answer is not configured")
             authorize_private(authorization)
             question = enforce_question_guardrail(request.question)
@@ -476,9 +543,17 @@ def create_app(
                     status_code=404,
                     detail="conversation session not found",
                 ) from error
-            answer = private_answer_backend.answer(
-                RuntimeRequest(question=prepared.contextual_question, slots=prepared.slots)
-            )
+            if private_workflow is not None:
+                answer = run_private_workflow(
+                    prepared.contextual_question,
+                    slots=prepared.slots,
+                    thread_id=session_id,
+                )
+            else:
+                assert private_answer_backend is not None
+                answer = private_answer_backend.answer(
+                    RuntimeRequest(question=prepared.contextual_question, slots=prepared.slots)
+                )
             turn_index = sessions.append(
                 session_id,
                 question=question,
