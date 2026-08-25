@@ -460,6 +460,9 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
     elif label is PublicNodeLabel.ITEM:
         title = str(row.get("raw_name_private") or row.get("display_name_private") or "Food item")
         subtitle = f"{platform} item" if platform else "Food item observation"
+    elif label is PublicNodeLabel.PLATFORM:
+        title = str(row.get("display_name_private") or platform or "Food-commerce platform")
+        subtitle = "Food-commerce platform"
     elif label is PublicNodeLabel.ORDER:
         title = f"Order {alias[-6:].upper()}"
         subtitle = f"{platform} order" if platform else "Commerce order"
