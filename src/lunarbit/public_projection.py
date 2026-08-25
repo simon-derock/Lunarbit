@@ -134,7 +134,12 @@ _NAVIGATION_LABELS = (
     "ReconciliationRun",
     "PersonMention",
     "EvidenceChunk",
+    "AgenticRegion",
+    "EntityMention",
+    "ResolutionDecision",
     "Document",
+    "SourceMessage",
+    "LegalEntity",
 )
 
 _NAVIGATION_NODE_CYPHER = (
@@ -147,7 +152,7 @@ _NAVIGATION_NODE_CYPHER = (
     "node.observed_amount AS observed_amount, node.amount AS amount, "
     "node.currency AS currency, node.component_type AS component_type, "
     "node.status AS status, node.scope AS scope "
-    "ORDER BY node.node_id LIMIT $limit"
+    "ORDER BY COUNT { (node)--() } DESC, node.node_id LIMIT $limit"
 )
 
 _NAVIGATION_RELATIONSHIP_CYPHER = (
@@ -430,7 +435,10 @@ def _navigation_label(labels: object) -> PublicNodeLabel:
 
 def _public_alias(canonical_id: str) -> str:
     digest = sha256(f"lunarbit-public-v1:{canonical_id}".encode()).hexdigest()[:12]
-    return f"pub:node:{digest}"
+    # Public payload validation rejects long digit runs; an alpha-only alias
+    # remains opaque while staying stable across projection refreshes.
+    alpha_digest = digest.translate(str.maketrans("0123456789", "abcdefghij"))
+    return f"pub:node:{alpha_digest}"
 
 
 def _navigation_node(row: Mapping[str, object]) -> PublicNode:
@@ -468,7 +476,22 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
         title = f"Delivery participant {alias[-6:].upper()}"
         subtitle = "Anonymized delivery mention"
     else:
-        title = "Evidence structure"
+        evidence_kind = next(
+            (
+                kind
+                for kind in (
+                    "AgenticRegion",
+                    "EntityMention",
+                    "ResolutionDecision",
+                    "Document",
+                    "SourceMessage",
+                    "EvidenceChunk",
+                )
+                if kind in label_values
+            ),
+            "Evidence",
+        )
+        title = evidence_kind.replace("SourceMessage", "Source message")
         subtitle = "Redacted source lineage"
     properties: dict[str, str | int | float | bool | None] = {"projection": "navigation"}
     if platform:
@@ -524,7 +547,12 @@ class NavigationSnapshotSource:
         )
         edges = tuple(
             PublicEdge(
-                id=f"pub:edge:{sha256(f'{source}:{target}:{relationship}'.encode()).hexdigest()[:16]}",
+                id=(
+                    "pub:edge:"
+                    + sha256(f"{source}:{target}:{relationship}".encode())
+                    .hexdigest()[:16]
+                    .translate(str.maketrans("0123456789", "abcdefghij"))
+                ),
                 source=aliases[source],
                 target=aliases[target],
                 relationship=relationship,
