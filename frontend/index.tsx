@@ -247,10 +247,8 @@ export function Console() {
       {/* top bar */}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-4">
         <div className="pointer-events-auto flex items-baseline gap-2.5 px-1 pt-1">
-          <h1 className="brandmark text-[15px] text-foreground">lunarbit</h1>
-          <span className="text-[9px] tracking-[0.18em] text-muted-foreground">
-            {apiState === "live" ? "neo4j aggregate live" : apiState === "loading" ? "connecting" : "live graph unavailable"}
-          </span>
+          <h1 className="brandmark text-[18px] tracking-[0.08em] text-foreground">LUNARBIT</h1>
+          <span className="text-[9px] tracking-[0.08em] text-muted-foreground">by Philip Simon Derock</span>
         </div>
 
 
