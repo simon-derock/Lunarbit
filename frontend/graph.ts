@@ -765,6 +765,23 @@ export interface GraphProfile {
   density: number;
 }
 
+/** Relationship vocabulary emitted by the live Neo4j public projection. */
+export const LIVE_RELATIONSHIPS = [
+  "PLACED_ON",
+  "ORDERED_FROM",
+  "OUTLET_OF",
+  "LISTING_OF",
+  "HAS_ITEM_OBSERVATION",
+  "HAS_COMPONENT",
+  "RECONCILED_BY",
+  "EVALUATED_BY",
+  "DOCUMENTED_BY",
+  "RESOLVES_TO",
+  "HAS_DELIVERY_MENTION",
+  "USED",
+  "EVIDENCED_BY",
+] as const;
+
 export const GRAPH_PROFILES: GraphProfile[] = [
   {
     id: "full",
@@ -792,6 +809,7 @@ export const GRAPH_PROFILES: GraphProfile[] = [
       "PRECEDES",
       "COMPARED_WITH",
       "SUPPORTS",
+      ...LIVE_RELATIONSHIPS,
     ],
     density: 1,
   },
@@ -809,6 +827,12 @@ export const GRAPH_PROFILES: GraphProfile[] = [
       "RECONCILES_TO",
       "EVIDENCED_BY",
       "ORDERED_FROM",
+      "PLACED_ON",
+      "OUTLET_OF",
+      "HAS_COMPONENT",
+      "RECONCILED_BY",
+      "EVALUATED_BY",
+      "DOCUMENTED_BY",
     ],
     density: 0.9,
   },
@@ -824,6 +848,7 @@ export const GRAPH_PROFILES: GraphProfile[] = [
       "EVIDENCED_BY",
       "FULFILLED_BY",
       "CONFLICTS_WITH",
+      "HAS_DELIVERY_MENTION",
     ],
     density: 0.75,
   },
@@ -832,7 +857,16 @@ export const GRAPH_PROFILES: GraphProfile[] = [
     name: "Evidence Spine",
     scope: "Document → page → chunk → assertion provenance",
     layers: ["evidence", "intelligence"],
-    relationships: ["CONTAINS", "ASSERTS", "EVIDENCED_BY", "DERIVED_FROM", "SUPPORTS"],
+    relationships: [
+      "CONTAINS",
+      "ASSERTS",
+      "EVIDENCED_BY",
+      "DERIVED_FROM",
+      "SUPPORTS",
+      "DOCUMENTED_BY",
+      "EVALUATED_BY",
+      "USED",
+    ],
     density: 0.8,
   },
   {
@@ -846,6 +880,8 @@ export const GRAPH_PROFILES: GraphProfile[] = [
       "POSSIBLY_SAME_AS",
       "EXPLAINS",
       "DERIVED_FROM",
+      "RECONCILED_BY",
+      "EVALUATED_BY",
     ],
     density: 0.6,
   },
@@ -854,7 +890,16 @@ export const GRAPH_PROFILES: GraphProfile[] = [
     name: "Comparable Items",
     scope: "Item observations grouped across merchants",
     layers: ["product", "commerce", "financial"],
-    relationships: ["HAS_ITEM", "COMPARED_WITH", "ORDERED_FROM", "HAS_MONEY_COMPONENT", "PRECEDES"],
+    relationships: [
+      "HAS_ITEM",
+      "COMPARED_WITH",
+      "ORDERED_FROM",
+      "HAS_MONEY_COMPONENT",
+      "PRECEDES",
+      "OUTLET_OF",
+      "LISTING_OF",
+      "HAS_ITEM_OBSERVATION",
+    ],
     density: 0.85,
   },
 ];
