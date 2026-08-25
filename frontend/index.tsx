@@ -30,6 +30,7 @@ function Menu({
   onChange,
   align = "start",
   width = "16rem",
+  keepOpenOnSelect = false,
 }: {
   tag: string;
   value: string;
@@ -37,6 +38,7 @@ function Menu({
   onChange: (id: string) => void;
   align?: "start" | "end";
   width?: string;
+  keepOpenOnSelect?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -78,7 +80,7 @@ function Menu({
               key={o.id}
               onClick={() => {
                 onChange(o.id);
-                setOpen(false);
+                if (!keepOpenOnSelect) setOpen(false);
               }}
               className={`flex w-full items-start gap-2 border-b border-border px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-foreground/5 ${
                 o.id === value ? "bg-foreground/[0.07]" : ""
@@ -273,6 +275,7 @@ export function Console() {
             }}
             align="end"
             width="17rem"
+            keepOpenOnSelect
             options={VIZ_PROFILES.map((v) => ({ id: v.id, name: v.name, hint: v.hint }))}
           />
 
@@ -282,6 +285,7 @@ export function Console() {
             onChange={setThemeId}
             align="end"
             width="17rem"
+            keepOpenOnSelect
             options={THEMES.map((t) => ({
               id: t.id,
               name: t.name,
