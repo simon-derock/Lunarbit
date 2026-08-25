@@ -104,6 +104,21 @@ def test_public_snapshot_endpoint_refreshes_the_configured_safe_projection() -> 
     assert response.json()["metrics"] == [{"label": "Graph nodes", "value": "18", "detail": None}]
 
 
+def test_live_public_snapshot_does_not_fallback_to_synthetic_data() -> None:
+    from lunarbit.public_projection import PublicProjectionUnavailable
+
+    class Unavailable:
+        def snapshot(self) -> PublicSnapshot:
+            raise PublicProjectionUnavailable("neo4j unavailable")
+
+    response = TestClient(create_app(public_snapshot_source=Unavailable())).get(
+        "/v1/public/snapshot"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "live public graph projection is unavailable"}
+
+
 def test_query_plan_does_not_echo_user_input_or_expose_cypher() -> None:
     client = _client()
     sensitive_question = "What did my meal cost three years ago?"

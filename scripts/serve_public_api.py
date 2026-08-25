@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Serve Lunarbit's browser-safe API without mounting private GraphRAG routes.
 
-With ``NEO4J_URI`` (or ``--neo4j-uri``), this serves a live aggregate topology.
-Without it, the public synthetic mirror remains available for demos and contract
-verification. The process never loads embedding keys, private API tokens, or a
-private retrieval backend.
+With ``NEO4J_URI`` (or ``--neo4j-uri``), this serves a bounded live navigation topology.
+Synthetic fixtures are available only through tests and explicit internal contract
+verification; this launcher refuses to present them as the product. The process never
+loads embedding keys, private API tokens, or a private retrieval backend.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 from lunarbit.api import create_app, parse_public_origins
-from lunarbit.public_projection import AggregateSnapshotSource, Neo4jAggregateReader
+from lunarbit.public_projection import NavigationSnapshotSource, Neo4jAggregateReader
 
 
 def _args() -> argparse.Namespace:
@@ -36,6 +36,9 @@ def main() -> int:
     allowed_origins = parse_public_origins(os.environ.get("LUNARBIT_PUBLIC_ALLOWED_ORIGINS"))
     reader: Neo4jAggregateReader | None = None
 
+    if not uri:
+        raise ValueError("NEO4J_URI or --neo4j-uri is required for the live public product")
+
     try:
         source = None
         if uri:
@@ -45,7 +48,7 @@ def main() -> int:
                 username=os.environ.get("NEO4J_USERNAME") or None,
                 password=os.environ.get("NEO4J_PASSWORD") or None,
             )
-            source = AggregateSnapshotSource(reader)
+            source = NavigationSnapshotSource(reader)
         app = create_app(
             public_snapshot_source=source,
             allowed_origins=allowed_origins,

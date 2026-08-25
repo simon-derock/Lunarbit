@@ -7,6 +7,7 @@ from lunarbit.public_projection import (
     _RELATIONSHIP_COUNTS_CYPHER,
     AggregateRelationship,
     AggregateSnapshotSource,
+    NavigationSnapshotSource,
     build_aggregate_snapshot,
 )
 
@@ -135,3 +136,75 @@ def test_aggregate_queries_never_select_canonical_ids_or_properties() -> None:
     assert "_private" not in query_text
     assert ".properties" not in query_text
     assert "source_hash" not in query_text
+
+
+def test_navigation_projection_is_dense_anonymized_and_frontend_closed() -> None:
+    class Reader:
+        def graph_totals(self) -> tuple[int, int]:
+            return (48_518, 69_527)
+
+        def node_counts(self) -> dict[PublicNodeLabel, int]:
+            return {}
+
+        def relationship_counts(self, limit: int) -> tuple[AggregateRelationship, ...]:
+            return ()
+
+        def navigation_nodes(self, *, per_class: int):
+            assert per_class == 2
+            return (
+                {
+                    "canonical_id": "order:private-1",
+                    "labels": ["LunarbitNode", "Order"],
+                    "platform": "swiggy",
+                    "order_type": "food",
+                },
+                {
+                    "canonical_id": "merchant:private-1",
+                    "labels": ["LunarbitNode", "Merchant"],
+                    "display_name_private": "Ember Kitchen",
+                    "platform": "swiggy",
+                },
+                {
+                    "canonical_id": "item:private-1",
+                    "labels": ["LunarbitNode", "ItemObservation"],
+                    "raw_name_private": "Biryani",
+                    "platform": "swiggy",
+                },
+                {
+                    "canonical_id": "money:private-1",
+                    "labels": ["LunarbitNode", "MoneyComponent"],
+                    "component_type": "delivery_charge",
+                    "amount": "42.00",
+                    "currency": "INR",
+                },
+            )
+
+        def navigation_relationships(self, *, canonical_ids, limit: int):
+            assert limit == 20
+            return (
+                {
+                    "source_id": "order:private-1",
+                    "target_id": "merchant:private-1",
+                    "relationship": "ORDERED_FROM",
+                },
+                {
+                    "source_id": "order:private-1",
+                    "target_id": "item:private-1",
+                    "relationship": "HAS_ITEM_OBSERVATION",
+                },
+                {
+                    "source_id": "order:private-1",
+                    "target_id": "money:private-1",
+                    "relationship": "HAS_COMPONENT",
+                },
+            )
+
+    snapshot = NavigationSnapshotSource(Reader(), per_class=2, relationship_limit=20).snapshot()
+    payload = snapshot.model_dump(mode="json")
+
+    assert snapshot.mode == "neo4j_navigation_projection"
+    assert len(snapshot.nodes) == 4
+    assert len(snapshot.edges) == 3
+    assert all(node.id.startswith("pub:node:") for node in snapshot.nodes)
+    assert all("private-1" not in str(node.model_dump()) for node in snapshot.nodes)
+    assert_public_payload(payload)

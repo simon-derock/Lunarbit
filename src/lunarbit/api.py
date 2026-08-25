@@ -359,9 +359,11 @@ def create_app(
             return public_snapshot
         try:
             projected = public_snapshot_source.snapshot()
-        except PublicProjectionUnavailable:
-            # A safe demo projection is preferable to exposing partial private topology.
-            projected = public_snapshot
+        except PublicProjectionUnavailable as error:
+            raise HTTPException(
+                status_code=503,
+                detail="live public graph projection is unavailable",
+            ) from error
         assert_public_payload(projected.model_dump(mode="json"))
         return projected
 

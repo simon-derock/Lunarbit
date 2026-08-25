@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from threading import Lock
 from time import monotonic
 from typing import Protocol, Self
@@ -68,6 +69,19 @@ class AggregateReader(Protocol):
     def relationship_counts(self, limit: int) -> tuple[AggregateRelationship, ...]: ...
 
 
+class NavigationReader(AggregateReader, Protocol):
+    """Read a bounded, allowlisted public navigation slice."""
+
+    def navigation_nodes(self, *, per_class: int) -> tuple[Mapping[str, object], ...]: ...
+
+    def navigation_relationships(
+        self,
+        *,
+        canonical_ids: tuple[str, ...],
+        limit: int,
+    ) -> tuple[Mapping[str, object], ...]: ...
+
+
 def _class_case(variable: str) -> str:
     """Return a fixed Cypher CASE mapping from canonical labels to safe public classes."""
     return (
@@ -106,6 +120,42 @@ _RELATIONSHIP_COUNTS_CYPHER = (
     "WHERE source_label IS NOT NULL AND target_label IS NOT NULL "
     "RETURN source_label, target_label, relationship, count(*) AS count "
     "ORDER BY count DESC, source_label, target_label, relationship LIMIT $limit"
+)
+
+_NAVIGATION_LABELS = (
+    "Platform",
+    "Order",
+    "Merchant",
+    "Outlet",
+    "ItemObservation",
+    "MerchantItem",
+    "MoneyComponent",
+    "FinancialEvent",
+    "ReconciliationRun",
+    "PersonMention",
+    "EvidenceChunk",
+    "Document",
+)
+
+_NAVIGATION_NODE_CYPHER = (
+    "MATCH (node:LunarbitNode) "
+    "WHERE $label IN labels(node) "
+    "RETURN node.node_id AS canonical_id, labels(node) AS labels, "
+    "node.platform AS platform, node.order_type AS order_type, "
+    "node.display_name_private AS display_name_private, "
+    "node.raw_name_private AS raw_name_private, "
+    "node.observed_amount AS observed_amount, node.amount AS amount, "
+    "node.currency AS currency, node.component_type AS component_type, "
+    "node.status AS status, node.scope AS scope "
+    "ORDER BY node.node_id LIMIT $limit"
+)
+
+_NAVIGATION_RELATIONSHIP_CYPHER = (
+    "MATCH (source:LunarbitNode)-[relationship]->(target:LunarbitNode) "
+    "WHERE source.node_id IN $canonical_ids AND target.node_id IN $canonical_ids "
+    "RETURN source.node_id AS source_id, target.node_id AS target_id, "
+    "type(relationship) AS relationship ORDER BY source.node_id, target.node_id "
+    "LIMIT $limit"
 )
 
 
@@ -174,6 +224,44 @@ class Neo4jAggregateReader:
             for row in rows
             if int(row["count"]) > 0
         )
+
+    def navigation_nodes(self, *, per_class: int) -> tuple[Mapping[str, object], ...]:
+        if not 1 <= per_class <= 100:
+            raise ValueError("navigation per-class limit must be between 1 and 100")
+        rows: list[Mapping[str, object]] = []
+        with self._driver.session(
+            database=self._database,
+            default_access_mode=READ_ACCESS,
+        ) as session:
+            for label in _NAVIGATION_LABELS:
+                rows.extend(
+                    session.run(
+                        _NAVIGATION_NODE_CYPHER,
+                        {"label": label, "limit": per_class},
+                    )
+                )
+        return tuple(rows)
+
+    def navigation_relationships(
+        self,
+        *,
+        canonical_ids: tuple[str, ...],
+        limit: int,
+    ) -> tuple[Mapping[str, object], ...]:
+        if not canonical_ids:
+            return ()
+        if not 1 <= limit <= 2_000:
+            raise ValueError("navigation relationship limit must be between 1 and 2000")
+        with self._driver.session(
+            database=self._database,
+            default_access_mode=READ_ACCESS,
+        ) as session:
+            return tuple(
+                session.run(
+                    _NAVIGATION_RELATIONSHIP_CYPHER,
+                    {"canonical_ids": canonical_ids, "limit": limit},
+                )
+            )
 
     def close(self) -> None:
         self._driver.close()
@@ -320,4 +408,176 @@ class AggregateSnapshotSource:
             relationships=self._reader.relationship_counts(self._relationship_limit),
             graph_node_count=graph_node_count,
             graph_relationship_count=graph_relationship_count,
+        )
+
+
+def _navigation_label(labels: object) -> PublicNodeLabel:
+    values = {str(value) for value in labels} if isinstance(labels, (list, tuple)) else set()
+    if "Platform" in values:
+        return PublicNodeLabel.PLATFORM
+    if "Order" in values:
+        return PublicNodeLabel.ORDER
+    if values & {"Merchant", "Outlet"}:
+        return PublicNodeLabel.MERCHANT
+    if values & {"ItemObservation", "MerchantItem"}:
+        return PublicNodeLabel.ITEM
+    if values & {"MoneyComponent", "FinancialEvent"}:
+        return PublicNodeLabel.MONEY_COMPONENT
+    if "ReconciliationRun" in values:
+        return PublicNodeLabel.RECONCILIATION
+    return PublicNodeLabel.EVIDENCE
+
+
+def _public_alias(canonical_id: str) -> str:
+    digest = sha256(f"lunarbit-public-v1:{canonical_id}".encode()).hexdigest()[:12]
+    return f"pub:node:{digest}"
+
+
+def _navigation_node(row: Mapping[str, object]) -> PublicNode:
+    canonical_id = row.get("canonical_id")
+    if not isinstance(canonical_id, str) or not canonical_id:
+        raise PublicProjectionUnavailable("navigation row omitted its canonical identity")
+    label = _navigation_label(row.get("labels"))
+    raw_labels = row.get("labels")
+    label_values = (
+        tuple(str(value) for value in raw_labels)
+        if isinstance(raw_labels, (list, tuple))
+        else ()
+    )
+    alias = _public_alias(canonical_id)
+    platform = str(row.get("platform") or "").title()
+    if label is PublicNodeLabel.MERCHANT:
+        title = str(row.get("display_name_private") or "Merchant alias")
+        subtitle = f"{platform} merchant" if platform else "Merchant entity"
+    elif label is PublicNodeLabel.ITEM:
+        title = str(row.get("raw_name_private") or row.get("display_name_private") or "Food item")
+        subtitle = f"{platform} item" if platform else "Food item observation"
+    elif label is PublicNodeLabel.ORDER:
+        title = f"Order {alias[-6:].upper()}"
+        subtitle = f"{platform} order" if platform else "Commerce order"
+    elif label is PublicNodeLabel.MONEY_COMPONENT:
+        component = str(row.get("component_type") or "financial component").replace("_", " ")
+        amount = row.get("amount") or row.get("observed_amount")
+        currency = str(row.get("currency") or "")
+        title = f"{component.title()} {currency} {amount}".strip()
+        subtitle = "Source-backed financial event"
+    elif label is PublicNodeLabel.RECONCILIATION:
+        title = "Deterministic reconciliation"
+        subtitle = str(row.get("status") or "reviewed run")
+    elif "PersonMention" in label_values:
+        title = f"Delivery participant {alias[-6:].upper()}"
+        subtitle = "Anonymized delivery mention"
+    else:
+        title = "Evidence structure"
+        subtitle = "Redacted source lineage"
+    properties: dict[str, str | int | float | bool | None] = {"projection": "navigation"}
+    if platform:
+        properties["platform"] = platform
+    if label is PublicNodeLabel.MONEY_COMPONENT:
+        properties.update(
+            {
+                "amount": str(row.get("amount") or row.get("observed_amount") or ""),
+                "currency": str(row.get("currency") or ""),
+                "component_type": str(row.get("component_type") or ""),
+            }
+        )
+    return PublicNode(
+        id=alias,
+        label=label,
+        title=title[:80],
+        subtitle=subtitle[:120],
+        properties=properties,
+    )
+
+
+class NavigationSnapshotSource:
+    """Serve a dense, bounded, anonymized graph slice for visual navigation."""
+
+    def __init__(
+        self,
+        reader: NavigationReader,
+        *,
+        per_class: int = 24,
+        relationship_limit: int = 600,
+    ) -> None:
+        if not 1 <= per_class <= 100:
+            raise ValueError("navigation per-class limit must be between 1 and 100")
+        if not 1 <= relationship_limit <= 2_000:
+            raise ValueError("navigation relationship limit must be between 1 and 2000")
+        self._reader = reader
+        self._per_class = per_class
+        self._relationship_limit = relationship_limit
+
+    def snapshot(self) -> PublicSnapshot:
+        rows = self._reader.navigation_nodes(per_class=self._per_class)
+        nodes = tuple(_navigation_node(row) for row in rows)
+        if not nodes:
+            raise PublicProjectionUnavailable("canonical graph has no navigable public nodes")
+        aliases = {
+            str(row["canonical_id"]): _public_alias(str(row["canonical_id"]))
+            for row in rows
+            if isinstance(row.get("canonical_id"), str)
+        }
+        relationships = self._reader.navigation_relationships(
+            canonical_ids=tuple(aliases),
+            limit=self._relationship_limit,
+        )
+        edges = tuple(
+            PublicEdge(
+                id=f"pub:edge:{sha256(f'{source}:{target}:{relationship}'.encode()).hexdigest()[:16]}",
+                source=aliases[source],
+                target=aliases[target],
+                relationship=relationship,
+            )
+            for row in relationships
+            if (source := row.get("source_id")) in aliases
+            and (target := row.get("target_id")) in aliases
+            and isinstance(relationship := row.get("relationship"), str)
+            and _RELATIONSHIP.fullmatch(relationship)
+        )
+        if not edges:
+            raise PublicProjectionUnavailable("navigable public nodes have no relationships")
+        graph_nodes, graph_relationships = self._reader.graph_totals()
+        return PublicSnapshot(
+            mode="neo4j_navigation_projection",
+            disclosure=(
+                "Bounded live food-commerce navigation projection. Names and amounts are drawn "
+                "from reviewed evidence; personal identifiers and source text are withheld."
+            ),
+            metrics=(
+                PublicMetric(
+                    label="Visible nodes",
+                    value=str(len(nodes)),
+                    detail="bounded navigation",
+                ),
+                PublicMetric(
+                    label="Visible relationships",
+                    value=str(len(edges)),
+                    detail="bounded navigation",
+                ),
+                PublicMetric(
+                    label="Graph nodes",
+                    value=str(graph_nodes),
+                    detail="canonical aggregate",
+                ),
+                PublicMetric(
+                    label="Graph relationships",
+                    value=str(graph_relationships),
+                    detail="canonical aggregate",
+                ),
+            ),
+            sample_questions=(
+                "Which merchant and item observations connect to this order?",
+                "How do fees, discounts, and item prices connect through evidence?",
+                "Which delivery participant aliases recur across source-backed orders?",
+                "What temporal path connects an item price to its reconciliation?",
+                "Which evidence structures support this financial component?",
+                "Where do merchant, order, item, and money layers intersect?",
+                "Which relationships survive deterministic validation?",
+                "How does a promotion alter the effective order economics?",
+                "Which orders share a reviewed merchant identity?",
+                "What graph path proves this food-commerce finding?",
+            ),
+            nodes=nodes,
+            edges=edges,
         )

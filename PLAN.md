@@ -2643,6 +2643,13 @@ The first frontend integration slice is complete: Vite/React/Tailwind build
 shell, typed public snapshot/query-plan client, privacy-safe DTO adapter,
 live-aggregate status, explicit unavailable state, and graph-console smoke
 tests. Synthetic graph nodes are never rendered on API failure.
+
+The live browser projection now uses a bounded navigation slice rather than
+class-only aggregates: reviewed merchant/item names, orders, money components,
+evidence structures, reconciliation runs, and anonymized delivery mentions are
+mapped to stable public aliases and selected relationships. The API returns
+`503` when this live projection is unavailable; it never silently substitutes a
+synthetic graph in the product launcher.
 Private chat remains server-authenticated and is not bundled with browser
 credentials; it will be added through an explicit session/auth boundary.
 

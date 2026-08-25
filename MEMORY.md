@@ -574,3 +574,21 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   useful for tests/public reviewed showcase routes, but are not silently shown
   as live graph state.
 - Validation: Frontend Vitest and production TypeScript/Vite build pass.
+
+### 2026-08-25 — Replace class-only public graph with dense navigation slice
+
+- Decision: Add `NavigationSnapshotSource`, which selects bounded real nodes
+  from allowlisted commerce/evidence/finance labels, emits stable hashed public
+  aliases, preserves safe merchant/item/amount display fields, anonymizes
+  delivery mentions, and returns only relationships whose endpoints are in the
+  visible slice.
+- Product effect: The frontend receives enough real topology for its brain,
+  orbit, culture, and constellation formations while retaining the same
+  `PublicSnapshot` DTO and privacy boundary.
+- Safety: Canonical IDs are used only transiently inside the projection query;
+  private source text, hashes, raw delivery names, payment data, and other
+  forbidden fields never enter the public payload. A live projection failure
+  now returns `503` instead of synthetic fallback data.
+- Validation: Public projection tests (11), Ruff, and strict mypy pass. A live
+  smoke query is pending because the local Neo4j container is currently being
+  killed after startup.
