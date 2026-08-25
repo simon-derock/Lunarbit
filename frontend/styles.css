@@ -94,12 +94,12 @@ body {
   }
 }
 
-/* Brandmark — quiet lowercase logotype, tight and small (Apple-scale) */
+/* Brandmark — compact title case logotype for the Lunarbit lockup. */
 @utility brandmark {
   font-family: var(--font-mono);
   font-weight: 400;
   letter-spacing: 0.02em;
-  text-transform: lowercase;
+  text-transform: none;
   line-height: 1;
 }
 
