@@ -187,10 +187,11 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
     const dim = near ? !near.has(n.id) : false;
     const active = n.id === focus;
     const intro = introRef.current;
+    const dense = nodes.length > 220 || scale < 0.55;
     // screen-space compensation: marks stay legible when the fit zooms out
-    const zc = Math.min(2.2, Math.max(0.7, 0.8 / scale));
-    const r = (2.6 + Math.sqrt(n.weight) * 1.5) * viz.scale * zc * (0.55 + intro * 0.45);
-    const hair = Math.max(0.35, 0.9 / scale);
+    const zc = Math.min(4, Math.max(0.9, 1.35 / scale));
+    const r = (3.4 + Math.sqrt(n.weight) * 1.8) * viz.scale * zc * (0.65 + intro * 0.35);
+    const hair = Math.max(0.55, 1.1 / scale);
     const seed = hash(n.id);
 
     ctx.globalAlpha = (dim ? 0.12 : 1) * (0.2 + intro * 0.8);
@@ -209,7 +210,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
 
     if (viz.nodeMark === "soma") {
       /* neuron: irregular soma body + tapering dendrite arbor */
-      const arms = 4 + Math.floor(seed * 4);
+      const arms = dense ? 3 : 4 + Math.floor(seed * 4);
       for (let i = 0; i < arms; i++) {
         const a = (i / arms) * Math.PI * 2 + seed * 6.28;
         const len = r * (2.6 + seed * 2.4 + (i % 2 ? 0.9 : 0)) * (0.4 + intro * 0.6);
@@ -218,7 +219,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
         let py = n.y;
         let ang = a;
         let w = Math.max(0.22, r * 0.34);
-        const segs = 4;
+        const segs = dense ? 2 : 4;
         for (let s = 0; s < segs; s++) {
           const step = len / segs;
           const nx2 = px + Math.cos(ang) * step;
@@ -521,10 +522,18 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
         grow(ex, ey, ang + spread, len * 0.62, w * 0.62, depth - 1, k * 2 + 1);
         grow(ex, ey, ang - spread * 0.85, len * 0.58, w * 0.6, depth - 1, k * 2 + 2);
       };
-      const arms = 6 + Math.floor(seed * 4);
+      const arms = dense ? 3 : 6 + Math.floor(seed * 4);
       for (let i = 0; i < arms; i++) {
         const a = (i / arms) * Math.PI * 2 + seed * 6.28;
-        grow(n.x, n.y, a, r * (1.9 + rnd(i) * 1.3) * (0.45 + intro * 0.55), r * 0.3, 4, i + 1);
+        grow(
+          n.x,
+          n.y,
+          a,
+          r * (1.9 + rnd(i) * 1.3) * (0.45 + intro * 0.55),
+          r * 0.3,
+          dense ? 2 : 4,
+          i + 1,
+        );
       }
       // soma: a small dense knot, not a disc
       ctx.fillStyle = color;
