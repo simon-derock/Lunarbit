@@ -94,7 +94,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
   targetsRef.current = targets;
   const strengthRef = useRef(viz.formStrength);
   strengthRef.current = viz.formStrength;
-  const simNodes = useRef<(GraphNode & Pt & { vx: number; vy: number })[]>([]);
+  const simNodes = useRef<(GraphNode & Pt & { vx: number; vy: number; fx?: number; fy?: number })[]>([]);
 
   useEffect(() => {
     const fg = fgRef.current;
@@ -114,6 +114,10 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
       const st = strengthRef.current;
       if (!st) return;
       for (const nd of simNodes.current) {
+        // Let the pointer own a node while it is being dragged. Without this
+        // guard the formation spring immediately pulled it back under the
+        // cursor, which made organic marks feel impossible to move.
+        if (nd.fx != null || nd.fy != null) continue;
         const t = targetsRef.current.get(nd.id);
         if (!t) continue;
         nd.vx += (t.x - nd.x) * st;
@@ -121,7 +125,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
       }
     }) as (() => void) & { initialize?: (ns: unknown[]) => void };
     form.initialize = (ns: unknown[]) => {
-      simNodes.current = ns as (GraphNode & Pt & { vx: number; vy: number })[];
+      simNodes.current = ns as (GraphNode & Pt & { vx: number; vy: number; fx?: number; fy?: number })[];
     };
     fg.d3Force("form", form);
     fg.d3ReheatSimulation?.();
@@ -138,10 +142,9 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
     const fg = fgRef.current;
     if (!fg || userRef.current) return;
     prog.current += 2;
-    fg.zoomToFit(0, 150);
-    const c = fg.centerAt?.();
-    const k = fg.zoom?.();
-    if (c && k) fg.centerAt(c.x + 140 / k, c.y, 0);
+    // Keep a generous visual margin so style changes never crop or over-zoom
+    // the complete graph beneath the surrounding inspector plates.
+    fg.zoomToFit(220, 230);
   }, []);
   useEffect(() => {
     tickCount.current = 0;
@@ -787,7 +790,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
                 const n = raw as GraphNode & Pt;
                 const zc = Math.min(2.2, Math.max(0.7, 0.8 / (scale || 1)));
                 const hit = Math.max(
-                  6 / (scale || 1),
+                  14 / (scale || 1),
                   (2.6 + Math.sqrt(n.weight) * 1.5) * viz.scale * zc * 1.6,
                 );
                 ctx.fillStyle = color;
@@ -798,8 +801,17 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
             }
             onNodeHover={((n: unknown) => setHovered((n as GraphNode | null)?.id ?? null)) as never}
             onNodeClick={((n: unknown) => onSelect(n as GraphNode)) as never}
-            onNodeDrag={(() => {
+            onNodeDrag={((raw: unknown) => {
               userRef.current = true;
+              const n = raw as GraphNode & Pt & { fx?: number; fy?: number };
+              n.fx = n.x;
+              n.fy = n.y;
+            }) as never}
+            onNodeDragEnd={((raw: unknown) => {
+              const n = raw as GraphNode & Pt & { fx?: number; fy?: number };
+              n.fx = undefined;
+              n.fy = undefined;
+              fgRef.current?.d3ReheatSimulation?.();
             }) as never}
             onZoom={markUser as never}
             onBackgroundClick={() => onSelect(null)}
