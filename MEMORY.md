@@ -592,3 +592,32 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Validation: Public projection tests (11), Ruff, and strict mypy pass. A live
   smoke query is pending because the local Neo4j container is currently being
   killed after startup.
+
+### 2026-08-25 — Live graph navigation and frontend interaction hardening
+
+- Live public projection smoke now returns `neo4j_navigation_projection` with
+  322 real nodes and 105 real relationships from the Neo4j food-commerce graph.
+  Representative paths include order → item observation, order → money
+  component, order → reconciliation, order → merchant, order → platform,
+  order → anonymized delivery mention, and money component → evidence chunk.
+- Frontend relationship filters now include the live Neo4j vocabulary
+  (`PLACED_ON`, `ORDERED_FROM`, `HAS_COMPONENT`, `RECONCILED_BY`,
+  `EVIDENCED_BY`, and related types), so valid edges are not hidden by the old
+  synthetic profile vocabulary. Duplicate relationship keys were removed.
+- `/frontend` retains the reference visual engine and now defaults to the
+  formed `Cortex` layout with its curated `Cerise` palette. `Monochrome Grain`
+  is available as a graphite/silver theme and preserves the title-case
+  `Lunarbit` brand lockup with `by Philip Simon Derock`.
+- Canvas interaction: node hit areas are enlarged for organic marks; drag
+  pins a node while held and releases it naturally; style changes fit the full
+  graph with padded framing; repeated per-tick `zoomToFit` calls were removed.
+- Golgi/arbor rendering uses dense level-of-detail (fewer branches and lower
+  recursion when zoomed out or above 220 nodes), preventing the browser from
+  hanging on the live projection while preserving detailed rendering at focus.
+- Style/theme menus remain open after selecting an option and close only on an
+  outside click. Neo4j Browser is available at `http://127.0.0.1:7474/browser/`
+  with Bolt at `bolt://127.0.0.1:7687`.
+- Validation: frontend Vitest and production Vite build pass; backend public
+  projection tests, Ruff, and strict mypy pass. Production API smoke returned
+  the 322/105 live graph. Private corpus, `samples/`, API keys, and unrelated
+  chunking work remain uncommitted.
