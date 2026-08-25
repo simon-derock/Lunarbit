@@ -996,7 +996,7 @@ export const VIZ_PROFILES: VizProfile[] = [
     scale: 1.1,
     formation: "free",
     formStrength: 0,
-    preferredTheme: "cinnabar",
+    preferredTheme: "monochrome-grain",
   },
   {
     id: "chromatic",

@@ -147,9 +147,9 @@ const STATUS: Record<string, string> = {
 };
 
 export function Console() {
-  const [themeId, setThemeId] = useState(THEMES[0]!.id);
   const [profileId, setProfileId] = useState(GRAPH_PROFILES[0]!.id);
   const [vizId, setVizId] = useState(VIZ_PROFILES[0]!.id);
+  const [themeId, setThemeId] = useState(VIZ_PROFILES[0]!.preferredTheme);
   const [sort, setSort] = useState<SortId>("weight");
   const [minConfidence, setMinConfidence] = useState(0.6);
   const [mutedLayers, setMutedLayers] = useState<LayerId[]>([]);
@@ -249,7 +249,7 @@ export function Console() {
       {/* top bar */}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-4">
         <div className="pointer-events-auto flex items-baseline gap-2.5 px-1 pt-1">
-          <h1 className="brandmark text-[18px] tracking-[0.08em] text-foreground">LUNARBIT</h1>
+          <h1 className="brandmark text-[18px] tracking-[0.08em] text-foreground">Lunarbit</h1>
           <span className="text-[9px] tracking-[0.08em] text-muted-foreground">by Philip Simon Derock</span>
         </div>
 
