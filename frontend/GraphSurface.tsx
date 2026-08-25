@@ -151,8 +151,9 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
   const onTick = useCallback(() => {
     if (userRef.current) return;
     tickCount.current += 1;
-    // keep the frame locked to the layout while it settles — one continuous move
-    if (tickCount.current % 8 === 0) fit();
+    // Frame once after the first layout sample; repeatedly animating zoomToFit
+    // during every eighth tick made dense live projections feel unresponsive.
+    if (tickCount.current === 1) fit();
   }, [fit]);
   const markUser = useCallback(() => {
     if (prog.current > 0) prog.current -= 1;
@@ -767,16 +768,16 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
             height={size.h}
             graphData={data as never}
             backgroundColor={palette.paper}
-            warmupTicks={24}
-            cooldownTicks={110}
-            d3AlphaDecay={0.045}
-            d3VelocityDecay={0.5}
+            warmupTicks={12}
+            cooldownTicks={72}
+            d3AlphaDecay={0.065}
+            d3VelocityDecay={0.58}
             enableNodeDrag
             enableZoomInteraction
             enablePanInteraction
             linkCanvasObject={drawLink as never}
             linkCanvasObjectMode={(() => "replace") as never}
-            linkDirectionalParticles={viz.particles ? 2 : 0}
+            linkDirectionalParticles={viz.particles && data.links.length < 180 ? 2 : 0}
             linkDirectionalParticleWidth={1.1}
             linkDirectionalParticleColor={(() => palette.edgeHot) as never}
             nodeRelSize={6}
