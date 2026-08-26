@@ -3207,7 +3207,16 @@ Control: mandatory `MEMORY.md` start/end protocol and conflict reconciliation.
 
 ---
 
-## 31. Final standard
+## 31. Aura deployment checkpoint
+
+- Load the canonical graph archive with `scripts/ingest_graph.py` using the
+  four `NEO4J_*` environment variables; explicit CLI values remain supported.
+- Require an idempotent write and a post-write count equality check against the
+  archive before exposing the graph to the API.
+- Current verified Aura baseline: 48,518 nodes and 69,527 relationships from
+  `data/processed/_graph/canonical_v1_20260823d`.
+
+## 32. Final standard
 
 Lunarbit should not appear advanced because it has many folders, agents, node labels, or frameworks.
 

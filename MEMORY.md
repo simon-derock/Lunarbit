@@ -621,3 +621,14 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   projection tests, Ruff, and strict mypy pass. Production API smoke returned
   the 322/105 live graph. Private corpus, `samples/`, API keys, and unrelated
   chunking work remain uncommitted.
+
+### 2026-08-27 — Aura canonical graph ingestion
+
+- Decision: `scripts/ingest_graph.py` now resolves authenticated Neo4j targets
+  from `NEO4J_URI`, `NEO4J_DATABASE`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD`,
+  while retaining explicit CLI overrides for local or CI runs.
+- Result: the `canonical_v1_20260823d` archive was loaded idempotently into
+  Neo4j Aura and verified at 48,518 nodes and 69,527 relationships.
+- Validation: ingestion configuration tests pass; Ruff and strict mypy pass.
+  Private source documents, API keys, `samples/`, and multi-key chunking
+  artifacts remain outside commits.
