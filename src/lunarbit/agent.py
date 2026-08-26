@@ -35,6 +35,11 @@ class QueryPlan(ContractModel):
 
 def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, ...]:
     normalized = " ".join(question.casefold().split())
+    if any(
+        token in normalized
+        for token in ("which restaurants", "most orders", "most-ordered", "top restaurants")
+    ):
+        return (QueryTemplate.MERCHANT_ORDER_RANKING,)
     if "delivery" in normalized and any(
         token in normalized for token in ("who", "person", "times", "delivered")
     ):
@@ -68,6 +73,7 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
     if any(
         template
         in {
+            QueryTemplate.MERCHANT_ORDER_RANKING,
             QueryTemplate.MERCHANT_ORDER_COUNT,
             QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,
             QueryTemplate.ORDER_RECONSTRUCTION,

@@ -53,6 +53,8 @@ def _require(value: str | None, name: str) -> str:
 
 def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | int]:
     limit = slots.limit
+    if template is QueryTemplate.MERCHANT_ORDER_RANKING:
+        return {"limit": limit}
     if template is QueryTemplate.MERCHANT_ORDER_COUNT:
         return {"normalized_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
     if template is QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY:
@@ -290,6 +292,26 @@ def _synthesize(
     slots: QuerySlots,
     rows: tuple[Mapping[str, Any], ...],
 ) -> tuple[int, str | None, str | None, tuple[str, ...]]:
+    if QueryTemplate.MERCHANT_ORDER_RANKING in plan.selected_templates:
+        ranked: dict[str, int] = {}
+        for row in rows:
+            name = row.get("merchant_name")
+            count = row.get("order_count")
+            if isinstance(name, str) and isinstance(count, int):
+                ranked[name] = count
+        if not ranked:
+            return 0, None, None, ()
+        ordered = sorted(ranked.items(), key=lambda item: (-item[1], item[0]))
+        preview = "; ".join(f"{name}: {count}" for name, count in ordered[:10])
+        return (
+            len(ordered),
+            f"Restaurants ranked by source-backed order count: {preview}.",
+            None,
+            (
+                "Counts use distinct reconstructed orders linked to reviewed "
+                "merchant identities.",
+            ),
+        )
     if QueryTemplate.FINANCIAL_COMPONENT_SUM in plan.selected_templates:
         count, calculation, total, currency = _money_calculation(rows)
         if total is None or currency is None:

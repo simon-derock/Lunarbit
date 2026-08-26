@@ -25,6 +25,11 @@ def test_query_plan_selects_bounded_governed_tools_for_price_history() -> None:
     assert len(plan.traversal) <= plan.policy.maximum_actions
 
 
+def test_query_plan_supports_cross_restaurant_order_ranking() -> None:
+    plan = build_query_plan("Which restaurants' orders are most?")
+    assert plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
+
+
 def test_answer_finalization_requires_claim_level_evidence() -> None:
     draft = AnswerDraft(
         direct_answer="The verified synthetic total is INR 500.00.",
