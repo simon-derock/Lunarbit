@@ -107,8 +107,8 @@ _NODE_COUNTS_CYPHER = (
 )
 
 _GRAPH_TOTALS_CYPHER = (
-    "CALL { MATCH (node:LunarbitNode) RETURN count(node) AS graph_node_count } "
-    "CALL { MATCH (source:LunarbitNode)-[relationship]->(target:LunarbitNode) "
+    "CALL () { MATCH (node:LunarbitNode) RETURN count(node) AS graph_node_count } "
+    "CALL () { MATCH (source:LunarbitNode)-[relationship]->(target:LunarbitNode) "
     "RETURN count(relationship) AS graph_relationship_count } "
     "RETURN graph_node_count, graph_relationship_count"
 )
