@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -24,8 +25,10 @@ def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--graph-root", type=Path, required=True)
     parser.add_argument("--schema", type=Path, default=Path("cypher/schema.cypher"))
-    parser.add_argument("--uri", default="bolt://127.0.0.1:7687")
-    parser.add_argument("--database", default="neo4j")
+    parser.add_argument("--uri", default=None)
+    parser.add_argument("--database", default=None)
+    parser.add_argument("--username", default=None)
+    parser.add_argument("--password", default=None)
     parser.add_argument("--batch-size", type=int, default=500)
     return parser.parse_args()
 
@@ -51,15 +54,25 @@ def _write_batch(transaction: ManagedTransaction, batch: Neo4jWriteBatch) -> Non
 
 def main() -> int:
     args = _args()
+    uri = args.uri or os.environ.get("NEO4J_URI", "bolt://127.0.0.1:7687")
+    database = args.database or os.environ.get("NEO4J_DATABASE", "neo4j")
+    username = args.username or os.environ.get("NEO4J_USERNAME")
+    password = args.password or os.environ.get("NEO4J_PASSWORD")
+    if (username is None) != (password is None):
+        raise ValueError("NEO4J_USERNAME and NEO4J_PASSWORD must be supplied together")
     graph = CanonicalGraph(
         nodes=_read(args.graph_root / "nodes.jsonl", GraphNode),
         relationships=_read(args.graph_root / "relationships.jsonl", GraphRelationship),
     )
     batches = neo4j_write_batches(graph, batch_size=args.batch_size)
-    driver = GraphDatabase.driver(args.uri, auth=None)
+    auth = None
+    if username is not None:
+        assert password is not None
+        auth = (username, password)
+    driver = GraphDatabase.driver(uri, auth=auth)
     try:
         driver.verify_connectivity()
-        with driver.session(database=args.database) as session:
+        with driver.session(database=database) as session:
             for statement in _schema_statements(args.schema):
                 session.run(statement).consume()
             for batch in batches:
@@ -79,7 +92,7 @@ def main() -> int:
         raise ValueError("Neo4j counts do not match the canonical graph archive")
     print(
         json.dumps(
-            {**counts, "write_batches": len(batches), "database": args.database},
+            {**counts, "write_batches": len(batches), "database": database},
             indent=2,
             sort_keys=True,
         )
