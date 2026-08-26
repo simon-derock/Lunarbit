@@ -10,6 +10,8 @@ from lunarbit.langgraph_workflow import (
     LangGraphInputError,
 )
 from lunarbit.runtime import QuerySlots
+from lunarbit.query_planner import ResilientQueryPlanner, StructuredQueryProposal
+from lunarbit.retrieval import QueryTemplate
 
 
 class FakeReader:
@@ -40,6 +42,20 @@ def test_workflow_runs_governed_query_and_checkpoints_state() -> None:
     checkpoint = workflow.state(thread_id="session:test")
     assert checkpoint is not None
     assert checkpoint["status"] == "verified"
+
+
+def test_workflow_accepts_structured_model_plan_without_phrase_routing() -> None:
+    class Planner:
+        def plan(self, question):
+            return StructuredQueryProposal(
+                operations=(QueryTemplate.MERCHANT_ORDER_RANKING,), limit=10
+            )
+
+    workflow = GraphRAGWorkflow(
+        FakeReader(), planner=ResilientQueryPlanner(Planner(), None)
+    )
+    context = workflow.invoke("Rank my restaurants by order frequency")
+    assert context.plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
 
 
 def test_workflow_rejects_prompt_extraction_before_graph_access() -> None:

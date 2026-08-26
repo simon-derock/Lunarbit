@@ -398,8 +398,13 @@ def _execute_bounded(
     return tuple(rows), complete
 
 
-def retrieve_grounded_context(request: RuntimeRequest, reader: GraphReader) -> GroundedContext:
-    plan = build_query_plan(request.question)
+def retrieve_grounded_context(
+    request: RuntimeRequest,
+    reader: GraphReader,
+    *,
+    plan: QueryPlan | None = None,
+) -> GroundedContext:
+    plan = plan or build_query_plan(request.question)
     queries = bind_query_plan(plan, request.slots)
     rows, query_complete = _execute_bounded(plan, queries, reader)
     claim_id = _claim_id(request, plan)

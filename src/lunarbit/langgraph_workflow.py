@@ -11,8 +11,9 @@ from typing import Any, TypedDict, cast
 
 from pydantic import ValidationError
 
-from lunarbit.agent import build_query_plan
+from lunarbit.agent import QueryPlan, build_query_plan
 from lunarbit.guardrails import QuestionGuardrailError, validate_user_question
+from lunarbit.query_planner import ResilientQueryPlanner
 from lunarbit.retrieval import QueryClassification
 from lunarbit.runtime import (
     GraphReader,
@@ -73,6 +74,7 @@ class WorkflowState(TypedDict, total=False):
     slots: QuerySlots
     request: RuntimeRequest
     classification: QueryClassification
+    plan: QueryPlan
     context: GroundedContext
     status: str
     error: str
@@ -90,19 +92,32 @@ def _guardrail_node(state: WorkflowState) -> WorkflowState:
     return {"question": question, "slots": state.get("slots", QuerySlots())}
 
 
-def _plan_node(state: WorkflowState) -> WorkflowState:
+def _plan_node(
+    state: WorkflowState, *, planner: ResilientQueryPlanner | None = None
+) -> WorkflowState:
     request = RuntimeRequest(question=state["question"], slots=state["slots"])
     # The planner is invoked by the runtime and retained in state as an audit
     # signal for tracing and future conditional routing.
-    plan = build_query_plan(request.question)
+    if planner is None:
+        plan = build_query_plan(request.question)
+        slots = state["slots"]
+    else:
+        plan, proposed_slots = planner.plan(request.question)
+        proposed_values = proposed_slots.model_dump(exclude_unset=True)
+        proposed_values.pop("operations", None)
+        slots = QuerySlots.model_validate(
+            {**state["slots"].model_dump(), **proposed_values}
+        )
+        request = RuntimeRequest(question=state["question"], slots=slots)
     return {
         "request": request,
         "classification": plan.classification,
+        "plan": plan,
     }
 
 
 def _retrieve_and_verify_node(state: WorkflowState, *, reader: GraphReader) -> WorkflowState:
-    context = retrieve_grounded_context(state["request"], reader)
+    context = retrieve_grounded_context(state["request"], reader, plan=state.get("plan"))
     return {"context": context, "status": context.status.value}
 
 
@@ -114,19 +129,29 @@ def _finalize_node(state: WorkflowState) -> WorkflowState:
 class GraphRAGWorkflow:
     """Run a bounded, checkpointed GraphRAG workflow for one private session."""
 
-    def __init__(self, reader: GraphReader, *, checkpointer: object | None = None) -> None:
+    def __init__(
+        self,
+        reader: GraphReader,
+        *,
+        checkpointer: object | None = None,
+        planner: ResilientQueryPlanner | None = None,
+    ) -> None:
         _require_langgraph()
         if checkpointer is None:
             assert MemorySaver is not None
             checkpointer = MemorySaver()
-        self._graph = self._compile(reader, checkpointer)
+        self._graph = self._compile(reader, checkpointer, planner)
 
     @staticmethod
-    def _compile(reader: GraphReader, checkpointer: Any) -> Any:
+    def _compile(
+        reader: GraphReader,
+        checkpointer: Any,
+        planner: ResilientQueryPlanner | None,
+    ) -> Any:
         assert StateGraph is not None
         builder = StateGraph(WorkflowState)
         builder.add_node("guardrail", _guardrail_node)
-        builder.add_node("plan", _plan_node)
+        builder.add_node("plan", lambda state: _plan_node(state, planner=planner))
         builder.add_node(
             "retrieve_and_verify",
             lambda state: _retrieve_and_verify_node(state, reader=reader),

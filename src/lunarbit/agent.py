@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import Field
@@ -146,6 +147,33 @@ def build_query_plan(question: str) -> QueryPlan:
         classification=classification,
         selected_templates=templates,
         traversal=traversal,
+        policy=policy,
+    )
+
+
+def build_query_plan_from_templates(
+    question: str,
+    templates: tuple[QueryTemplate, ...],
+) -> QueryPlan:
+    """Compile a validated model proposal into the governed traversal plan."""
+    if not templates:
+        raise ValueError("at least one governed template is required")
+    policy = TraversalPolicy(
+        maximum_depth=4,
+        candidate_paths_per_step=2,
+        maximum_actions=12,
+        row_limit=50,
+        relationship_allowlist=tuple(RelationshipType),
+    )
+    return QueryPlan(
+        question=question,
+        classification=QueryClassification(
+            intent=QueryIntent.EXACT_GRAPH,
+            confidence=Decimal("0.90"),
+            signals=("structured-model-plan",),
+        ),
+        selected_templates=templates,
+        traversal=validate_traversal(_traversal_for(templates), policy),
         policy=policy,
     )
 

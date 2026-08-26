@@ -14,6 +14,7 @@ from lunarbit.cohere import CohereClient
 from lunarbit.hybrid import HybridRetriever, Neo4jHybridGraph
 from lunarbit.langgraph_workflow import GraphRAGWorkflow
 from lunarbit.public_projection import AggregateSnapshotSource, Neo4jAggregateReader
+from lunarbit.query_planner import planner_from_environment
 from lunarbit.runtime import Neo4jGraphReader
 from lunarbit.service import GovernedAnswerBackend, HybridRetrievalBackend
 
@@ -65,7 +66,7 @@ def main() -> int:
         cohere = CohereClient(cohere_key, embedding_dimension=1536)
         retrieval_backend = HybridRetrievalBackend(HybridRetriever(graph, cohere))
         answer_backend = GovernedAnswerBackend(reader)
-        workflow = GraphRAGWorkflow(reader)
+        workflow = GraphRAGWorkflow(reader, planner=planner_from_environment())
         app = create_app(
             public_snapshot_source=AggregateSnapshotSource(public_reader),
             private_backend=retrieval_backend,
