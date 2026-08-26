@@ -105,9 +105,7 @@ def _plan_node(
         plan, proposed_slots = planner.plan(request.question)
         proposed_values = proposed_slots.model_dump(exclude_unset=True)
         proposed_values.pop("operations", None)
-        slots = QuerySlots.model_validate(
-            {**state["slots"].model_dump(), **proposed_values}
-        )
+        slots = QuerySlots.model_validate({**state["slots"].model_dump(), **proposed_values})
         request = RuntimeRequest(question=state["question"], slots=slots)
     return {
         "request": request,

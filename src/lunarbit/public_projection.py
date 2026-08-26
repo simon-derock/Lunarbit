@@ -448,9 +448,7 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
     label = _navigation_label(row.get("labels"))
     raw_labels = row.get("labels")
     label_values = (
-        tuple(str(value) for value in raw_labels)
-        if isinstance(raw_labels, (list, tuple))
-        else ()
+        tuple(str(value) for value in raw_labels) if isinstance(raw_labels, (list, tuple)) else ()
     )
     alias = _public_alias(canonical_id)
     platform = str(row.get("platform") or "").title()

@@ -307,10 +307,7 @@ def _synthesize(
             len(ordered),
             f"Restaurants ranked by source-backed order count: {preview}.",
             None,
-            (
-                "Counts use distinct reconstructed orders linked to reviewed "
-                "merchant identities.",
-            ),
+            ("Counts use distinct reconstructed orders linked to reviewed merchant identities.",),
         )
     if QueryTemplate.FINANCIAL_COMPONENT_SUM in plan.selected_templates:
         count, calculation, total, currency = _money_calculation(rows)

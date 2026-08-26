@@ -9,9 +9,9 @@ from lunarbit.langgraph_workflow import (
     LangGraphGuardrailError,
     LangGraphInputError,
 )
-from lunarbit.runtime import QuerySlots
 from lunarbit.query_planner import ResilientQueryPlanner, StructuredQueryProposal
 from lunarbit.retrieval import QueryTemplate
+from lunarbit.runtime import QuerySlots
 
 
 class FakeReader:
@@ -51,9 +51,7 @@ def test_workflow_accepts_structured_model_plan_without_phrase_routing() -> None
                 operations=(QueryTemplate.MERCHANT_ORDER_RANKING,), limit=10
             )
 
-    workflow = GraphRAGWorkflow(
-        FakeReader(), planner=ResilientQueryPlanner(Planner(), None)
-    )
+    workflow = GraphRAGWorkflow(FakeReader(), planner=ResilientQueryPlanner(Planner(), None))
     context = workflow.invoke("Rank my restaurants by order frequency")
     assert context.plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
 
