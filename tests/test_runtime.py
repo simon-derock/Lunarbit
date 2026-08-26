@@ -54,6 +54,13 @@ def test_query_binding_requires_typed_slots_and_keeps_values_out_of_cypher() -> 
         bind_query_plan(plan, QuerySlots(merchant_name="sample kitchen"))
 
 
+def test_query_binding_supports_global_restaurant_ranking_without_name_slot() -> None:
+    plan = build_query_plan("Which restaurants' orders are most?")
+    queries = bind_query_plan(plan, QuerySlots(limit=20))
+    assert queries[0].template is QueryTemplate.MERCHANT_ORDER_RANKING
+    assert queries[0].parameters == {"limit": 20}
+
+
 def test_financial_filters_apply_before_optional_evidence_expansion() -> None:
     plan = build_query_plan("How much platform fee did I pay?")
     query = bind_query_plan(
