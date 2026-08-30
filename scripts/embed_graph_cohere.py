@@ -166,9 +166,14 @@ def _ingest(
     dimension: int,
     uri: str,
     database: str,
+    username: str | None = None,
+    password: str | None = None,
 ) -> None:
     identifiers = vector_identifiers(PROVIDER, EMBED_MODEL, dimension)
-    driver = GraphDatabase.driver(uri, auth=None)
+    if (username is None) != (password is None):
+        raise ValueError("Neo4j username and password must be supplied together")
+    auth = (username, password) if username is not None else None
+    driver = GraphDatabase.driver(uri, auth=auth)
     try:
         driver.verify_connectivity()
         with driver.session(database=database) as session:
@@ -264,7 +269,14 @@ def main() -> int:
     if args.ingest:
         if not complete:
             raise ValueError("Cohere embedding archive must be complete before Neo4j ingestion")
-        _ingest(all_rows, dimension=args.dimension, uri=args.uri, database=args.database)
+        _ingest(
+            all_rows,
+            dimension=args.dimension,
+            uri=args.uri,
+            database=args.database,
+            username=os.environ.get("NEO4J_USERNAME"),
+            password=os.environ.get("NEO4J_PASSWORD"),
+        )
     identifiers = vector_identifiers(PROVIDER, EMBED_MODEL, args.dimension)
     manifest = {
         "provider": PROVIDER,
