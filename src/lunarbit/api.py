@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
 from secrets import compare_digest
-from time import monotonic
+from time import monotonic, sleep
 from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from neo4j.exceptions import Neo4jError
 from starlette.responses import Response
 
 from lunarbit.agent import build_query_plan
@@ -359,6 +360,15 @@ def create_app(
             return public_snapshot
         try:
             projected = public_snapshot_source.snapshot()
+        except Neo4jError as error:
+            sleep(0.25)
+            try:
+                projected = public_snapshot_source.snapshot()
+            except Neo4jError as retry_error:
+                raise HTTPException(
+                    status_code=503,
+                    detail="live public graph projection is temporarily unavailable",
+                ) from retry_error
         except PublicProjectionUnavailable as error:
             raise HTTPException(
                 status_code=503,
