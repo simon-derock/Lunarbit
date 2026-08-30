@@ -56,6 +56,42 @@ body {
   height: 100%;
 }
 
+.food-garnish {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  pointer-events: none;
+}
+.food-garnish__item { position: absolute; width: 76px; height: 76px; object-fit: contain; opacity: 0.34; filter: saturate(0.42) contrast(0.94); mix-blend-mode: normal; pointer-events: none; }
+.food-garnish__item--left { left: 18rem; bottom: 4.5rem; transform: rotate(-9deg); }
+.food-garnish__item--query { right: 28rem; bottom: 4.1rem; width: 58px; height: 58px; opacity: 0.28; }
+.food-garnish__item--right { right: 20rem; top: 8rem; width: 68px; height: 68px; transform: rotate(8deg); opacity: 0.24; }
+.food-garnish__credit { position: absolute; right: 12px; bottom: 5px; pointer-events: auto; color: var(--muted-foreground); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
+.food-garnish__credit:hover { color: var(--foreground); }
+@media (prefers-reduced-motion: reduce) { .food-garnish__item { transition: none; } }
+@media (max-width: 800px) {
+  body { font-size: 11px; overflow: hidden; }
+  .food-garnish__item--left { left: 9rem; bottom: 3.8rem; width: 52px; height: 52px; }
+  .food-garnish__item--query { right: 9rem; bottom: 3.8rem; width: 44px; height: 44px; }
+  .food-garnish__item--right { display: none; }
+}
+@media (max-width: 560px) {
+  header { padding: 10px !important; }
+  header > div:last-child { max-width: 64vw; gap: 4px; }
+  header .plate { min-width: 0; height: 32px; padding-inline: 8px; }
+  header .tag { letter-spacing: 0.12em; }
+  footer { padding: 10px !important; padding-bottom: 40px !important; gap: 6px !important; }
+  footer > div:first-child { max-width: 46vw; }
+  footer .w-\[19rem\] { width: min(19rem, 46vw); }
+  footer .w-\[26rem\] { width: min(26rem, 49vw); }
+  .food-garnish__item--left { left: 4.5rem; bottom: 3.2rem; width: 42px; height: 42px; }
+  .food-garnish__item--query { right: 4.5rem; bottom: 3.2rem; width: 36px; height: 36px; }
+  .food-garnish__credit { right: 8px; bottom: 2px; font-size: 7px; }
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);

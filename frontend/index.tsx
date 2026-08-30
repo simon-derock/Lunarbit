@@ -156,6 +156,7 @@ export function Console() {
   const [mutedLayers, setMutedLayers] = useState<LayerId[]>([]);
   const [mutedRels, setMutedRels] = useState<string[]>([]);
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Snapshot["graph_edges"][number] | null>(null);
   const [panel, setPanel] = useState<"filters" | "findings" | null>("findings");
   const [ask, setAsk] = useState("");
   const [liveSnapshot, setLiveSnapshot] = useState<Snapshot | null>(null);
@@ -229,6 +230,7 @@ export function Console() {
         viz={viz}
         selectedId={selected?.id ?? null}
         onSelect={setSelected}
+        onLinkSelect={setSelectedEdge}
       />
 
       {apiState === "error" && (
@@ -351,6 +353,22 @@ export function Console() {
                 </li>
               ))}
             </ul>
+          </div>
+        ) : selectedEdge ? (
+          <div className="pointer-events-auto plate">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <span className="tag">relationship</span>
+              <button className="tag hover:text-foreground" onClick={() => setSelectedEdge(null)}>close</button>
+            </div>
+            <div className="space-y-2 px-3 py-3">
+              <div className="serif text-[17px]">{selectedEdge.relationship_type}</div>
+              <div className="grid grid-cols-2 gap-y-1 text-[10px] text-muted-foreground">
+                <span>source · {byId.get(selectedEdge.source)?.label ?? selectedEdge.source}</span>
+                <span>target · {byId.get(selectedEdge.target)?.label ?? selectedEdge.target}</span>
+                <span>confidence · {selectedEdge.confidence.toFixed(2)}</span>
+                <span>provenance · {selectedEdge.provenance_label}</span>
+              </div>
+            </div>
           </div>
         ) : (
           panel === "findings" && (
@@ -500,6 +518,13 @@ export function Console() {
         </div>
 
       </footer>
+
+      <div className="food-garnish" aria-hidden="true">
+        <img className="food-garnish__item food-garnish__item--left" src="/food-marquee/vecteezy/fresh-vegetables-bag.png" alt="" loading="eager" decoding="async" draggable={false} />
+        <img className="food-garnish__item food-garnish__item--query" src="/food-marquee/vecteezy/minimal-paper-cup.png" alt="" loading="eager" decoding="async" draggable={false} />
+        <img className="food-garnish__item food-garnish__item--right" src="/food-marquee/vecteezy/sushi-bento.png" alt="" loading="eager" decoding="async" draggable={false} />
+        <a className="food-garnish__credit" href="https://www.vecteezy.com/free-png/food-pack" target="_blank" rel="noreferrer">artwork · vecteezy</a>
+      </div>
 
       <p className="pointer-events-none absolute inset-x-0 bottom-1 mx-auto hidden max-w-2xl text-center text-[9px] text-muted-foreground/70 2xl:block">
         {snapshot.disclosure}

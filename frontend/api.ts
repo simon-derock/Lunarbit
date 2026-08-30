@@ -2,6 +2,22 @@ import type { Finding, GraphEdge, GraphNode, LayerId, Metric, Snapshot } from ".
 
 const API_BASE = import.meta.env.VITE_LUNARBIT_API_URL ?? "http://127.0.0.1:8000";
 
+async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit, attempts = 3): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(input, init);
+      if (response.ok || attempt === attempts - 1) return response;
+      lastError = new Error(`request failed: ${response.status}`);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) throw error;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 400 * (attempt + 1)));
+  }
+  throw lastError instanceof Error ? lastError : new Error("request failed");
+}
+
 export interface PublicSnapshotPayload {
   mode: string;
   disclosure: string;
@@ -34,13 +50,13 @@ export interface PublicQueryPlanPayload {
 }
 
 export async function fetchPublicSnapshot(signal?: AbortSignal): Promise<PublicSnapshotPayload> {
-  const response = await fetch(`${API_BASE}/v1/public/snapshot`, { signal });
+  const response = await fetchWithRetry(`${API_BASE}/v1/public/snapshot`, { signal });
   if (!response.ok) throw new Error(`snapshot request failed: ${response.status}`);
   return (await response.json()) as PublicSnapshotPayload;
 }
 
 export async function fetchQueryPlan(question: string): Promise<PublicQueryPlanPayload> {
-  const response = await fetch(`${API_BASE}/v1/query/plan`, {
+  const response = await fetchWithRetry(`${API_BASE}/v1/query/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),

@@ -14,6 +14,7 @@ interface Props {
   viz: VizProfile;
   selectedId: string | null;
   onSelect: (node: GraphNode | null) => void;
+  onLinkSelect: (edge: GraphEdge | null) => void;
 }
 
 function useSize() {
@@ -46,7 +47,7 @@ function hash(id: string) {
   return (h >>> 0) / 4294967296;
 }
 
-export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect }: Props) {
+export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect, onLinkSelect }: Props) {
   const { ref, size } = useSize();
   const fgRef = useRef<any>(null);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -809,7 +810,24 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
               }) as never
             }
             onNodeHover={((n: unknown) => setHovered((n as GraphNode | null)?.id ?? null)) as never}
-            onNodeClick={((n: unknown) => onSelect(n as GraphNode)) as never}
+            onNodeClick={((n: unknown) => {
+              onLinkSelect(null);
+              onSelect(n as GraphNode);
+            }) as never}
+            linkPointerAreaPaint={((raw: unknown, color: string, ctx: CanvasRenderingContext2D, scale: number) => {
+              const l = raw as LinkDatum;
+              if (!l.source || !l.target) return;
+              ctx.strokeStyle = color;
+              ctx.lineWidth = Math.max(12 / (scale || 1), 8);
+              ctx.beginPath();
+              ctx.moveTo(l.source.x, l.source.y);
+              ctx.lineTo(l.target.x, l.target.y);
+              ctx.stroke();
+            }) as never}
+            onLinkClick={((l: unknown) => {
+              onSelect(null);
+              onLinkSelect(l as GraphEdge);
+            }) as never}
             onNodeDrag={((raw: unknown) => {
               userRef.current = true;
               const n = raw as GraphNode & Pt & { fx?: number; fy?: number };
@@ -823,7 +841,10 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect 
               fgRef.current?.d3ReheatSimulation?.();
             }) as never}
             onZoom={markUser as never}
-            onBackgroundClick={() => onSelect(null)}
+            onBackgroundClick={() => {
+              onSelect(null);
+              onLinkSelect(null);
+            }}
             onEngineTick={onTick}
             onEngineStop={() => fit()}
 
