@@ -519,13 +519,6 @@ export function Console() {
 
       </footer>
 
-      <div className="food-garnish" aria-hidden="true">
-        <img className="food-garnish__item food-garnish__item--left" src="/food-marquee/vecteezy/fresh-vegetables-bag.png" alt="" loading="eager" decoding="async" draggable={false} />
-        <img className="food-garnish__item food-garnish__item--query" src="/food-marquee/vecteezy/minimal-paper-cup.png" alt="" loading="eager" decoding="async" draggable={false} />
-        <img className="food-garnish__item food-garnish__item--right" src="/food-marquee/vecteezy/sushi-bento.png" alt="" loading="eager" decoding="async" draggable={false} />
-        <a className="food-garnish__credit" href="https://www.vecteezy.com/free-png/food-pack" target="_blank" rel="noreferrer">artwork · vecteezy</a>
-      </div>
-
       <p className="pointer-events-none absolute inset-x-0 bottom-1 mx-auto hidden max-w-2xl text-center text-[9px] text-muted-foreground/70 2xl:block">
         {snapshot.disclosure}
       </p>
