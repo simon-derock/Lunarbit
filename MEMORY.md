@@ -2,12 +2,36 @@
 
 ## Session handoff
 
-- Last updated: 2026-08-22
-- Active phase: The local backend is complete through canonical-oracle evaluation, runtime safety hardening, bounded private conversation state, and privacy-safe operational tracing. Nexus Insight is live-wired to the privacy-safe public FastAPI contract; remaining gates are public privacy review and cloud deployment.
+- Last updated: 2026-09-01
+- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, and citation identifiers are implemented and pushed; remaining gates are provenance-rich graph focus, durable sessions, HITL, full analytics, live E2E coverage, and production security.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `14848f3` (`feat(api): add bounded private conversation runtime`), pushed to `main`.
-- Last passing checks: 231 committed Python tests, Ruff lint, strict MyPy across 39 modules, repository hygiene, Nexus Insight ESLint (six inherited fast-refresh warnings only), and a production Nexus Insight build. The public-only service and release audit passed with `200` health/showcase responses and absent private routes.
+- Last verified implementation commit: `12ac2c2` (`feat(chat): restore opaque sessions across browser refreshes`), pushed to `main`.
+- Recent commits: `3f1bdc9` secure SSE/browser proxy, `7300f9c` citation identifiers, `f819314` Cortex favicon, `12ac2c2` opaque session restoration.
+- Last passing checks: 231 committed Python tests, Ruff lint, strict MyPy across 39 modules, repository hygiene, frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, and browser-origin SSE proxy smoke test.
+
+## Goal-loop scope (2026-09-01)
+
+The finish line is a deployable, privacy-safe financial-intelligence product, not a planner-only demo. Work in dependency order and push each coherent red/green slice.
+
+1. **Answer contract:** expose safe citation metadata, claim coverage, calculation provenance, and graph-focus IDs without raw evidence leakage.
+2. **Graph-aware streaming:** emit delimiter-protected `thinking`, `retrieval`, `calculation`, `citation`, `graph_focus`, `answer`, `done`, and safe `error` events; highlight only returned IDs.
+3. **Conversation durability:** replace process-local memory with an authenticated durable checkpoint/session store; add history listing, TTL, limits, and restart recovery.
+4. **HITL:** pause for sensitive scope expansion, identity ambiguity, or any mutation proposal; keep the graph read-only by default.
+5. **Frontend product loop:** answer card, citation cards, graph path inspection, history/session restore, reconnect/timeout states, and mobile accessibility.
+6. **Senior data-science layer:** reusable feature tables, temporal spend trends, personal food-price index, fee/discount decomposition, robust anomalies/change points, interpretable cohorts, uncertainty bounds, and reproducible metric definitions.
+7. **Evaluation:** human-reviewed golden questions, entity-resolution metrics, retrieval recall/MRR, citation coverage, abstention quality, latency/cost, and A/B comparison of answer/visual variants.
+8. **Production security:** HTTPS/reverse proxy, strict CORS, secret manager and rotation, least-privilege Aura credentials, rate/request limits, audit-safe logs, dependency/image scanning, backups, readiness probes, monitoring, alerts, and rollback drills.
+9. **Release automation:** CI gates for Python/frontend lint, type checks, TDD, integration, Playwright live tests, privacy-leakage checks, build artifacts, migration checks, and deployment smoke tests.
+10. **Release documentation:** update `PLAN.md`, this memory, README, architecture/runbook, data dictionary, model/provider cards, and public disclosure; review the final deployment with no private artifacts in Git or browser.
+
+### Execution rules for this loop
+
+- Read `PLAN.md` and this file before every slice; use SDD contracts and acceptance tests before implementation.
+- Keep deterministic code authoritative for IDs, money, graph truth, privacy, query budgets, verification, and abstention. LLMs may propose structured intent/prose only.
+- Use Gemini as primary planner, Mistral as fallback, Cohere Embed/Rerank for retrieval; never expose provider keys in frontend code.
+- Run focused red/green tests, live Aura/API/browser checks, and relevant A/B measurements before each push.
+- Commit professional Conventional Commit messages on `main`; stage explicit safe paths only. Never commit `samples/`, private PDFs/mail/JSONL, `.env`, provider responses, or the multi-key chunking runner.
 
 ## Current state
 
@@ -232,10 +256,11 @@ Copy the XML below as initialization context when handing Lunarbit to another co
 
 ## Next actions — ordered
 
-1. Pause and obtain the user's frontend visual system, graph-visualization references, page templates, and interaction requirements.
-2. Build the Next.js graph explorer, evidence trace, transaction reconstruction, economic dashboard, and benchmark views against public-safe contracts only.
-3. Create a human-reviewed natural-language golden set and public privacy-leakage review without publishing private cases.
-4. Deploy the reviewed public projection and API to Aura/Vercel, then run the final end-to-end release audit.
+1. Add provenance-rich citation and graph-focus response contracts with red/green tests.
+2. Add durable authenticated conversation checkpoints and HITL state transitions.
+3. Wire citation cards, graph highlighting, history, reconnect, and accessibility into the frontend.
+4. Add the focused financial analytics/evaluation layer and A/B measurement harness.
+5. Complete CI/CD, deployment security, live Playwright coverage, privacy audit, and cloud release rehearsal.
 
 ## Decisions — append-only, newest first
 
