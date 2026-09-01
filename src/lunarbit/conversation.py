@@ -53,6 +53,12 @@ def infer_query_slots(question: str) -> QuerySlots:
     """Extract only high-precision slots; names and identities remain explicit."""
     normalized = re.sub(r"\s+", " ", question.casefold()).strip()
     values: dict[str, str] = {}
+    merchant_match = re.search(
+        r"\b(?:from|at|with)\s+([a-z0-9][a-z0-9 &'()./-]{1,158}?)(?=\s*[?.!,;]|\s+(?:in|on|during|between|for)\b|$)",
+        normalized,
+    )
+    if merchant_match:
+        values["merchant_name"] = merchant_match.group(1).strip(" .,-")
     for platform in ("swiggy", "zomato"):
         if re.search(rf"\b{platform}\b", normalized):
             values["platform"] = platform

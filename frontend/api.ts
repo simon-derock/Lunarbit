@@ -49,6 +49,58 @@ export interface PublicQueryPlanPayload {
   verification_required: boolean;
 }
 
+export interface StreamAnswer {
+  status: string;
+  direct_answer: string | null;
+  calculation: string | null;
+  fact_count: number;
+  citation_ids: string[];
+  verification_status: string;
+  limitations: string[];
+  abstention_reason: string | null;
+}
+
+export interface ChatStreamResult {
+  session_id: string;
+  turn_index: number;
+  context_reused: boolean;
+  answer: StreamAnswer;
+}
+
+export async function streamPrivateChat(
+  question: string,
+  onStage: (stage: string) => void,
+): Promise<ChatStreamResult> {
+  const response = await fetchWithRetry("/api/private/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  if (!response.ok || !response.body) throw new Error(`chat stream failed: ${response.status}`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ChatStreamResult | null = null;
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      const event = frame.match(/^event:\s*(\S+)/m)?.[1];
+      const data = frame.match(/^data:\s*(.*)$/m)?.[1];
+      if (!event || !data) continue;
+      const payload = JSON.parse(data) as Record<string, unknown>;
+      if (event === "thinking") onStage(String(payload.stage ?? "thinking"));
+      if (event === "answer") result = payload as unknown as ChatStreamResult;
+      if (event === "error") throw new Error(String(payload.detail ?? payload.code ?? "chat failed"));
+    }
+    if (done) break;
+  }
+  if (!result) throw new Error("chat stream ended without an answer");
+  return result;
+}
+
 export async function fetchPublicSnapshot(signal?: AbortSignal): Promise<PublicSnapshotPayload> {
   const response = await fetchWithRetry(`${API_BASE}/v1/public/snapshot`, { signal });
   if (!response.ok) throw new Error(`snapshot request failed: ${response.status}`);

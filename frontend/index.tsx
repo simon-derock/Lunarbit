@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { GraphSurface } from "./GraphSurface";
-import { fetchPublicSnapshot, fetchQueryPlan, mapPublicSnapshot } from "./api";
+import { fetchPublicSnapshot, mapPublicSnapshot, streamPrivateChat, type ChatStreamResult } from "./api";
 import {
   GRAPH_PROFILES,
   SORTS,
@@ -162,6 +162,20 @@ export function Console() {
   const [liveSnapshot, setLiveSnapshot] = useState<Snapshot | null>(null);
   const [apiState, setApiState] = useState<"loading" | "live" | "error">("loading");
   const [queryState, setQueryState] = useState<string | null>(null);
+  const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+
+  const submitAsk = () => {
+    const question = ask.trim();
+    if (!question) return;
+    setChatBusy(true);
+    setChatResult(null);
+    setQueryState("thinking");
+    streamPrivateChat(question, (stage) => setQueryState(stage))
+      .then((result) => { setChatResult(result); setQueryState(result.answer.status); })
+      .catch((error) => setQueryState(error instanceof Error ? error.message : "chat unavailable"))
+      .finally(() => setChatBusy(false));
+  };
 
   const theme = THEMES.find((t) => t.id === themeId)!;
   const profile = GRAPH_PROFILES.find((p) => p.id === profileId)!;
@@ -296,6 +310,9 @@ export function Console() {
               swatches: Object.values(t.palette.layers),
             }))}
           />
+          <a className="github-link" href="https://github.com/simon-derock/Lunarbit" target="_blank" rel="noreferrer" aria-label="Open Lunarbit on GitHub" title="Lunarbit on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.57 22c.57.1.78-.25.78-.55v-2.1c-3.18.69-3.85-1.34-3.85-1.34-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.54-.29-5.21-1.27-5.21-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.03 0 0 .96-.31 3.13 1.17A10.9 10.9 0 0 1 12 6c.97 0 1.95.13 2.86.38 2.17-1.48 3.13-1.17 3.13-1.17.62 1.58.23 2.74.11 3.03.73.8 1.18 1.82 1.18 3.07 0 4.4-2.68 5.36-5.23 5.64.41.36.78 1.07.78 2.16v3.2c0 .3.2.66.79.55A11.3 11.3 0 0 0 12 .7Z" /></svg><span>repo</span>
+          </a>
         </div>
       </header>
 
@@ -489,8 +506,16 @@ export function Console() {
           )}
         </div>
 
+        {chatResult && (
+          <section className="ask-answer pointer-events-auto" aria-live="polite">
+            <div className="tag">verified response · {chatResult.answer.verification_status}</div>
+            <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
+            {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
+            <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
+          </section>
+        )}
         <div
-          className="pointer-events-auto flex h-10 w-[26rem] max-w-full items-center gap-2.5 border px-3"
+          className="pointer-events-auto flex h-11 w-[34rem] max-w-[calc(100vw-2rem)] items-center gap-2 border px-3"
           style={{
             background: "color-mix(in oklab, var(--surface) 92%, var(--foreground))",
             borderColor: "color-mix(in oklab, var(--border) 40%, var(--foreground))",
@@ -502,19 +527,20 @@ export function Console() {
             value={ask}
             onChange={(e) => setAsk(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key !== "Enter" || !ask.trim()) return;
+              if (e.key !== "Enter") return;
               e.preventDefault();
-              setQueryState("planning");
-              fetchQueryPlan(ask)
-                .then((plan) => setQueryState(`${plan.intent} · ${plan.actions.length} actions`))
-                .catch(() => setQueryState("public scope abstained"));
+              submitAsk();
             }}
+            aria-label="Ask Lunarbit"
             placeholder="reconcile delivery fees for ORD-4821"
-            className="h-full flex-1 bg-transparent text-[11.5px] text-foreground outline-none placeholder:text-muted-foreground/80"
+            className="h-full min-w-0 flex-1 bg-transparent text-[11.5px] text-foreground outline-none placeholder:text-muted-foreground/80"
           />
           <span className="text-[9.5px] tracking-[0.12em] text-foreground/60">
-            {queryState ?? (ask ? "enter · plan" : "↵")}
+            {queryState ?? (ask ? "enter" : "ask")}
           </span>
+          <button type="button" onClick={submitAsk} aria-label="Submit question" className="ask-submit" disabled={!ask.trim() || chatBusy}>
+            ↵
+          </button>
         </div>
 
       </footer>

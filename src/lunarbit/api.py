@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
+import json
 from secrets import compare_digest
 from time import monotonic, sleep
 from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from neo4j.exceptions import Neo4jError
-from starlette.responses import Response
+from neo4j.exceptions import DriverError, Neo4jError, ServiceUnavailable, SessionExpired
+from starlette.responses import Response, StreamingResponse
 
 from lunarbit.agent import build_query_plan
 from lunarbit.api_contracts import (
@@ -224,6 +225,8 @@ def create_app(
     private_limiter = private_rate_limiter or InMemoryRateLimiter(limit=30, window_seconds=60)
     sessions = conversation_store or ConversationStore()
     traces = trace_sink or InMemoryTraceSink()
+    projection_cache: tuple[float, PublicSnapshot] | None = None
+    projection_cache_ttl = 30.0
 
     @app.middleware("http")
     async def security_headers(
@@ -355,16 +358,20 @@ def create_app(
 
     @app.get("/v1/public/snapshot", response_model=PublicSnapshot)
     def public_snapshot_endpoint(request: Request) -> PublicSnapshot:
+        nonlocal projection_cache
         enforce_rate_limit(request, public_limiter)
         if public_snapshot_source is None:
             return public_snapshot
+        now = monotonic()
+        if projection_cache is not None and now - projection_cache[0] < projection_cache_ttl:
+            return projection_cache[1]
         try:
             projected = public_snapshot_source.snapshot()
-        except Neo4jError as error:
+        except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired) as error:
             sleep(0.25)
             try:
                 projected = public_snapshot_source.snapshot()
-            except Neo4jError as retry_error:
+            except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired) as retry_error:
                 raise HTTPException(
                     status_code=503,
                     detail="live public graph projection is temporarily unavailable",
@@ -375,6 +382,7 @@ def create_app(
                 detail="live public graph projection is unavailable",
             ) from error
         assert_public_payload(projected.model_dump(mode="json"))
+        projection_cache = (monotonic(), projected)
         return projected
 
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)
@@ -589,6 +597,55 @@ def create_app(
                 context_reused=prepared.context_reused,
                 answer=answer,
             )
+
+        @app.post("/v1/private/chat/stream")
+        def private_chat_stream(
+            request: PrivateChatRequest,
+            http_request: Request,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> StreamingResponse:
+            """Stream governed chat progress without exposing model internals."""
+            enforce_rate_limit(http_request, private_limiter)
+            if (private_answer_backend is None and private_workflow is None) or private_api_token is None:
+                raise HTTPException(status_code=503, detail="private answer is not configured")
+            authorize_private(authorization)
+            question = enforce_question_guardrail(request.question)
+            if request.slots is not None:
+                enforce_slot_guardrail(request.slots)
+
+            def events():
+                yield "event: thinking\ndata: {\"stage\":\"guardrails\"}\n\n"
+                session_id = request.session_id or sessions.create()
+                try:
+                    inferred = infer_query_slots(question)
+                    slots = merge_query_slots(
+                        inferred if inferred.model_fields_set else None,
+                        request.slots,
+                    )
+                    prepared = sessions.prepare(session_id, question=question, slots=slots)
+                except SessionNotFoundError:
+                    yield "event: error\ndata: {\"code\":\"session_not_found\"}\n\n"
+                    return
+                yield "event: thinking\ndata: {\"stage\":\"retrieval\"}\n\n"
+                try:
+                    if private_workflow is not None:
+                        answer = run_private_workflow(prepared.contextual_question, slots=prepared.slots, thread_id=session_id)
+                    else:
+                        assert private_answer_backend is not None
+                        answer = private_answer_backend.answer(RuntimeRequest(question=prepared.contextual_question, slots=prepared.slots))
+                except (HTTPException, LangGraphExecutionError, LangGraphStateError) as error:
+                    yield "event: error\ndata: " + json.dumps({"code": "answer_unavailable", "detail": str(error.detail if isinstance(error, HTTPException) else error)}) + "\n\n"
+                    return
+                turn_index = sessions.append(session_id, question=question, slots=prepared.slots, status=answer.status)
+                yield "event: answer\ndata: " + json.dumps({
+                    "session_id": session_id,
+                    "turn_index": turn_index,
+                    "context_reused": prepared.context_reused,
+                    "answer": answer.model_dump(mode="json"),
+                }) + "\n\n"
+                yield "event: done\ndata: {}\n\n"
+
+            return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     return app
 

@@ -56,6 +56,30 @@ body {
   height: 100%;
 }
 
+.ask-submit {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1;
+  transition: border-color 140ms ease, background-color 140ms ease, opacity 140ms ease;
+}
+.ask-submit:hover:not(:disabled) { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+.ask-submit:disabled { cursor: not-allowed; opacity: 0.35; }
+.ask-answer {
+  width: min(34rem, calc(100vw - 2rem));
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 94%, var(--foreground));
+  padding: 14px 16px;
+}
+.ask-answer-text { margin: 8px 0 5px; font-family: var(--font-display); font-size: 18px; line-height: 1.25; }
+.ask-calculation { margin: 0; color: var(--muted-foreground); font-size: 10px; }
+.ask-meta { margin-top: 10px; color: var(--muted-foreground); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+
 @media (max-width: 800px) {
   body { font-size: 11px; overflow: hidden; }
 }
@@ -64,10 +88,12 @@ body {
   header > div:last-child { max-width: 64vw; gap: 4px; }
   header .plate { min-width: 0; height: 32px; padding-inline: 8px; }
   header .tag { letter-spacing: 0.12em; }
+  .github-link { height: 32px; padding-inline: 8px; }
+  .github-link span { display: none; }
   footer { padding: 10px !important; padding-bottom: 40px !important; gap: 6px !important; }
   footer > div:first-child { max-width: 46vw; }
   footer .w-\[19rem\] { width: min(19rem, 46vw); }
-  footer .w-\[26rem\] { width: min(26rem, 49vw); }
+  footer .w-\[34rem\] { width: min(34rem, calc(100vw - 1.25rem)); }
 }
 
 body {
@@ -116,6 +142,10 @@ body {
   text-transform: none;
   line-height: 1;
 }
+
+.github-link { order: -1; display: inline-flex; height: 36px; align-items: center; gap: 7px; border: 1px solid var(--border); padding: 0 10px; color: var(--muted-foreground); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; transition: color 160ms ease, border-color 160ms ease; }
+.github-link svg { width: 14px; height: 14px; fill: currentColor; }
+.github-link:hover { border-color: color-mix(in oklab, var(--border) 35%, var(--foreground)); color: var(--foreground); }
 
 /* Product wordmark — high-contrast display, optical sizing at display grade */
 @utility wordmark {
