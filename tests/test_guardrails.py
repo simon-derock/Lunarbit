@@ -19,6 +19,8 @@ def test_api_sets_security_headers_and_disables_response_caching() -> None:
 
     assert response.status_code == 200
     assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"

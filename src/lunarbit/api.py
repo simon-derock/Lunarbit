@@ -251,11 +251,15 @@ def create_app(
             )
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
             response.headers["X-Request-ID"] = request.state.trace_id
             return response
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if request.url.scheme == "https":
