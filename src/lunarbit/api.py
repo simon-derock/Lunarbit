@@ -648,6 +648,8 @@ def create_app(
                     yield "event: error\ndata: " + json.dumps({"code": "answer_unavailable", "detail": str(error.detail if isinstance(error, HTTPException) else error)}) + "\n\n"
                     return
                 turn_index = sessions.append(session_id, question=question, slots=prepared.slots, status=answer.status)
+                for citation in answer.citations:
+                    yield "event: citation\ndata: " + json.dumps(citation.model_dump(mode="json")) + "\n\n"
                 yield "event: answer\ndata: " + json.dumps({
                     "session_id": session_id,
                     "turn_index": turn_index,
