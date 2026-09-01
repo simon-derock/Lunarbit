@@ -2,13 +2,13 @@
 
 ## Session handoff
 
-- Last updated: 2026-09-01
+- Last updated: 2026-09-02
 - Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, and citation identifiers are implemented and pushed; remaining gates are provenance-rich graph focus, durable sessions, HITL, full analytics, live E2E coverage, and production security.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `12ac2c2` (`feat(chat): restore opaque sessions across browser refreshes`), pushed to `main`.
-- Recent commits: `3f1bdc9` secure SSE/browser proxy, `7300f9c` citation identifiers, `f819314` Cortex favicon, `12ac2c2` opaque session restoration.
-- Last passing checks: 231 committed Python tests, Ruff lint, strict MyPy across 39 modules, repository hygiene, frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, and browser-origin SSE proxy smoke test.
+- Last verified implementation commit: `5dd1f16` (`test(api): cover readiness failure and chat stream contracts`), pushed to `main`.
+- Recent commits: `5dd1f16` API readiness/streaming contracts, `bf68a00` typed API/session quality gates, `3d9199b` deployment release contract.
+- Last passing checks: 254 Python tests, Ruff format/lint, strict MyPy across 42 modules, repository hygiene, frontend Vitest (2 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, and browser-origin SSE proxy smoke test.
 - Deployment verification: `Dockerfile.api` built as `lunarbit-api:ci`; a real container with the configured environment returned `/health` 200, `/ready` 200 with `graph=configured`, a 322-node/105-edge Aura navigation projection, and authenticated SSE chat events. The verification container was stopped after the smoke test.
 
 ## Goal-loop scope (2026-09-01)
