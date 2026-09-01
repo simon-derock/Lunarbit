@@ -85,6 +85,13 @@ def test_sqlite_store_creates_explicit_persistent_parent_directory(tmp_path) -> 
     assert session_id.startswith("session:")
 
 
+def test_sqlite_store_uses_durable_concurrency_pragmas(tmp_path) -> None:
+    store = SQLiteConversationStore(str(tmp_path / "sessions.sqlite3"))
+
+    assert store._db.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    assert store._db.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
 class StubConversationBackend:
     def __init__(self) -> None:
         self.requests: list[RuntimeRequest] = []
