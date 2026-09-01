@@ -46,6 +46,12 @@ jobs:
       - run: npm ci
       - run: npm test -- --run
       - run: npm run build
+      - name: Assert private credentials are absent from frontend artifacts
+        run: |
+          if rg -n "LUNARBIT_PRIVATE_API_TOKEN|COHERE_API_KEY|GEMINI_API_KEY|MISTRAL_API_KEY" dist --glob '!*.map'; then
+            echo "private credential marker found in frontend build" >&2
+            exit 1
+          fi
 
   public-container:
     name: Public container boundary
