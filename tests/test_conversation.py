@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from lunarbit.api import PrivateGroundedAnswer, create_app
 from lunarbit.conversation import (
     ConversationStore,
+    SQLiteConversationStore,
     SessionNotFoundError,
     infer_query_slots,
     merge_query_slots,
@@ -57,6 +58,19 @@ def test_slot_inference_only_extracts_high_precision_financial_terms() -> None:
     assert slots.platform == "swiggy"
     assert slots.component_type == "platform_fee"
     assert slots.merchant_name is None
+
+
+def test_sqlite_store_recovers_bounded_history_after_reopen(tmp_path) -> None:
+    database = tmp_path / "sessions.sqlite3"
+    first = SQLiteConversationStore(str(database))
+    session_id = first.create()
+    first.append(session_id, question="How much did I spend?", slots=QuerySlots(), status="verified")
+
+    reopened = SQLiteConversationStore(str(database))
+    history = reopened.history(session_id)
+    assert len(history) == 1
+    assert history[0].question == "How much did I spend?"
+    assert history[0].status == "verified"
 
 
 class StubConversationBackend:
