@@ -20,7 +20,10 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
-      LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS }}
+      # The Aura smoke job exercises the API without a browser. Keep its
+      # CORS contract fail-closed while allowing it to run before the frontend
+      # has a public hostname; the real deployment must override this secret.
+      LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS || 'https://localhost' }}
       LUNARBIT_SESSION_DB: /tmp/lunarbit-conversations.sqlite3
     steps:
       - uses: actions/checkout@v4
