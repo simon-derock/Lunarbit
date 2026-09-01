@@ -40,7 +40,8 @@ jobs:
             --env NEO4J_DATABASE --env COHERE_API_KEY --env GEMINI_API_KEY \
             --env MISTRAL_API_KEY --env LUNARBIT_PRIVATE_API_TOKEN \
             --env LUNARBIT_PUBLIC_ALLOWED_ORIGINS --env LUNARBIT_SESSION_DB \
-            lunarbit-api:live-smoke
+            lunarbit-api:live-smoke python scripts/serve_api.py \
+            --host 0.0.0.0 --port 8000 --production
       - name: Verify live health and projection
         run: |
           for attempt in {1..60}; do

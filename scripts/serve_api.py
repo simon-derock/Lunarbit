@@ -9,9 +9,10 @@ import os
 import uvicorn
 from dotenv import load_dotenv
 
-from lunarbit.api import create_app
+from lunarbit.api import DEFAULT_PUBLIC_ORIGINS, create_app
 from lunarbit.cohere import CohereClient
 from lunarbit.conversation import SQLiteConversationStore
+from lunarbit.deployment_config import validate_deployment_environment
 from lunarbit.hybrid import HybridRetriever, Neo4jHybridGraph
 from lunarbit.langgraph_workflow import GraphRAGWorkflow
 from lunarbit.public_projection import NavigationSnapshotSource, Neo4jAggregateReader
@@ -26,6 +27,11 @@ def _args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--neo4j-uri", default=None)
     parser.add_argument("--neo4j-database", default=None)
+    parser.add_argument(
+        "--production",
+        action="store_true",
+        help="validate the deployment environment and enforce production settings",
+    )
     return parser.parse_args()
 
 
@@ -39,10 +45,19 @@ def _required_environment(name: str) -> str:
 def main() -> int:
     args = _args()
     load_dotenv(".env", override=False)
+    production_config = validate_deployment_environment() if args.production else None
     cohere_key = _required_environment("COHERE_API_KEY")
     private_token = _required_environment("LUNARBIT_PRIVATE_API_TOKEN")
-    uri = args.neo4j_uri or os.environ.get("NEO4J_URI", "bolt://127.0.0.1:7687")
-    database = args.neo4j_database or os.environ.get("NEO4J_DATABASE", "neo4j")
+    uri = args.neo4j_uri or (
+        production_config.neo4j_uri
+        if production_config is not None
+        else os.environ.get("NEO4J_URI", "bolt://127.0.0.1:7687")
+    )
+    database = args.neo4j_database or (
+        production_config.database
+        if production_config is not None
+        else os.environ.get("NEO4J_DATABASE", "neo4j")
+    )
     username = os.environ.get("NEO4J_USERNAME") or None
     password = os.environ.get("NEO4J_PASSWORD") or None
     graph = Neo4jHybridGraph.connect(
@@ -78,9 +93,18 @@ def main() -> int:
             private_answer_backend=answer_backend,
             private_workflow=workflow,
             private_api_token=private_token,
+            allowed_origins=(
+                production_config.allowed_origins
+                if production_config is not None
+                else DEFAULT_PUBLIC_ORIGINS
+            ),
             conversation_store=(
-                SQLiteConversationStore(os.environ["LUNARBIT_SESSION_DB"])
-                if os.environ.get("LUNARBIT_SESSION_DB")
+                SQLiteConversationStore(
+                    str(production_config.session_db)
+                    if production_config is not None
+                    else os.environ["LUNARBIT_SESSION_DB"]
+                )
+                if production_config is not None or os.environ.get("LUNARBIT_SESSION_DB")
                 else None
             ),
         )
