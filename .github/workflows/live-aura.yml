@@ -85,5 +85,11 @@ jobs:
           grep -q '^event: answer$' /tmp/lunarbit-sse.txt
           grep -q '^event: done$' /tmp/lunarbit-sse.txt
           rm -f /tmp/lunarbit-sse.txt
+      - name: Surface safe API failure code
+        if: failure()
+        run: |
+          docker logs lunarbit-api-live 2>&1 \
+            | grep -Eo 'code[=:][A-Za-z0-9_-]+|answer_[A-Za-z0-9_-]+|retrieval_[A-Za-z0-9_-]+' \
+            | sort -u || true
       - if: always()
         run: docker stop lunarbit-api-live || true
