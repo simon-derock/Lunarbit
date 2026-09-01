@@ -92,6 +92,16 @@ def test_sqlite_store_uses_durable_concurrency_pragmas(tmp_path) -> None:
     assert store._db.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
 
 
+def test_sqlite_store_can_be_reopened_after_explicit_close(tmp_path) -> None:
+    database = tmp_path / "sessions.sqlite3"
+    first = SQLiteConversationStore(str(database))
+    session_id = first.create()
+    first.close()
+
+    reopened = SQLiteConversationStore(str(database))
+    assert reopened.history(session_id) == ()
+
+
 class StubConversationBackend:
     def __init__(self) -> None:
         self.requests: list[RuntimeRequest] = []

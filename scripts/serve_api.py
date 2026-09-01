@@ -78,6 +78,15 @@ def main() -> int:
         username=username,
         password=password,
     )
+    session_store = (
+        SQLiteConversationStore(
+            str(production_config.session_db)
+            if production_config is not None
+            else os.environ["LUNARBIT_SESSION_DB"]
+        )
+        if production_config is not None or os.environ.get("LUNARBIT_SESSION_DB")
+        else None
+    )
     try:
         cohere = CohereClient(cohere_key, embedding_dimension=1536)
         retrieval_backend = HybridRetrievalBackend(HybridRetriever(graph, cohere))
@@ -98,21 +107,15 @@ def main() -> int:
                 if production_config is not None
                 else DEFAULT_PUBLIC_ORIGINS
             ),
-            conversation_store=(
-                SQLiteConversationStore(
-                    str(production_config.session_db)
-                    if production_config is not None
-                    else os.environ["LUNARBIT_SESSION_DB"]
-                )
-                if production_config is not None or os.environ.get("LUNARBIT_SESSION_DB")
-                else None
-            ),
+            conversation_store=session_store,
         )
         uvicorn.run(app, host=args.host, port=args.port)
     finally:
         public_reader.close()
         reader.close()
         graph.close()
+        if session_store is not None:
+            session_store.close()
     return 0
 
 

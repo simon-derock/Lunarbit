@@ -293,3 +293,8 @@ class SQLiteConversationStore:
         with self._lock:
             self._load(session_id)
             return self._memory.history(session_id)
+
+    def close(self) -> None:
+        """Release the SQLite connection during graceful service shutdown."""
+        with self._lock:
+            self._db.close()
