@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+import pytest
+
+from lunarbit.deployment_config import DeploymentConfigError, validate_deployment_environment
+
+
+def _environment(**overrides: str) -> dict[str, str]:
+    values = {
+        "NEO4J_URI": "neo4j+s://example.databases.neo4j.io",
+        "NEO4J_USERNAME": "reader",
+        "NEO4J_PASSWORD": "password",
+        "NEO4J_DATABASE": "neo4j",
+        "LUNARBIT_PRIVATE_API_TOKEN": "x" * 32,
+        "LUNARBIT_PUBLIC_ALLOWED_ORIGINS": "https://app.example",
+        "LUNARBIT_SESSION_DB": "/var/lib/lunarbit/conversations.sqlite3",
+    }
+    values.update(overrides)
+    return values
+
+
+def test_production_environment_returns_safe_typed_config() -> None:
+    config = validate_deployment_environment(_environment())
+    assert config.neo4j_uri.startswith("neo4j+s://")
+    assert config.allowed_origins == ("https://app.example",)
+    assert config.session_db.is_absolute()
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    (
+        ("NEO4J_URI", "bolt://example", "encrypted"),
+        ("LUNARBIT_PRIVATE_API_TOKEN", "short", "32 characters"),
+        ("LUNARBIT_PUBLIC_ALLOWED_ORIGINS", "*", "HTTPS origins"),
+        ("LUNARBIT_SESSION_DB", "relative.sqlite3", "absolute"),
+    ),
+)
+def test_production_environment_fails_closed(name: str, value: str, message: str) -> None:
+    with pytest.raises(DeploymentConfigError, match=message):
+        validate_deployment_environment(_environment(**{name: value}))
