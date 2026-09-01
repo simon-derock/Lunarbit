@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from lunarbit.api import create_app
 from lunarbit.cohere import CohereClient
+from lunarbit.conversation import SQLiteConversationStore
 from lunarbit.hybrid import HybridRetriever, Neo4jHybridGraph
 from lunarbit.langgraph_workflow import GraphRAGWorkflow
 from lunarbit.public_projection import NavigationSnapshotSource, Neo4jAggregateReader
@@ -77,6 +78,7 @@ def main() -> int:
             private_answer_backend=answer_backend,
             private_workflow=workflow,
             private_api_token=private_token,
+            conversation_store=(SQLiteConversationStore(os.environ["LUNARBIT_SESSION_DB"]) if os.environ.get("LUNARBIT_SESSION_DB") else None),
         )
         uvicorn.run(app, host=args.host, port=args.port)
     finally:

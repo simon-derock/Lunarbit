@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import json
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Lock
@@ -197,3 +199,52 @@ class ConversationStore:
         with self._lock:
             self._purge_expired(now)
             return tuple(self._require(session_id).turns)
+
+
+class SQLiteConversationStore:
+    """Durable bounded session store for single-node or shared-volume deploys."""
+
+    def __init__(self, path: str, *, ttl_seconds: float = 1_800, max_sessions: int = 1_000, max_turns: int = 8) -> None:
+        if not path.strip():
+            raise ValueError("conversation database path cannot be empty")
+        self._memory = ConversationStore(ttl_seconds=ttl_seconds, max_sessions=max_sessions, max_turns=max_turns)
+        self._db = sqlite3.connect(path, check_same_thread=False)
+        self._lock = Lock()
+        self._db.executescript("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created REAL NOT NULL, updated REAL NOT NULL); CREATE TABLE IF NOT EXISTS turns (session_id TEXT NOT NULL, turn_index INTEGER NOT NULL, question TEXT NOT NULL, slots TEXT NOT NULL, status TEXT NOT NULL, PRIMARY KEY(session_id, turn_index));")
+        self._db.commit()
+
+    def _load(self, session_id: str) -> None:
+        rows = self._db.execute("SELECT question, slots, status FROM turns WHERE session_id = ? ORDER BY turn_index", (session_id,)).fetchall()
+        if session_id not in self._memory._sessions:
+            if not self._db.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone():
+                raise SessionNotFoundError(session_id)
+            now = self._memory.clock()
+            self._memory._sessions[session_id] = _SessionState(session_id=session_id, created_at=now, updated_at=now, next_turn_index=len(rows) + 1, turns=[])
+        state = self._memory._sessions[session_id]
+        state.turns = [SessionTurn(question=q, slots=QuerySlots.model_validate(json.loads(slots)), status=status) for q, slots, status in rows]
+        state.next_turn_index = len(state.turns) + 1
+
+    def create(self) -> str:
+        with self._lock:
+            session_id = self._memory.create()
+            self._db.execute("INSERT INTO sessions(id, created, updated) VALUES (?, ?, ?)", (session_id, 0, 0))
+            self._db.commit()
+            return session_id
+
+    def prepare(self, session_id: str, *, question: str, slots: QuerySlots | None) -> PreparedTurn:
+        with self._lock:
+            self._load(session_id)
+            return self._memory.prepare(session_id, question=question, slots=slots)
+
+    def append(self, session_id: str, *, question: str, slots: QuerySlots, status: str) -> int:
+        with self._lock:
+            self._load(session_id)
+            index = self._memory.append(session_id, question=question, slots=slots, status=status)
+            self._db.execute("INSERT INTO turns(session_id, turn_index, question, slots, status) VALUES (?, ?, ?, ?, ?)", (session_id, index, question, slots.model_dump_json(), status))
+            self._db.commit()
+            return index
+
+    def history(self, session_id: str) -> tuple[SessionTurn, ...]:
+        with self._lock:
+            self._load(session_id)
+            return self._memory.history(session_id)
