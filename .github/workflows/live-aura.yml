@@ -1,0 +1,57 @@
+name: Lunarbit Live Aura Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aura-smoke:
+    name: Aura-backed release smoke
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      NEO4J_URI: ${{ secrets.NEO4J_URI }}
+      NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
+      NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+      NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
+      LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS }}
+      LUNARBIT_SESSION_DB: /tmp/lunarbit-conversations.sqlite3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.22"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --extra api --extra graph --extra agent
+      - run: uv run python scripts/verify_deployment_config.py
+      - run: docker build --file Dockerfile.api --tag lunarbit-api:live-smoke .
+      - name: Start Aura-backed API
+        run: |
+          docker run --detach --rm --name lunarbit-api-live \
+            --publish 127.0.0.1:8016:8000 \
+            --env NEO4J_URI --env NEO4J_USERNAME --env NEO4J_PASSWORD \
+            --env NEO4J_DATABASE --env COHERE_API_KEY --env GEMINI_API_KEY \
+            --env MISTRAL_API_KEY --env LUNARBIT_PRIVATE_API_TOKEN \
+            --env LUNARBIT_PUBLIC_ALLOWED_ORIGINS --env LUNARBIT_SESSION_DB \
+            lunarbit-api:live-smoke
+      - name: Verify live health and projection
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8016/health >/dev/null \
+              && curl --fail --silent http://127.0.0.1:8016/ready >/dev/null \
+              && curl --fail --silent http://127.0.0.1:8016/v1/public/snapshot >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs lunarbit-api-live
+          exit 1
+      - if: always()
+        run: docker stop lunarbit-api-live || true
