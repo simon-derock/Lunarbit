@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { GraphSurface } from "./GraphSurface";
-import { fetchPublicSnapshot, mapPublicSnapshot, streamPrivateChat, type ChatStreamResult } from "./api";
+import { fetchPublicSnapshot, fetchSessionHistory, mapPublicSnapshot, streamPrivateChat, type ChatStreamResult, type SessionHistory } from "./api";
 import {
   GRAPH_PROFILES,
   SORTS,
@@ -165,6 +165,7 @@ export function Console() {
   const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [streamCitations, setStreamCitations] = useState<ChatStreamResult["answer"]["citations"]>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistory | null>(null);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(() => {
     try { return window.sessionStorage.getItem("lunarbit.session") ?? undefined; } catch { return undefined; }
   });
@@ -190,6 +191,10 @@ export function Console() {
   const theme = THEMES.find((t) => t.id === themeId)!;
   const profile = GRAPH_PROFILES.find((p) => p.id === profileId)!;
   const viz = VIZ_PROFILES.find((v) => v.id === vizId)!;
+  useEffect(() => {
+    if (!chatSessionId) return;
+    fetchSessionHistory(chatSessionId).then(setSessionHistory).catch(() => setSessionHistory(null));
+  }, [chatSessionId]);
   useEffect(() => {
     let active = true;
     setApiState("loading");
@@ -522,6 +527,7 @@ export function Console() {
             <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
             <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
+            {sessionHistory && sessionHistory.turns.length > 1 && <div className="ask-history">{sessionHistory.turns.slice(0, -1).map((turn) => <span key={turn.turn_index}>↳ {turn.question}</span>)}</div>}
             {(streamCitations.length > 0 || chatResult.answer.citations.length > 0) && (
               <div className="ask-citations" aria-label="Evidence citations">
                 {(streamCitations.length ? streamCitations : chatResult.answer.citations).slice(0, 6).map((citation) => <span key={citation.citation_id}>{citation.citation_id} · {(citation.authority_score * 100).toFixed(0)}%</span>)}

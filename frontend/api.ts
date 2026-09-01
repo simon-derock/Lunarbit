@@ -68,6 +68,17 @@ export interface ChatStreamResult {
   answer: StreamAnswer;
 }
 
+export interface SessionHistory {
+  session_id: string;
+  turns: { turn_index: number; question: string; status: string }[];
+}
+
+export async function fetchSessionHistory(sessionId: string): Promise<SessionHistory> {
+  const response = await fetchWithRetry(`/api/private/chat/${encodeURIComponent(sessionId)}/history`);
+  if (!response.ok) throw new Error(`history request failed: ${response.status}`);
+  return (await response.json()) as SessionHistory;
+}
+
 export async function streamPrivateChat(
   question: string,
   onStage: (stage: string) => void,
