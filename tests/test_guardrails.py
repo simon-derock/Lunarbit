@@ -24,6 +24,18 @@ def test_api_sets_security_headers_and_disables_response_caching() -> None:
     assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
 
 
+def test_api_emits_hsts_only_for_https_requests() -> None:
+    app = create_app()
+
+    http_response = TestClient(app, base_url="http://testserver").get("/health")
+    https_response = TestClient(app, base_url="https://testserver").get("/health")
+
+    assert "strict-transport-security" not in http_response.headers
+    assert https_response.headers["strict-transport-security"] == (
+        "max-age=31536000; includeSubDomains"
+    )
+
+
 def test_public_rate_limit_returns_retry_after_without_leaking_payload() -> None:
     client = TestClient(
         create_app(
