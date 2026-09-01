@@ -53,5 +53,15 @@ jobs:
           done
           docker logs lunarbit-api-live
           exit 1
+      - name: Verify authenticated SSE answer contract
+        run: |
+          curl --fail --silent --no-buffer \
+            --header "Authorization: Bearer ${LUNARBIT_PRIVATE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"question":"How many orders did I place?"}' \
+            http://127.0.0.1:8016/v1/private/chat/stream > /tmp/lunarbit-sse.txt
+          grep -q '^event: answer$' /tmp/lunarbit-sse.txt
+          grep -q '^event: done$' /tmp/lunarbit-sse.txt
+          rm -f /tmp/lunarbit-sse.txt
       - if: always()
         run: docker stop lunarbit-api-live || true
