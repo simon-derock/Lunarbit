@@ -72,3 +72,16 @@ jobs:
           exit 1
       - if: always()
         run: docker stop lunarbit-public-api || true
+
+  api-container:
+    name: Production API container
+    needs: python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false
+          tags: lunarbit-api:ci
