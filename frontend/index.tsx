@@ -164,6 +164,7 @@ export function Console() {
   const [queryState, setQueryState] = useState<string | null>(null);
   const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [streamCitations, setStreamCitations] = useState<ChatStreamResult["answer"]["citations"]>([]);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(() => {
     try { return window.sessionStorage.getItem("lunarbit.session") ?? undefined; } catch { return undefined; }
   });
@@ -173,8 +174,9 @@ export function Console() {
     if (!question) return;
     setChatBusy(true);
     setChatResult(null);
+    setStreamCitations([]);
     setQueryState("thinking");
-    streamPrivateChat(question, (stage) => setQueryState(stage), chatSessionId)
+    streamPrivateChat(question, (stage) => setQueryState(stage), (citation) => setStreamCitations((current) => [...current, citation]), chatSessionId)
       .then((result) => {
         setChatResult(result);
         setChatSessionId(result.session_id);
@@ -520,9 +522,9 @@ export function Console() {
             <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
             <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
-            {chatResult.answer.citations.length > 0 && (
+            {(streamCitations.length > 0 || chatResult.answer.citations.length > 0) && (
               <div className="ask-citations" aria-label="Evidence citations">
-                {chatResult.answer.citations.slice(0, 6).map((citation) => <span key={citation.citation_id}>{citation.citation_id} · {(citation.authority_score * 100).toFixed(0)}%</span>)}
+                {(streamCitations.length ? streamCitations : chatResult.answer.citations).slice(0, 6).map((citation) => <span key={citation.citation_id}>{citation.citation_id} · {(citation.authority_score * 100).toFixed(0)}%</span>)}
               </div>
             )}
           </section>
