@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from lunarbit.api import PrivateGroundedAnswer, create_app
 from lunarbit.conversation import (
     ConversationStore,
-    SQLiteConversationStore,
     SessionNotFoundError,
+    SQLiteConversationStore,
     infer_query_slots,
     merge_query_slots,
 )
@@ -64,7 +64,9 @@ def test_sqlite_store_recovers_bounded_history_after_reopen(tmp_path) -> None:
     database = tmp_path / "sessions.sqlite3"
     first = SQLiteConversationStore(str(database))
     session_id = first.create()
-    first.append(session_id, question="How much did I spend?", slots=QuerySlots(), status="verified")
+    first.append(
+        session_id, question="How much did I spend?", slots=QuerySlots(), status="verified"
+    )
 
     reopened = SQLiteConversationStore(str(database))
     history = reopened.history(session_id)

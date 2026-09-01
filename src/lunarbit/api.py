@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
 import json
+from collections.abc import Awaitable, Callable, Generator, Sequence
 from secrets import compare_digest
 from time import monotonic, sleep
 from typing import Annotated
@@ -14,18 +14,18 @@ from starlette.responses import Response, StreamingResponse
 from lunarbit.agent import build_query_plan
 from lunarbit.api_contracts import (
     API_VERSION,
+    ConversationSessionId,
     HealthResponse,
     PrivateAnswerBackend,
     PrivateAnswerRequest,
     PrivateChatRequest,
     PrivateChatResponse,
     PrivateCitation,
-    PrivateSessionHistory,
-    PrivateSessionTurn,
     PrivateGroundedAnswer,
-    ReadinessResponse,
     PrivateRetrievalBackend,
     PrivateRetrievalTrace,
+    PrivateSessionHistory,
+    PrivateSessionTurn,
     PrivateWorkflowBackend,
     PublicDemoAnswer,
     PublicEvidenceCard,
@@ -33,6 +33,7 @@ from lunarbit.api_contracts import (
     PublicShowcaseAnswer,
     PublicSnapshotSource,
     QueryPlanRequest,
+    ReadinessResponse,
 )
 from lunarbit.conversation import (
     ConversationStore,
@@ -378,7 +379,13 @@ def create_app(
             return ReadinessResponse(status="ready", graph="synthetic")
         try:
             public_snapshot_source.snapshot()
-        except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired, PublicProjectionUnavailable) as error:
+        except (
+            DriverError,
+            Neo4jError,
+            ServiceUnavailable,
+            SessionExpired,
+            PublicProjectionUnavailable,
+        ) as error:
             raise HTTPException(status_code=503, detail="graph dependency is not ready") from error
         return ReadinessResponse(status="ready", graph="configured")
 
@@ -393,7 +400,7 @@ def create_app(
             return projection_cache[1]
         try:
             projected = public_snapshot_source.snapshot()
-        except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired) as error:
+        except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired):
             sleep(0.25)
             try:
                 projected = public_snapshot_source.snapshot()
@@ -635,7 +642,9 @@ def create_app(
             try:
                 turns = sessions.history(session_id)
             except SessionNotFoundError as error:
-                raise HTTPException(status_code=404, detail="conversation session not found") from error
+                raise HTTPException(
+                    status_code=404, detail="conversation session not found"
+                ) from error
             return PrivateSessionHistory(
                 session_id=session_id,
                 turns=tuple(
@@ -652,15 +661,17 @@ def create_app(
         ) -> StreamingResponse:
             """Stream governed chat progress without exposing model internals."""
             enforce_rate_limit(http_request, private_limiter)
-            if (private_answer_backend is None and private_workflow is None) or private_api_token is None:
+            if (
+                private_answer_backend is None and private_workflow is None
+            ) or private_api_token is None:
                 raise HTTPException(status_code=503, detail="private answer is not configured")
             authorize_private(authorization)
             question = enforce_question_guardrail(request.question)
             if request.slots is not None:
                 enforce_slot_guardrail(request.slots)
 
-            def events():
-                yield "event: thinking\ndata: {\"stage\":\"guardrails\"}\n\n"
+            def events() -> Generator[str, None, None]:
+                yield 'event: thinking\ndata: {"stage":"guardrails"}\n\n'
                 session_id = request.session_id or sessions.create()
                 try:
                     inferred = infer_query_slots(question)
@@ -670,35 +681,80 @@ def create_app(
                     )
                     prepared = sessions.prepare(session_id, question=question, slots=slots)
                 except SessionNotFoundError:
-                    yield "event: error\ndata: {\"code\":\"session_not_found\"}\n\n"
+                    yield 'event: error\ndata: {"code":"session_not_found"}\n\n'
                     return
-                yield "event: thinking\ndata: {\"stage\":\"retrieval\"}\n\n"
+                yield 'event: thinking\ndata: {"stage":"retrieval"}\n\n'
                 try:
                     if private_workflow is not None:
-                        answer = run_private_workflow(prepared.contextual_question, slots=prepared.slots, thread_id=session_id)
+                        answer = run_private_workflow(
+                            prepared.contextual_question, slots=prepared.slots, thread_id=session_id
+                        )
                     else:
                         assert private_answer_backend is not None
-                        answer = private_answer_backend.answer(RuntimeRequest(question=prepared.contextual_question, slots=prepared.slots))
+                        answer = private_answer_backend.answer(
+                            RuntimeRequest(
+                                question=prepared.contextual_question, slots=prepared.slots
+                            )
+                        )
                 except (HTTPException, LangGraphExecutionError, LangGraphStateError) as error:
-                    yield "event: error\ndata: " + json.dumps({"code": "answer_unavailable", "detail": str(error.detail if isinstance(error, HTTPException) else error)}) + "\n\n"
+                    yield (
+                        "event: error\ndata: "
+                        + json.dumps(
+                            {
+                                "code": "answer_unavailable",
+                                "detail": str(
+                                    error.detail if isinstance(error, HTTPException) else error
+                                ),
+                            }
+                        )
+                        + "\n\n"
+                    )
                     return
-                turn_index = sessions.append(session_id, question=question, slots=prepared.slots, status=answer.status)
+                turn_index = sessions.append(
+                    session_id, question=question, slots=prepared.slots, status=answer.status
+                )
                 for citation in answer.citations:
-                    yield "event: citation\ndata: " + json.dumps(citation.model_dump(mode="json")) + "\n\n"
-                focus_ids = sorted({identifier for citation in answer.citations for identifier in (citation.chunk_node_id, citation.source_node_id)})
+                    yield (
+                        "event: citation\ndata: "
+                        + json.dumps(citation.model_dump(mode="json"))
+                        + "\n\n"
+                    )
+                focus_ids = sorted(
+                    {
+                        identifier
+                        for citation in answer.citations
+                        for identifier in (citation.chunk_node_id, citation.source_node_id)
+                    }
+                )
                 if focus_ids:
-                    yield "event: graph_focus\ndata: " + json.dumps({"node_ids": focus_ids}) + "\n\n"
+                    yield (
+                        "event: graph_focus\ndata: " + json.dumps({"node_ids": focus_ids}) + "\n\n"
+                    )
                 if answer.calculation:
-                    yield "event: calculation\ndata: " + json.dumps({"text": answer.calculation}) + "\n\n"
-                yield "event: answer\ndata: " + json.dumps({
-                    "session_id": session_id,
-                    "turn_index": turn_index,
-                    "context_reused": prepared.context_reused,
-                    "answer": answer.model_dump(mode="json"),
-                }) + "\n\n"
+                    yield (
+                        "event: calculation\ndata: "
+                        + json.dumps({"text": answer.calculation})
+                        + "\n\n"
+                    )
+                yield (
+                    "event: answer\ndata: "
+                    + json.dumps(
+                        {
+                            "session_id": session_id,
+                            "turn_index": turn_index,
+                            "context_reused": prepared.context_reused,
+                            "answer": answer.model_dump(mode="json"),
+                        }
+                    )
+                    + "\n\n"
+                )
                 yield "event: done\ndata: {}\n\n"
 
-            return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+            return StreamingResponse(
+                events(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
 
     return app
 

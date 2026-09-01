@@ -71,7 +71,7 @@ class PrivateGroundedAnswer(ContractModel):
     calculation: str | None = Field(default=None, max_length=2_000)
     fact_count: int = Field(ge=0)
     citation_ids: tuple[RuntimeCitationId, ...]
-    citations: tuple["PrivateCitation", ...] = ()
+    citations: tuple[PrivateCitation, ...] = ()
     verification_status: str
     limitations: tuple[str, ...]
     abstention_reason: str | None
