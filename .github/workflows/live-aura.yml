@@ -69,11 +69,19 @@ jobs:
           exit 1
       - name: Verify authenticated SSE answer contract
         run: |
-          curl --fail --silent --no-buffer \
+          curl --silent --show-error --no-buffer \
             --header "Authorization: Bearer ${LUNARBIT_PRIVATE_API_TOKEN}" \
             --header "Content-Type: application/json" \
             --data '{"question":"How many orders did I place?"}' \
             http://127.0.0.1:8016/v1/private/chat/stream > /tmp/lunarbit-sse.txt
+          echo "SSE events:"
+          grep '^event:' /tmp/lunarbit-sse.txt || true
+          if ! grep -q '^event: answer$' /tmp/lunarbit-sse.txt; then
+            echo "SSE answer event missing"
+            grep -o '"code":"[^"]*"' /tmp/lunarbit-sse.txt | sort -u || true
+            rm -f /tmp/lunarbit-sse.txt
+            exit 1
+          fi
           grep -q '^event: answer$' /tmp/lunarbit-sse.txt
           grep -q '^event: done$' /tmp/lunarbit-sse.txt
           rm -f /tmp/lunarbit-sse.txt
