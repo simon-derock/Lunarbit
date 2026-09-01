@@ -38,13 +38,15 @@ replicas, replace SQLite with an authenticated shared store before scaling out.
 
 1. Run Python tests, Ruff, strict MyPy, repository hygiene, frontend Vitest,
    TypeScript, and production build.
-2. Build `Dockerfile.api`; inspect the image as non-root and confirm no private
+2. Run `uv run python scripts/verify_deployment_config.py` against the platform
+   secret-manager environment; it must pass without printing secret values.
+3. Build `Dockerfile.api`; inspect the image as non-root and confirm no private
    corpus or credential marker is present.
-3. Start a release candidate with deployment secrets and require `/health`
+4. Start a release candidate with deployment secrets and require `/health`
    plus `/ready` before routing traffic.
-4. Verify the public snapshot contains only the reviewed projection and that
+5. Verify the public snapshot contains only the reviewed projection and that
    authenticated SSE chat returns typed events without raw evidence.
-5. Record image digest, schema/index versions, migration status, and rollback
+6. Record image digest, schema/index versions, migration status, and rollback
    image before promotion.
 
 ## Security controls
