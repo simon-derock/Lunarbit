@@ -7,6 +7,7 @@ import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
@@ -218,6 +219,8 @@ class SQLiteConversationStore:
         self._memory = ConversationStore(
             ttl_seconds=ttl_seconds, max_sessions=max_sessions, max_turns=max_turns
         )
+        database_path = Path(path)
+        database_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._lock = Lock()
         self._db.executescript(

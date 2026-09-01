@@ -75,6 +75,16 @@ def test_sqlite_store_recovers_bounded_history_after_reopen(tmp_path) -> None:
     assert history[0].status == "verified"
 
 
+def test_sqlite_store_creates_explicit_persistent_parent_directory(tmp_path) -> None:
+    database = tmp_path / "persistent" / "sessions.sqlite3"
+
+    store = SQLiteConversationStore(str(database))
+    session_id = store.create()
+
+    assert database.exists()
+    assert session_id.startswith("session:")
+
+
 class StubConversationBackend:
     def __init__(self) -> None:
         self.requests: list[RuntimeRequest] = []
