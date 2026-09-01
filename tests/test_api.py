@@ -48,6 +48,19 @@ def test_readiness_distinguishes_synthetic_and_configured_graphs() -> None:
     assert response.json()["graph"] == "synthetic"
 
 
+def test_readiness_fails_closed_when_configured_graph_is_unavailable() -> None:
+    from lunarbit.public_projection import PublicProjectionUnavailable
+
+    class Unavailable:
+        def snapshot(self) -> PublicSnapshot:
+            raise PublicProjectionUnavailable("Aura unavailable")
+
+    response = TestClient(create_app(public_snapshot_source=Unavailable())).get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "graph dependency is not ready"}
+
+
 def test_default_snapshot_uses_the_current_private_corpus_rollup() -> None:
     response = TestClient(create_app()).get("/v1/public/snapshot")
     metrics = {item["label"]: item["value"] for item in response.json()["metrics"]}
@@ -304,6 +317,34 @@ def test_private_answer_returns_verified_calculation_without_raw_evidence() -> N
     ]
     assert "source_hash" not in response.text
     assert "evidence_text" not in response.text
+
+
+def test_private_chat_stream_emits_ordered_progress_and_terminal_events() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/chat/stream",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={"question": "How much platform fee did I pay on Swiggy?"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    event_names = [
+        line.removeprefix("event: ")
+        for line in response.text.splitlines()
+        if line.startswith("event: ")
+    ]
+    assert event_names[:2] == ["thinking", "thinking"]
+    assert "calculation" in event_names
+    assert event_names[-2:] == ["answer", "done"]
+    assert "The evidence-backed total is INR 10.30." in response.text
+    assert "source_hash" not in response.text
 
 
 class StubPrivateWorkflow:
