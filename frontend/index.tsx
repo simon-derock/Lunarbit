@@ -164,6 +164,9 @@ export function Console() {
   const [queryState, setQueryState] = useState<string | null>(null);
   const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState<string | undefined>(() => {
+    try { return window.sessionStorage.getItem("lunarbit.session") ?? undefined; } catch { return undefined; }
+  });
 
   const submitAsk = () => {
     const question = ask.trim();
@@ -171,8 +174,13 @@ export function Console() {
     setChatBusy(true);
     setChatResult(null);
     setQueryState("thinking");
-    streamPrivateChat(question, (stage) => setQueryState(stage))
-      .then((result) => { setChatResult(result); setQueryState(result.answer.status); })
+    streamPrivateChat(question, (stage) => setQueryState(stage), chatSessionId)
+      .then((result) => {
+        setChatResult(result);
+        setChatSessionId(result.session_id);
+        try { window.sessionStorage.setItem("lunarbit.session", result.session_id); } catch { /* storage is optional */ }
+        setQueryState(result.answer.status);
+      })
       .catch((error) => setQueryState(error instanceof Error ? error.message : "chat unavailable"))
       .finally(() => setChatBusy(false));
   };

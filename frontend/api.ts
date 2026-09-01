@@ -70,11 +70,12 @@ export interface ChatStreamResult {
 export async function streamPrivateChat(
   question: string,
   onStage: (stage: string) => void,
+  sessionId?: string,
 ): Promise<ChatStreamResult> {
   const response = await fetchWithRetry("/api/private/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, ...(sessionId ? { session_id: sessionId } : {}) }),
   });
   if (!response.ok || !response.body) throw new Error(`chat stream failed: ${response.status}`);
   const reader = response.body.getReader();
