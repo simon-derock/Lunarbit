@@ -1,9 +1,13 @@
-# Build only the public serving surface. Private corpus data, local artifacts,
-# credentials, and unrelated frontends never enter the container context.
-*
-!pyproject.toml
-!uv.lock
-!src/
-!src/**
-!scripts/
-!scripts/serve_public_api.py
+.env
+.git
+.github
+data
+samples
+frontend
+memory.md
+MEMORY.md
+PLAN.md
+tests
+scripts/run_mistral_agentic_chunking.py
+__pycache__
+*.pyc
