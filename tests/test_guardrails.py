@@ -36,6 +36,17 @@ def test_api_emits_hsts_only_for_https_requests() -> None:
     )
 
 
+def test_api_rejects_oversized_request_bodies_before_processing() -> None:
+    response = TestClient(create_app()).post(
+        "/v1/query/plan",
+        headers={"Content-Length": str(64 * 1024 + 1)},
+        content=b"{}",
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "request body exceeds the configured limit"}
+
+
 def test_public_rate_limit_returns_retry_after_without_leaking_payload() -> None:
     client = TestClient(
         create_app(

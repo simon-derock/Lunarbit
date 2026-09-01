@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j.exceptions import DriverError, Neo4jError, ServiceUnavailable, SessionExpired
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from lunarbit.agent import build_query_plan
 from lunarbit.api_contracts import (
@@ -78,6 +78,7 @@ DEFAULT_PUBLIC_ORIGINS = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 )
+MAX_REQUEST_BYTES = 64 * 1024
 
 
 def parse_public_origins(value: str | None) -> tuple[str, ...]:
@@ -239,6 +240,19 @@ def create_app(
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         request.state.trace_id = new_trace_id()
+        content_length = request.headers.get("content-length")
+        if (
+            content_length is not None
+            and content_length.isdigit()
+            and int(content_length) > MAX_REQUEST_BYTES
+        ):
+            response: Response = JSONResponse(
+                {"detail": "request body exceeds the configured limit"}, status_code=413
+            )
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Request-ID"] = request.state.trace_id
+            return response
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
