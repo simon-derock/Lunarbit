@@ -8,7 +8,7 @@
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
 - Last verified implementation commit: `7bf7f74` (`feat(deploy): enforce validated production launcher mode`), pushed to `main`.
 - Recent commits: `589d489` live authenticated SSE smoke, `d977881` manual Aura release workflow, `7bf7f74` validated production launcher.
-- Last passing checks: 263 Python tests, Ruff format/lint, strict MyPy across 43 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, production API container health/readiness smoke checks, and sanitized deployment preflight.
+- Last passing checks: 265 Python tests, Ruff format/lint, strict MyPy across 43 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, production API container health/readiness smoke checks, and sanitized deployment preflight.
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, or abstention quality drops.
 - Deployment verification: `Dockerfile.api` built as `lunarbit-api:ci`; a real container with the configured environment returned `/health` 200, `/ready` 200 with `graph=configured`, a 322-node/105-edge Aura navigation projection, and authenticated SSE chat events. The verification container was stopped after the smoke test.
 
