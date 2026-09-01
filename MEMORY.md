@@ -8,7 +8,8 @@
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
 - Last verified implementation commit: `5dd1f16` (`test(api): cover readiness failure and chat stream contracts`), pushed to `main`.
 - Recent commits: `5dd1f16` API readiness/streaming contracts, `bf68a00` typed API/session quality gates, `3d9199b` deployment release contract.
-- Last passing checks: 254 Python tests, Ruff format/lint, strict MyPy across 42 modules, repository hygiene, frontend Vitest (2 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, and browser-origin SSE proxy smoke test.
+- Last passing checks: 257 Python tests, Ruff format/lint, strict MyPy across 42 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, and production API container health/readiness smoke checks.
+- Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, or abstention quality drops.
 - Deployment verification: `Dockerfile.api` built as `lunarbit-api:ci`; a real container with the configured environment returned `/health` 200, `/ready` 200 with `graph=configured`, a 322-node/105-edge Aura navigation projection, and authenticated SSE chat events. The verification container was stopped after the smoke test.
 
 ## Goal-loop scope (2026-09-01)
