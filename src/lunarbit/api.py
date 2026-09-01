@@ -19,6 +19,7 @@ from lunarbit.api_contracts import (
     PrivateAnswerRequest,
     PrivateChatRequest,
     PrivateChatResponse,
+    PrivateCitation,
     PrivateGroundedAnswer,
     PrivateRetrievalBackend,
     PrivateRetrievalTrace,
@@ -347,6 +348,16 @@ def create_app(
             calculation=context.calculation,
             fact_count=context.fact_count,
             citation_ids=context.verification.citation_ids,
+            citations=tuple(
+                PrivateCitation(
+                    citation_id=citation.citation_id,
+                    authority_score=float(citation.authority_score),
+                    supports_claim_ids=citation.supports_claim_ids,
+                    quality_flags=citation.quality_flags,
+                )
+                for citation in context.citations
+                if citation.citation_id in context.verification.citation_ids
+            ),
             verification_status=context.verification.status.value,
             limitations=context.limitations,
             abstention_reason=context.abstention_reason,

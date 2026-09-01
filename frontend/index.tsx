@@ -520,9 +520,9 @@ export function Console() {
             <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
             <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
-            {chatResult.answer.citation_ids.length > 0 && (
+            {chatResult.answer.citations.length > 0 && (
               <div className="ask-citations" aria-label="Evidence citations">
-                {chatResult.answer.citation_ids.slice(0, 6).map((citation) => <span key={citation}>{citation}</span>)}
+                {chatResult.answer.citations.slice(0, 6).map((citation) => <span key={citation.citation_id}>{citation.citation_id} · {(citation.authority_score * 100).toFixed(0)}%</span>)}
               </div>
             )}
           </section>

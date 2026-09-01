@@ -65,9 +65,19 @@ class PrivateGroundedAnswer(ContractModel):
     calculation: str | None = Field(default=None, max_length=2_000)
     fact_count: int = Field(ge=0)
     citation_ids: tuple[RuntimeCitationId, ...]
+    citations: tuple["PrivateCitation", ...] = ()
     verification_status: str
     limitations: tuple[str, ...]
     abstention_reason: str | None
+
+
+class PrivateCitation(ContractModel):
+    """Safe provenance envelope; source text and private identifiers never cross it."""
+
+    citation_id: RuntimeCitationId
+    authority_score: float = Field(ge=0.0, le=1.0)
+    supports_claim_ids: tuple[str, ...] = Field(min_length=1)
+    quality_flags: tuple[str, ...]
 
 
 class PrivateChatResponse(ContractModel):

@@ -55,6 +55,7 @@ export interface StreamAnswer {
   calculation: string | null;
   fact_count: number;
   citation_ids: string[];
+  citations: { citation_id: string; authority_score: number; supports_claim_ids: string[]; quality_flags: string[] }[];
   verification_status: string;
   limitations: string[];
   abstention_reason: string | null;
