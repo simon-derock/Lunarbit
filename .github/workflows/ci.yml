@@ -91,3 +91,17 @@ jobs:
           file: Dockerfile.api
           push: false
           tags: lunarbit-api:ci
+      - name: Run production API smoke checks
+        run: |
+          docker run --detach --rm --name lunarbit-api --publish 127.0.0.1:8014:8000 lunarbit-api:ci
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8014/health >/dev/null \
+              && curl --fail --silent http://127.0.0.1:8014/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs lunarbit-api
+          exit 1
+      - if: always()
+        run: docker stop lunarbit-api || true
