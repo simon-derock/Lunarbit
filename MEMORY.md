@@ -6,9 +6,9 @@
 - Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, and citation identifiers are implemented and pushed; remaining gates are provenance-rich graph focus, durable sessions, HITL, full analytics, live E2E coverage, and production security.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `5dd1f16` (`test(api): cover readiness failure and chat stream contracts`), pushed to `main`.
-- Recent commits: `5dd1f16` API readiness/streaming contracts, `bf68a00` typed API/session quality gates, `3d9199b` deployment release contract.
-- Last passing checks: 257 Python tests, Ruff format/lint, strict MyPy across 42 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, and production API container health/readiness smoke checks.
+- Last verified implementation commit: `7bf7f74` (`feat(deploy): enforce validated production launcher mode`), pushed to `main`.
+- Recent commits: `589d489` live authenticated SSE smoke, `d977881` manual Aura release workflow, `7bf7f74` validated production launcher.
+- Last passing checks: 263 Python tests, Ruff format/lint, strict MyPy across 43 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, production API container health/readiness smoke checks, and sanitized deployment preflight.
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, or abstention quality drops.
 - Deployment verification: `Dockerfile.api` built as `lunarbit-api:ci`; a real container with the configured environment returned `/health` 200, `/ready` 200 with `graph=configured`, a 322-node/105-edge Aura navigation projection, and authenticated SSE chat events. The verification container was stopped after the smoke test.
 
