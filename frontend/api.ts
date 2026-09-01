@@ -11,6 +11,7 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit, atte
       lastError = new Error(`request failed: ${response.status}`);
     } catch (error) {
       lastError = error;
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
       if (attempt === attempts - 1) throw error;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 400 * (attempt + 1)));
@@ -93,12 +94,15 @@ export async function streamPrivateChat(
   onCitation: (citation: StreamAnswer["citations"][number]) => void,
   onGraphFocus: (nodeIds: string[]) => void,
   sessionId?: string,
+  signal?: AbortSignal,
 ): Promise<ChatStreamResult> {
+  // A POST stream is deliberately never retried: replaying it could duplicate a turn.
   const response = await fetchWithRetry("/api/private/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, ...(sessionId ? { session_id: sessionId } : {}) }),
-  });
+    signal,
+  }, 1);
   if (!response.ok || !response.body) throw new Error(`chat stream failed: ${response.status}`);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { mapPublicSnapshot, parseSseFrame, type PublicSnapshotPayload } from "./api";
+import { describe, expect, it, vi } from "vitest";
+import {
+  mapPublicSnapshot,
+  parseSseFrame,
+  streamPrivateChat,
+  type PublicSnapshotPayload,
+} from "./api";
 
 const payload: PublicSnapshotPayload = {
   mode: "neo4j_aggregate_projection",
@@ -52,5 +57,19 @@ describe("SSE protocol parser", () => {
     });
     expect(parseSseFrame("data: {}"))?.toBeNull();
     expect(parseSseFrame("event: done\ndata: {}"))?.toEqual({ event: "done", data: {} });
+  });
+
+  it("does not retry an aborted chat POST", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new DOMException("cancelled", "AbortError"));
+    const controller = new AbortController();
+
+    await expect(
+      streamPrivateChat("How much did I spend?", vi.fn(), vi.fn(), vi.fn(), undefined, controller.signal),
+    ).rejects.toThrow("cancelled");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
+    fetchMock.mockRestore();
   });
 });

@@ -167,6 +167,7 @@ export function Console() {
   const [streamCitations, setStreamCitations] = useState<ChatStreamResult["answer"]["citations"]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionHistory | null>(null);
   const [graphFocusIds, setGraphFocusIds] = useState<string[]>([]);
+  const chatAbort = useRef<AbortController | null>(null);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(() => {
     try { return window.sessionStorage.getItem("lunarbit.session") ?? undefined; } catch { return undefined; }
   });
@@ -175,11 +176,14 @@ export function Console() {
     const question = ask.trim();
     if (!question) return;
     setChatBusy(true);
+    chatAbort.current?.abort();
+    const controller = new AbortController();
+    chatAbort.current = controller;
     setChatResult(null);
     setStreamCitations([]);
     setGraphFocusIds([]);
     setQueryState("thinking");
-    streamPrivateChat(question, (stage) => setQueryState(stage), (citation) => setStreamCitations((current) => [...current, citation]), (nodeIds) => setGraphFocusIds(nodeIds), chatSessionId)
+    streamPrivateChat(question, (stage) => setQueryState(stage), (citation) => setStreamCitations((current) => [...current, citation]), (nodeIds) => setGraphFocusIds(nodeIds), chatSessionId, controller.signal)
       .then((result) => {
         setChatResult(result);
         setChatSessionId(result.session_id);
@@ -187,8 +191,13 @@ export function Console() {
         setQueryState(result.answer.status);
       })
       .catch((error) => setQueryState(error instanceof Error ? error.message : "chat unavailable"))
-      .finally(() => setChatBusy(false));
+      .finally(() => {
+        if (chatAbort.current === controller) chatAbort.current = null;
+        setChatBusy(false);
+      });
   };
+
+  useEffect(() => () => chatAbort.current?.abort(), []);
 
   const theme = THEMES.find((t) => t.id === themeId)!;
   const profile = GRAPH_PROFILES.find((p) => p.id === profileId)!;
