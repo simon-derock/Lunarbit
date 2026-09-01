@@ -55,7 +55,7 @@ export interface StreamAnswer {
   calculation: string | null;
   fact_count: number;
   citation_ids: string[];
-  citations: { citation_id: string; authority_score: number; supports_claim_ids: string[]; quality_flags: string[] }[];
+  citations: { citation_id: string; chunk_node_id: string; source_node_id: string; authority_score: number; supports_claim_ids: string[]; quality_flags: string[] }[];
   verification_status: string;
   limitations: string[];
   abstention_reason: string | null;
@@ -83,6 +83,7 @@ export async function streamPrivateChat(
   question: string,
   onStage: (stage: string) => void,
   onCitation: (citation: StreamAnswer["citations"][number]) => void,
+  onGraphFocus: (nodeIds: string[]) => void,
   sessionId?: string,
 ): Promise<ChatStreamResult> {
   const response = await fetchWithRetry("/api/private/chat/stream", {
@@ -108,6 +109,7 @@ export async function streamPrivateChat(
       if (event === "thinking") onStage(String(payload.stage ?? "thinking"));
       if (event === "calculation") onStage("calculation");
       if (event === "citation") onCitation(payload as unknown as StreamAnswer["citations"][number]);
+      if (event === "graph_focus") onGraphFocus(Array.isArray(payload.node_ids) ? payload.node_ids.map(String) : []);
       if (event === "answer") result = payload as unknown as ChatStreamResult;
       if (event === "error") throw new Error(String(payload.detail ?? payload.code ?? "chat failed"));
     }

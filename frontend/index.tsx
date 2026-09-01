@@ -166,6 +166,7 @@ export function Console() {
   const [chatBusy, setChatBusy] = useState(false);
   const [streamCitations, setStreamCitations] = useState<ChatStreamResult["answer"]["citations"]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionHistory | null>(null);
+  const [graphFocusIds, setGraphFocusIds] = useState<string[]>([]);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(() => {
     try { return window.sessionStorage.getItem("lunarbit.session") ?? undefined; } catch { return undefined; }
   });
@@ -176,8 +177,9 @@ export function Console() {
     setChatBusy(true);
     setChatResult(null);
     setStreamCitations([]);
+    setGraphFocusIds([]);
     setQueryState("thinking");
-    streamPrivateChat(question, (stage) => setQueryState(stage), (citation) => setStreamCitations((current) => [...current, citation]), chatSessionId)
+    streamPrivateChat(question, (stage) => setQueryState(stage), (citation) => setStreamCitations((current) => [...current, citation]), (nodeIds) => setGraphFocusIds(nodeIds), chatSessionId)
       .then((result) => {
         setChatResult(result);
         setChatSessionId(result.session_id);
@@ -195,6 +197,11 @@ export function Console() {
     if (!chatSessionId) return;
     fetchSessionHistory(chatSessionId).then(setSessionHistory).catch(() => setSessionHistory(null));
   }, [chatSessionId]);
+  useEffect(() => {
+    if (!graphFocusIds.length || !liveSnapshot) return;
+    const focused = liveSnapshot.graph_nodes.find((node) => graphFocusIds.includes(node.id));
+    if (focused) setSelected(focused);
+  }, [graphFocusIds, liveSnapshot]);
   useEffect(() => {
     let active = true;
     setApiState("loading");
@@ -526,7 +533,7 @@ export function Console() {
             <div className="tag">verified response · {chatResult.answer.verification_status}</div>
             <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
-            <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
+            <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · {graphFocusIds.length} focus nodes · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
             {sessionHistory && sessionHistory.turns.length > 1 && <div className="ask-history">{sessionHistory.turns.slice(0, -1).map((turn) => <span key={turn.turn_index}>↳ {turn.question}</span>)}</div>}
             {(streamCitations.length > 0 || chatResult.answer.citations.length > 0) && (
               <div className="ask-citations" aria-label="Evidence citations">

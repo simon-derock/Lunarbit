@@ -353,6 +353,8 @@ def create_app(
             citations=tuple(
                 PrivateCitation(
                     citation_id=citation.citation_id,
+                    chunk_node_id=citation.chunk_node_id,
+                    source_node_id=citation.source_node_id,
                     authority_score=float(citation.authority_score),
                     supports_claim_ids=citation.supports_claim_ids,
                     quality_flags=citation.quality_flags,
@@ -672,6 +674,9 @@ def create_app(
                 turn_index = sessions.append(session_id, question=question, slots=prepared.slots, status=answer.status)
                 for citation in answer.citations:
                     yield "event: citation\ndata: " + json.dumps(citation.model_dump(mode="json")) + "\n\n"
+                focus_ids = sorted({identifier for citation in answer.citations for identifier in (citation.chunk_node_id, citation.source_node_id)})
+                if focus_ids:
+                    yield "event: graph_focus\ndata: " + json.dumps({"node_ids": focus_ids}) + "\n\n"
                 if answer.calculation:
                     yield "event: calculation\ndata: " + json.dumps({"text": answer.calculation}) + "\n\n"
                 yield "event: answer\ndata: " + json.dumps({

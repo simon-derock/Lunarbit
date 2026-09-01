@@ -75,6 +75,8 @@ class PrivateCitation(ContractModel):
     """Safe provenance envelope; source text and private identifiers never cross it."""
 
     citation_id: RuntimeCitationId
+    chunk_node_id: str = Field(min_length=1, max_length=200)
+    source_node_id: str = Field(min_length=1, max_length=200)
     authority_score: float = Field(ge=0.0, le=1.0)
     supports_claim_ids: tuple[str, ...] = Field(min_length=1)
     quality_flags: tuple[str, ...]
