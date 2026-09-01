@@ -87,6 +87,17 @@ class PrivateChatResponse(ContractModel):
     answer: PrivateGroundedAnswer
 
 
+class PrivateSessionTurn(ContractModel):
+    turn_index: int = Field(ge=1)
+    question: str = Field(min_length=3, max_length=500)
+    status: str
+
+
+class PrivateSessionHistory(ContractModel):
+    session_id: ConversationSessionId
+    turns: tuple[PrivateSessionTurn, ...]
+
+
 class PrivateAnswerBackend(Protocol):
     def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer: ...
 

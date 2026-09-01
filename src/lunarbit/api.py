@@ -20,6 +20,8 @@ from lunarbit.api_contracts import (
     PrivateChatRequest,
     PrivateChatResponse,
     PrivateCitation,
+    PrivateSessionHistory,
+    PrivateSessionTurn,
     PrivateGroundedAnswer,
     PrivateRetrievalBackend,
     PrivateRetrievalTrace,
@@ -607,6 +609,26 @@ def create_app(
                 turn_index=turn_index,
                 context_reused=prepared.context_reused,
                 answer=answer,
+            )
+
+        @app.get("/v1/private/chat/{session_id}/history", response_model=PrivateSessionHistory)
+        def private_chat_history(
+            session_id: ConversationSessionId,
+            http_request: Request,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> PrivateSessionHistory:
+            enforce_rate_limit(http_request, private_limiter)
+            authorize_private(authorization)
+            try:
+                turns = sessions.history(session_id)
+            except SessionNotFoundError as error:
+                raise HTTPException(status_code=404, detail="conversation session not found") from error
+            return PrivateSessionHistory(
+                session_id=session_id,
+                turns=tuple(
+                    PrivateSessionTurn(turn_index=index, question=turn.question, status=turn.status)
+                    for index, turn in enumerate(turns, start=1)
+                ),
             )
 
         @app.post("/v1/private/chat/stream")

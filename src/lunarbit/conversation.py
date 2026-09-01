@@ -191,3 +191,9 @@ class ConversationStore:
     def contextual_question(self, session_id: str, question: str) -> str:
         """Return a bounded follow-up question for planner/runtime context."""
         return self.prepare(session_id, question=question, slots=None).contextual_question
+
+    def history(self, session_id: str) -> tuple[SessionTurn, ...]:
+        now = self.clock()
+        with self._lock:
+            self._purge_expired(now)
+            return tuple(self._require(session_id).turns)
