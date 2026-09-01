@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapPublicSnapshot, type PublicSnapshotPayload } from "./api";
+import { mapPublicSnapshot, parseSseFrame, type PublicSnapshotPayload } from "./api";
 
 const payload: PublicSnapshotPayload = {
   mode: "neo4j_aggregate_projection",
@@ -41,5 +41,16 @@ describe("public snapshot adapter", () => {
     expect(snapshot.graph_edges[0]?.relationship_type).toBe("ORDERED_FROM");
     expect(snapshot.metrics[0]?.scope).toBe("neo4j_aggregate_projection");
     expect(snapshot.findings).toHaveLength(6);
+  });
+});
+
+describe("SSE protocol parser", () => {
+  it("parses typed JSON events and ignores incomplete frames", () => {
+    expect(parseSseFrame("event: citation\ndata: {\"citation_id\":\"runtime:citation:1\"}"))?.toEqual({
+      event: "citation",
+      data: { citation_id: "runtime:citation:1" },
+    });
+    expect(parseSseFrame("data: {}"))?.toBeNull();
+    expect(parseSseFrame("event: done\ndata: {}"))?.toEqual({ event: "done", data: {} });
   });
 });

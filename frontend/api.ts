@@ -73,6 +73,14 @@ export interface SessionHistory {
   turns: { turn_index: number; question: string; status: string }[];
 }
 
+export function parseSseFrame(frame: string): { event: string; data: Record<string, unknown> } | null {
+  const event = frame.match(/^event:\s*(\S+)/m)?.[1];
+  const raw = frame.match(/^data:\s*(.*)$/m)?.[1];
+  if (!event || !raw) return null;
+  const data = JSON.parse(raw) as Record<string, unknown>;
+  return { event, data };
+}
+
 export async function fetchSessionHistory(sessionId: string): Promise<SessionHistory> {
   const response = await fetchWithRetry(`/api/private/chat/${encodeURIComponent(sessionId)}/history`);
   if (!response.ok) throw new Error(`history request failed: ${response.status}`);
@@ -102,10 +110,9 @@ export async function streamPrivateChat(
     const frames = buffer.split("\n\n");
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      const event = frame.match(/^event:\s*(\S+)/m)?.[1];
-      const data = frame.match(/^data:\s*(.*)$/m)?.[1];
-      if (!event || !data) continue;
-      const payload = JSON.parse(data) as Record<string, unknown>;
+      const parsed = parseSseFrame(frame);
+      if (!parsed) continue;
+      const { event, data: payload } = parsed;
       if (event === "thinking") onStage(String(payload.stage ?? "thinking"));
       if (event === "calculation") onStage("calculation");
       if (event === "citation") onCitation(payload as unknown as StreamAnswer["citations"][number]);
