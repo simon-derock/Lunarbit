@@ -9,6 +9,7 @@
 - Last verified implementation commit: `12ac2c2` (`feat(chat): restore opaque sessions across browser refreshes`), pushed to `main`.
 - Recent commits: `3f1bdc9` secure SSE/browser proxy, `7300f9c` citation identifiers, `f819314` Cortex favicon, `12ac2c2` opaque session restoration.
 - Last passing checks: 231 committed Python tests, Ruff lint, strict MyPy across 39 modules, repository hygiene, frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, and browser-origin SSE proxy smoke test.
+- Deployment verification: `Dockerfile.api` built as `lunarbit-api:ci`; a real container with the configured environment returned `/health` 200, `/ready` 200 with `graph=configured`, a 322-node/105-edge Aura navigation projection, and authenticated SSE chat events. The verification container was stopped after the smoke test.
 
 ## Goal-loop scope (2026-09-01)
 
