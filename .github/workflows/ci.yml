@@ -24,6 +24,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked --extra dev --extra api --extra graph
+      - run: uv lock --check
       - run: uv run ruff format --check src scripts tests
       - run: uv run ruff check src scripts tests
       - run: uv run mypy --strict src
