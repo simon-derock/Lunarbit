@@ -5,6 +5,7 @@ from decimal import Decimal
 from lunarbit.answer_evaluation import (
     AnswerFamily,
     AnswerGolden,
+    compare_answer_variants,
     evaluate_grounded_answers,
 )
 from lunarbit.api import PrivateGroundedAnswer
@@ -92,3 +93,37 @@ def test_answer_evaluation_rejects_duplicate_case_identity() -> None:
         assert "unique" in str(error)
     else:
         raise AssertionError("duplicate answer goldens must be rejected")
+
+
+def test_variant_comparison_flags_quality_regression_on_same_goldens() -> None:
+    goldens = (_golden("case:ab"),)
+
+    def baseline(_: RuntimeRequest) -> PrivateGroundedAnswer:
+        return PrivateGroundedAnswer(
+            status="verified",
+            direct_answer="Verified answer",
+            calculation="Exact calculation",
+            fact_count=2,
+            citation_ids=("citation:1", "citation:2"),
+            verification_status="verified",
+            limitations=(),
+            abstention_reason=None,
+        )
+
+    def candidate(_: RuntimeRequest) -> PrivateGroundedAnswer:
+        return PrivateGroundedAnswer(
+            status="verified",
+            direct_answer="Verified answer",
+            calculation="Exact calculation",
+            fact_count=2,
+            citation_ids=(),
+            verification_status="verified",
+            limitations=(),
+            abstention_reason=None,
+        )
+
+    comparison = compare_answer_variants(goldens, baseline, candidate)
+
+    assert comparison.status_accuracy_delta == 0
+    assert comparison.citation_support_rate_delta == -1
+    assert comparison.candidate_non_regression is False

@@ -83,6 +83,47 @@ class AnswerEvaluationReport(ContractModel):
     summary: AnswerEvaluationSummary
 
 
+class AnswerVariantComparison(ContractModel):
+    """A deterministic A/B comparison over one immutable golden corpus."""
+
+    baseline: AnswerEvaluationSummary
+    candidate: AnswerEvaluationSummary
+    status_accuracy_delta: Decimal
+    answer_exact_match_delta: Decimal
+    citation_support_rate_delta: Decimal
+    p95_latency_delta_ms: Decimal
+    candidate_non_regression: bool
+
+
+def compare_answer_variants(
+    goldens: tuple[AnswerGolden, ...],
+    baseline: Callable[[RuntimeRequest], PrivateGroundedAnswer],
+    candidate: Callable[[RuntimeRequest], PrivateGroundedAnswer],
+) -> AnswerVariantComparison:
+    """Score two providers identically and flag quality-safe candidate changes."""
+    baseline_report = evaluate_grounded_answers(goldens, baseline)
+    candidate_report = evaluate_grounded_answers(goldens, candidate)
+    baseline_summary = baseline_report.summary
+    candidate_summary = candidate_report.summary
+    return AnswerVariantComparison(
+        baseline=baseline_summary,
+        candidate=candidate_summary,
+        status_accuracy_delta=candidate_summary.status_accuracy - baseline_summary.status_accuracy,
+        answer_exact_match_delta=(
+            candidate_summary.answer_exact_match - baseline_summary.answer_exact_match
+        ),
+        citation_support_rate_delta=(
+            candidate_summary.citation_support_rate - baseline_summary.citation_support_rate
+        ),
+        p95_latency_delta_ms=candidate_summary.p95_latency_ms - baseline_summary.p95_latency_ms,
+        candidate_non_regression=(
+            candidate_summary.status_accuracy >= baseline_summary.status_accuracy
+            and candidate_summary.citation_support_rate >= baseline_summary.citation_support_rate
+            and candidate_summary.abstention_accuracy >= baseline_summary.abstention_accuracy
+        ),
+    )
+
+
 def _rate(values: tuple[bool, ...]) -> Decimal:
     return Decimal(sum(values)) / Decimal(len(values))
 
