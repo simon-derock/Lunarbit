@@ -17,6 +17,12 @@ class HealthResponse(ContractModel):
     version: str = API_VERSION
 
 
+class ReadinessResponse(ContractModel):
+    status: Literal["ready"]
+    service: str = "lunarbit-api"
+    graph: Literal["configured", "synthetic"]
+
+
 class QueryPlanRequest(ContractModel):
     question: str = Field(min_length=3, max_length=500)
 

@@ -41,6 +41,13 @@ def test_health_and_snapshot_endpoints_publish_only_reviewed_state() -> None:
     assert_public_payload(snapshot.json())
 
 
+def test_readiness_distinguishes_synthetic_and_configured_graphs() -> None:
+    response = _client().get("/ready")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["graph"] == "synthetic"
+
+
 def test_default_snapshot_uses_the_current_private_corpus_rollup() -> None:
     response = TestClient(create_app()).get("/v1/public/snapshot")
     metrics = {item["label"]: item["value"] for item in response.json()["metrics"]}

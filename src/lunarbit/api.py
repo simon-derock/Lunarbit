@@ -23,6 +23,7 @@ from lunarbit.api_contracts import (
     PrivateSessionHistory,
     PrivateSessionTurn,
     PrivateGroundedAnswer,
+    ReadinessResponse,
     PrivateRetrievalBackend,
     PrivateRetrievalTrace,
     PrivateWorkflowBackend,
@@ -370,6 +371,16 @@ def create_app(
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse()
+
+    @app.get("/ready", response_model=ReadinessResponse)
+    def readiness() -> ReadinessResponse:
+        if public_snapshot_source is None:
+            return ReadinessResponse(status="ready", graph="synthetic")
+        try:
+            public_snapshot_source.snapshot()
+        except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired, PublicProjectionUnavailable) as error:
+            raise HTTPException(status_code=503, detail="graph dependency is not ready") from error
+        return ReadinessResponse(status="ready", graph="configured")
 
     @app.get("/v1/public/snapshot", response_model=PublicSnapshot)
     def public_snapshot_endpoint(request: Request) -> PublicSnapshot:
