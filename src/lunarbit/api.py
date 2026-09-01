@@ -650,6 +650,8 @@ def create_app(
                 turn_index = sessions.append(session_id, question=question, slots=prepared.slots, status=answer.status)
                 for citation in answer.citations:
                     yield "event: citation\ndata: " + json.dumps(citation.model_dump(mode="json")) + "\n\n"
+                if answer.calculation:
+                    yield "event: calculation\ndata: " + json.dumps({"text": answer.calculation}) + "\n\n"
                 yield "event: answer\ndata: " + json.dumps({
                     "session_id": session_id,
                     "turn_index": turn_index,

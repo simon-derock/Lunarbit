@@ -95,6 +95,7 @@ export async function streamPrivateChat(
       if (!event || !data) continue;
       const payload = JSON.parse(data) as Record<string, unknown>;
       if (event === "thinking") onStage(String(payload.stage ?? "thinking"));
+      if (event === "calculation") onStage("calculation");
       if (event === "citation") onCitation(payload as unknown as StreamAnswer["citations"][number]);
       if (event === "answer") result = payload as unknown as ChatStreamResult;
       if (event === "error") throw new Error(String(payload.detail ?? payload.code ?? "chat failed"));
