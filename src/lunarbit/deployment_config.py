@@ -46,7 +46,14 @@ def validate_deployment_environment(
         raise DeploymentConfigError("allowed origins cannot be empty")
     for origin in origins:
         parsed = urlparse(origin)
-        if parsed.scheme != "https" or not parsed.netloc or parsed.path not in ("", "/"):
+        if (
+            parsed.scheme != "https"
+            or not parsed.netloc
+            or parsed.path not in ("", "/")
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+        ):
             raise DeploymentConfigError("production allowed origins must be HTTPS origins")
         if "*" in origin:
             raise DeploymentConfigError("allowed origins cannot contain wildcards")

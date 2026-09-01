@@ -32,6 +32,7 @@ def test_production_environment_returns_safe_typed_config() -> None:
         ("NEO4J_URI", "bolt://example", "encrypted"),
         ("LUNARBIT_PRIVATE_API_TOKEN", "short", "32 characters"),
         ("LUNARBIT_PUBLIC_ALLOWED_ORIGINS", "*", "HTTPS origins"),
+        ("LUNARBIT_PUBLIC_ALLOWED_ORIGINS", "https://app.example/?next=home", "HTTPS origins"),
         ("LUNARBIT_SESSION_DB", "relative.sqlite3", "absolute"),
     ),
 )
