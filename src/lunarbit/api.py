@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from secrets import compare_digest
 from time import monotonic, sleep
@@ -79,6 +80,7 @@ DEFAULT_PUBLIC_ORIGINS = (
     "http://127.0.0.1:5173",
 )
 MAX_REQUEST_BYTES = 64 * 1024
+_LOGGER = logging.getLogger(__name__)
 
 
 def parse_public_origins(value: str | None) -> tuple[str, ...]:
@@ -357,6 +359,14 @@ def create_app(
                 detail="conversation checkpoint not found",
             ) from error
         except LangGraphExecutionError as error:
+            # Keep the client-facing contract generic, but retain a safe
+            # exception class for deployment diagnostics. Never log prompts,
+            # graph rows, provider responses, or credentials here.
+            cause = error.__cause__
+            _LOGGER.error(
+                "private workflow execution failed; cause=%s",
+                type(cause).__name__ if cause is not None else type(error).__name__,
+            )
             raise HTTPException(
                 status_code=503,
                 detail="private workflow execution failed",
