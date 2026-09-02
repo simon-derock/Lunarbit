@@ -12,7 +12,11 @@ from pathlib import Path
 import lunarbit.agentic as agentic
 
 
-_KEY_NAMES = tuple(f"KEY_{name}" for name in ("ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN"))
+_KEY_NAMES = tuple(
+    f"KEY_{name}"
+    for name in ("ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN")
+)
+
 
 def _keys(root: Path) -> tuple[str, ...]:
     values: dict[str, str] = {}
@@ -31,6 +35,7 @@ def _keys(root: Path) -> tuple[str, ...]:
     if len(set(keys)) != len(keys):
         raise RuntimeError("Mistral API keys must be unique")
     return keys
+
 
 def _key(root: Path) -> str:
     for line in (root / ".env").read_text(encoding="utf-8").splitlines():
