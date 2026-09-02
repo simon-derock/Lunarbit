@@ -28,7 +28,10 @@ jobs:
       - run: uv run ruff format --check src scripts tests
       - run: uv run ruff check src scripts tests
       - run: uv run mypy --strict --no-incremental src
-      - run: uv run pytest -q
+      - name: Run Python contracts without third-party pytest autoload hooks
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run pytest -q
       - run: uv run python scripts/verify_repository_hygiene.py
 
   frontend:
