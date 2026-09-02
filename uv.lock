@@ -702,7 +702,7 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.138,<7" },
     { name = "langgraph", marker = "extra == 'agent'", specifier = ">=0.6,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17,<2" },
-    { name = "neo4j", marker = "extra == 'graph'", specifier = ">=5.26,<6" },
+    { name = "neo4j", marker = "extra == 'graph'", specifier = ">=5.26,<5.28" },
     { name = "pdfplumber", marker = "extra == 'extract'", specifier = ">=0.11,<1" },
     { name = "pillow", specifier = ">=12,<13" },
     { name = "pydantic", specifier = ">=2.12,<3" },
@@ -771,14 +771,14 @@ wheels = [
 
 [[package]]
 name = "neo4j"
-version = "5.28.4"
+version = "5.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytz" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/62/aa/83baca8f9e5e5ba1a00722067a4bf3c088c5c02019a7b485e94c8cf05d39/neo4j-5.28.4.tar.gz", hash = "sha256:4a2d8d6eb8c2da0bc87a30e96e2c179fbc0045665626482901ca3dcc9c2b1811", size = 232608, upload-time = "2026-05-04T08:00:55.426Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/b6/31ed9f3df8b948aecd31952193b803cd2007551f2f81aaa60d264e8d1950/neo4j-5.27.0.tar.gz", hash = "sha256:f82ee807cd15b178898d83f41a66372e11719a25dd487fd7bea48fd4b7323765", size = 223803, upload-time = "2024-11-28T08:15:22.007Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/fd/d46f29f4089a00a7d4894f5e1739288c2a42622b72ea7161a226b73ff4fa/neo4j-5.28.4-py3-none-any.whl", hash = "sha256:ba87c423fd2a1fbe6a116c47ac96cfbe7d8c419d24d2f5611e5674283dddf7b9", size = 313927, upload-time = "2026-05-04T08:00:52.005Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/9a/cec819e5887804896db67b13215682b15e6f9201d9cf63890fee2b9a29e9/neo4j-5.27.0-py3-none-any.whl", hash = "sha256:929c14b9e5341267324eca170b39d1798b032bffacc26a0529eacaf678ae483f", size = 301679, upload-time = "2024-11-28T08:15:17.844Z" },
 ]
 
 [[package]]

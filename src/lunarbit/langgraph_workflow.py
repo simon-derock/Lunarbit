@@ -23,24 +23,11 @@ from lunarbit.runtime import (
     retrieve_grounded_context,
 )
 
-try:
-    from langgraph.checkpoint.memory import MemorySaver as _MemorySaver
-    from langgraph.graph import END as _END
-    from langgraph.graph import START as _START
-    from langgraph.graph import StateGraph as _StateGraph
-except ImportError as error:  # pragma: no cover - exercised only without the agent extra
-    _MemorySaver: Any = None  # type: ignore[no-redef]
-    _END: Any = None  # type: ignore[no-redef]
-    _START: Any = None  # type: ignore[no-redef]
-    _StateGraph: Any = None  # type: ignore[no-redef]
-    _LANGGRAPH_IMPORT_ERROR: ImportError | None = error
-else:
-    _LANGGRAPH_IMPORT_ERROR = None
-
-MemorySaver = _MemorySaver
-END = _END
-START = _START
-StateGraph = _StateGraph
+MemorySaver: Any = None
+END: Any = None
+START: Any = None
+StateGraph: Any = None
+_LANGGRAPH_IMPORT_ERROR: ImportError | None = None
 
 
 class LangGraphUnavailableError(RuntimeError):
@@ -81,10 +68,17 @@ class WorkflowState(TypedDict, total=False):
 
 
 def _require_langgraph() -> None:
-    if _LANGGRAPH_IMPORT_ERROR is not None:
+    global MemorySaver, END, START, StateGraph, _LANGGRAPH_IMPORT_ERROR
+    if MemorySaver is not None:
+        return
+    try:
+        from langgraph.checkpoint.memory import MemorySaver
+        from langgraph.graph import END, START, StateGraph
+    except ImportError as error:  # pragma: no cover - optional dependency
+        _LANGGRAPH_IMPORT_ERROR = error
         raise LangGraphUnavailableError(
             "install the agent extra to use the LangGraph workflow"
-        ) from _LANGGRAPH_IMPORT_ERROR
+        ) from error
 
 
 def _guardrail_node(state: WorkflowState) -> WorkflowState:
