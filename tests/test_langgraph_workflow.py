@@ -56,6 +56,27 @@ def test_workflow_accepts_structured_model_plan_without_phrase_routing() -> None
     assert context.plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
 
 
+def test_workflow_rejects_unbound_model_slots_and_uses_platform_aggregate_fallback() -> None:
+    class Planner:
+        def plan(self, question):
+            return StructuredQueryProposal(operations=(QueryTemplate.MERCHANT_ORDER_COUNT,))
+
+    workflow = GraphRAGWorkflow(FakeReader(), planner=ResilientQueryPlanner(Planner(), None))
+    context = workflow.invoke("How many orders did I place on Swiggy?")
+
+    assert context.plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
+
+
+def test_workflow_routes_order_lists_to_fulltext_evidence() -> None:
+    workflow = GraphRAGWorkflow(FakeReader())
+    context = workflow.invoke(
+        "Show all my biryani orders",
+        slots=QuerySlots(lexical_query="show all my biryani orders"),
+    )
+
+    assert context.plan.selected_templates == (QueryTemplate.FULLTEXT_EVIDENCE,)
+
+
 def test_workflow_rejects_prompt_extraction_before_graph_access() -> None:
     class ExplodingReader:
         def run(self, query):

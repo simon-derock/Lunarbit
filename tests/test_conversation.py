@@ -60,6 +60,13 @@ def test_slot_inference_only_extracts_high_precision_financial_terms() -> None:
     assert slots.merchant_name is None
 
 
+def test_slot_inference_binds_bounded_lexical_queries_for_order_lists() -> None:
+    slots = infer_query_slots("Show all my biryani orders")
+
+    assert slots.lexical_query == "show all my biryani orders"
+    assert slots.merchant_name is None
+
+
 def test_sqlite_store_recovers_bounded_history_after_reopen(tmp_path) -> None:
     database = tmp_path / "sessions.sqlite3"
     first = SQLiteConversationStore(str(database))

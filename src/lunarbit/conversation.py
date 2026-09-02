@@ -62,7 +62,11 @@ def infer_query_slots(question: str) -> QuerySlots:
         normalized,
     )
     if merchant_match:
-        values["merchant_name"] = merchant_match.group(1).strip(" .,-")
+        merchant_name = merchant_match.group(1).strip(" .,-")
+        # Platform names are not merchant identities. Without this guard,
+        # “orders on Swiggy” becomes merchant=swiggy.
+        if merchant_name not in {"swiggy", "zomato"}:
+            values["merchant_name"] = merchant_name
     for platform in ("swiggy", "zomato"):
         if re.search(rf"\b{platform}\b", normalized):
             values["platform"] = platform
@@ -80,6 +84,8 @@ def infer_query_slots(question: str) -> QuerySlots:
         if any(term in normalized for term in terms):
             values["component_type"] = component_type
             break
+    if re.search(r"\b(?:show|list|find|search)\b.*\b(?:orders?|dishes?|items?)\b", normalized):
+        values["lexical_query"] = normalized[:300]
     return QuerySlots.model_validate(values)
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from enum import StrEnum
 
@@ -36,6 +37,14 @@ class QueryPlan(ContractModel):
 
 def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, ...]:
     normalized = " ".join(question.casefold().split())
+    # Platform-wide order questions have no merchant entity to bind. Route
+    # them to the aggregate query instead of failing on a missing merchant.
+    if re.search(r"\b(?:on|from)\s+(?:swiggy|zomato)\b", normalized) and any(
+        token in normalized for token in ("how many orders", "number of orders", "order count")
+    ):
+        return (QueryTemplate.MERCHANT_ORDER_RANKING,)
+    if re.search(r"\b(?:show|list|find|search)\b.*\b(?:orders?|dishes?|items?)\b", normalized):
+        return (QueryTemplate.FULLTEXT_EVIDENCE,)
     if any(
         token in normalized
         for token in ("which restaurants", "most orders", "most-ordered", "top restaurants")
@@ -111,10 +120,11 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
                 ),
             )
         )
+    verification_depth = max((step.depth for step in steps), default=0)
     steps.extend(
         (
-            TraversalStep(action=TraversalAction.VERIFY_PATH, depth=2),
-            TraversalStep(action=TraversalAction.FINISH_ANSWER, depth=2),
+            TraversalStep(action=TraversalAction.VERIFY_PATH, depth=verification_depth),
+            TraversalStep(action=TraversalAction.FINISH_ANSWER, depth=verification_depth),
         )
     )
     return tuple(steps)
