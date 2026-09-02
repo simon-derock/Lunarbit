@@ -12,6 +12,26 @@ from pathlib import Path
 import lunarbit.agentic as agentic
 
 
+_KEY_NAMES = tuple(f"KEY_{name}" for name in ("ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN"))
+
+def _keys(root: Path) -> tuple[str, ...]:
+    values: dict[str, str] = {}
+    for line in (root / ".env").read_text(encoding="utf-8").splitlines():
+        if not line or line.lstrip().startswith("#") or "=" not in line:
+            continue
+        name, raw_value = line.split("=", 1)
+        value = raw_value.strip().strip(chr(34)).strip(chr(39))
+        if value:
+            values[name.strip()] = value
+    keys = tuple(values[name] for name in _KEY_NAMES if name in values)
+    if not keys and values.get("MISTRAL_API_KEY"):
+        keys = (values["MISTRAL_API_KEY"],)
+    if not keys:
+        raise RuntimeError("No Mistral API keys are configured in .env")
+    if len(set(keys)) != len(keys):
+        raise RuntimeError("Mistral API keys must be unique")
+    return keys
+
 def _key(root: Path) -> str:
     for line in (root / ".env").read_text(encoding="utf-8").splitlines():
         if line.startswith("MISTRAL_API_KEY="):
