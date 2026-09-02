@@ -702,7 +702,7 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.138,<7" },
     { name = "langgraph", marker = "extra == 'agent'", specifier = ">=0.6,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17,<2" },
-    { name = "neo4j", marker = "extra == 'graph'", specifier = ">=5.26,<5.28" },
+    { name = "neo4j", marker = "extra == 'graph'", specifier = ">=5.26,<6" },
     { name = "pdfplumber", marker = "extra == 'extract'", specifier = ">=0.11,<1" },
     { name = "pillow", specifier = ">=12,<13" },
     { name = "pydantic", specifier = ">=2.12,<3" },
