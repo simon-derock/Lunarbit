@@ -67,6 +67,23 @@ def test_slot_inference_binds_bounded_lexical_queries_for_order_lists() -> None:
     assert slots.merchant_name is None
 
 
+def test_slot_inference_extracts_temporal_item_and_delivery_entities() -> None:
+    price = infer_query_slots("What did the same biryani cost at KMS Hakkim three years ago?")
+    delivery = infer_query_slots("How many times did Ram deliver my orders?")
+
+    assert price.item_name == "biryani"
+    assert price.merchant_name == "kms hakkim"
+    assert delivery.delivery_name == "ram"
+
+
+def test_slot_inference_extracts_explicit_component_and_order_ids() -> None:
+    component = infer_query_slots("Show evidence for money component MC-123")
+    order = infer_query_slots("Reconstruct order ORD-4821")
+
+    assert component.component_id == "mc-123"
+    assert order.order_id == "ord-4821"
+
+
 def test_sqlite_store_recovers_bounded_history_after_reopen(tmp_path) -> None:
     database = tmp_path / "sessions.sqlite3"
     first = SQLiteConversationStore(str(database))
