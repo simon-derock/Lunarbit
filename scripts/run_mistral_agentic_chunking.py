@@ -11,7 +11,6 @@ from pathlib import Path
 
 import lunarbit.agentic as agentic
 
-
 _KEY_NAMES = tuple(
     f"KEY_{name}"
     for name in ("ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN")
