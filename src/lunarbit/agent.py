@@ -43,6 +43,20 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
         token in normalized for token in ("how many orders", "number of orders", "order count")
     ):
         return (QueryTemplate.MERCHANT_ORDER_RANKING,)
+    if "evidence" in normalized and any(
+        token in normalized for token in ("component", "money", "fee", "charge")
+    ):
+        return (QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT,)
+    if "reconstruct" in normalized and "order" in normalized:
+        return (QueryTemplate.ORDER_RECONSTRUCTION,)
+    if ("delivery" in normalized or "deliver" in normalized) and any(
+        token in normalized for token in ("who", "person", "times", "delivered", "deliver")
+    ):
+        return (QueryTemplate.DELIVERY_MENTION_COUNT,)
+    if any(token in normalized for token in ("price", "cost")) and any(
+        token in normalized for token in ("ago", "history", "year", "same")
+    ):
+        return (QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,)
     if re.search(r"\b(?:show|list|find|search)\b.*\b(?:orders?|dishes?|items?)\b", normalized):
         return (QueryTemplate.FULLTEXT_EVIDENCE,)
     if any(
@@ -50,14 +64,6 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
         for token in ("which restaurants", "most orders", "most-ordered", "top restaurants")
     ):
         return (QueryTemplate.MERCHANT_ORDER_RANKING,)
-    if "delivery" in normalized and any(
-        token in normalized for token in ("who", "person", "times", "delivered")
-    ):
-        return (QueryTemplate.DELIVERY_MENTION_COUNT,)
-    if any(token in normalized for token in ("price", "cost")) and any(
-        token in normalized for token in ("ago", "history", "year", "same")
-    ):
-        return (QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,)
     if intent is QueryIntent.FINANCIAL_AGGREGATION:
         return (QueryTemplate.FINANCIAL_COMPONENT_SUM,)
     if intent is QueryIntent.EVIDENCE_REQUEST:

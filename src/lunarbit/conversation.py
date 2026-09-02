@@ -58,7 +58,9 @@ def infer_query_slots(question: str) -> QuerySlots:
     values: dict[str, str] = {}
     merchant_match = re.search(
         r"\b(?:from|at|with)\s+([a-z0-9][a-z0-9 &'()./-]{1,158}?)"
-        r"(?=\s*[?.!,;]|\s+(?:in|on|during|between|for)\b|$)",
+        r"(?=\s*[?.!,;]|\s+(?:in|on|during|between|for|ago)\b|"
+        r"\s+(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+)?"
+        r"(?:years?|months?)\b|$)",
         normalized,
     )
     if merchant_match:
@@ -67,6 +69,33 @@ def infer_query_slots(question: str) -> QuerySlots:
         # “orders on Swiggy” becomes merchant=swiggy.
         if merchant_name not in {"swiggy", "zomato"}:
             values["merchant_name"] = merchant_name
+    item_match = re.search(
+        r"\b(?:same|item|dish|food)\s+"
+        r"([a-z0-9][a-z0-9 &'()./-]{1,78}?)"
+        r"(?=\s+(?:cost|price|at|from|three|two|one)\b|[?.!,;]|$)",
+        normalized,
+    )
+    if item_match:
+        values["item_name"] = item_match.group(1).strip(" .,-")
+    delivery_match = re.search(
+        r"\b(?:delivery\s+(?:person|partner|agent)|driver)\s*[:=-]?\s*"
+        r"([a-z][a-z .'-]{1,78}?)(?=\s+(?:deliver|delivered|bring|brought)\b|[?.!,;]|$)",
+        normalized,
+    ) or re.search(r"\b(?:did|by|for)\s+([a-z][a-z .'-]{1,78}?)\s+deliver(?:ed)?\b", normalized)
+    if delivery_match:
+        values["delivery_name"] = delivery_match.group(1).strip(" .,-")
+    component_match = re.search(
+        r"\b(?:money|fee|charge)\s+component\s+([a-z0-9][a-z0-9:._-]{1,159})\b",
+        normalized,
+    )
+    if component_match:
+        values["component_id"] = component_match.group(1)
+    order_match = re.search(
+        r"\b(?:reconstruct\s+order|order)\s+(ord(?:er)?[- :_]?[a-z0-9-]+)\b",
+        normalized,
+    )
+    if order_match:
+        values["order_id"] = order_match.group(1)
     for platform in ("swiggy", "zomato"):
         if re.search(rf"\b{platform}\b", normalized):
             values["platform"] = platform
