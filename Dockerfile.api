@@ -21,6 +21,7 @@ RUN useradd --create-home --uid 10001 lunarbit \
     && chown lunarbit:lunarbit /var/lib/lunarbit
 USER lunarbit
 EXPOSE 8000
+VOLUME ["/var/lib/lunarbit"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"

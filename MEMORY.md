@@ -692,3 +692,7 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   LangGraph checkpoint paths to initialize during production startup.
 - Validation: deployment contract tests pass and the API image rebuilds with
   the hardened filesystem layout.
+
+- The API image also declares `/var/lib/lunarbit` as a volume so a deployment
+  platform can attach durable storage rather than silently losing session and
+  checkpoint state on container replacement.
