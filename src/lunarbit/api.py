@@ -39,6 +39,7 @@ from lunarbit.api_contracts import (
 from lunarbit.conversation import (
     ConversationStore,
     SessionNotFoundError,
+    SQLiteConversationStore,
     infer_query_slots,
     merge_query_slots,
 )
@@ -213,7 +214,7 @@ def create_app(
     include_private_routes: bool = True,
     public_rate_limiter: InMemoryRateLimiter | None = None,
     private_rate_limiter: InMemoryRateLimiter | None = None,
-    conversation_store: ConversationStore | None = None,
+    conversation_store: ConversationStore | SQLiteConversationStore | None = None,
     trace_sink: TraceSink | None = None,
 ) -> FastAPI:
     cors_origins = validate_public_origins(allowed_origins)

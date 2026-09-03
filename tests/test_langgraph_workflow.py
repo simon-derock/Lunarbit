@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 import pytest
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from lunarbit.langgraph_workflow import (
     GraphRAGWorkflow,
@@ -121,3 +125,24 @@ def test_workflow_rejects_invalid_input_and_unknown_checkpoint() -> None:
         workflow.invoke("")
     with pytest.raises(LangGraphCheckpointError, match="checkpoint not found"):
         workflow.state(thread_id="missing")
+
+
+def test_sqlite_checkpointer_survives_workflow_reconstruction(tmp_path: Path) -> None:
+    database = sqlite3.connect(tmp_path / "checkpoints.sqlite3", check_same_thread=False)
+    saver = SqliteSaver(database)
+    saver.setup()
+    first = GraphRAGWorkflow(FakeReader(), checkpointer=saver)
+    first.invoke(
+        "How many orders came from Ember Kitchen?",
+        slots=QuerySlots(merchant_name="ember kitchen"),
+        thread_id="session:persistent",
+    )
+    database.close()
+
+    reopened_database = sqlite3.connect(tmp_path / "checkpoints.sqlite3", check_same_thread=False)
+    reopened = GraphRAGWorkflow(FakeReader(), checkpointer=SqliteSaver(reopened_database))
+    checkpoint = reopened.state(thread_id="session:persistent")
+
+    assert checkpoint is not None
+    assert checkpoint["status"] == "verified"
+    reopened_database.close()
