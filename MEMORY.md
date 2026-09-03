@@ -674,3 +674,13 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   (322 nodes / 105 edges), and a natural merchant order-count plan. The local
   Starlette TestClient hangs even for a minimal FastAPI app in this environment;
   real HTTP boundary checks are used for runtime verification.
+
+### 2026-09-03 — Durable LangGraph checkpoints
+
+- The API runtime now uses the compatible `langgraph-checkpoint-sqlite` 2.x
+  saver when `LUNARBIT_SESSION_DB` is configured. Workflow checkpoints are kept
+  in a separate `*.langgraph.sqlite3` file beside the conversation database,
+  initialized at startup, and closed during graceful shutdown.
+- The persistence contract is covered by reconstructing a workflow against a
+  reopened SQLite database and verifying its checkpoint state. The checkpointer
+  remains optional for in-memory tests and local experiments.
