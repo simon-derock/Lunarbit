@@ -696,3 +696,9 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - The API image also declares `/var/lib/lunarbit` as a volume so a deployment
   platform can attach durable storage rather than silently losing session and
   checkpoint state on container replacement.
+
+### 2026-09-03 — CI hang diagnostics
+
+- Added `pytest-timeout` to the development contract and a 60-second timeout
+  to the hosted Python suite. This converts deadlocked test infrastructure into
+  an actionable CI failure instead of an indefinitely running job.
