@@ -702,3 +702,13 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Added `pytest-timeout` to the development contract and a 60-second timeout
   to the hosted Python suite. This converts deadlocked test infrastructure into
   an actionable CI failure instead of an indefinitely running job.
+
+### 2026-09-03 — Vercel private-chat boundary
+
+- Added `frontend/api/private/[...path].ts`, a server-side Vercel proxy for
+  private chat and session-history routes. It injects the bearer token only in
+  the server runtime, allows only GET/POST, forwards bounded request bodies,
+  and streams upstream SSE chunks without exposing credentials to the browser.
+- Validation: frontend TypeScript/Vite production build and all five Vitest
+  API/SSE tests pass. Vercel requires `LUNARBIT_API_URL` and
+  `LUNARBIT_PRIVATE_API_TOKEN` as server environment variables.
