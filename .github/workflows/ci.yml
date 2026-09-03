@@ -98,6 +98,26 @@ jobs:
             sleep 2
           done
           exit 1
+      - name: Seed synthetic CI graph
+        run: |
+          uv run python - <<'PY'
+          from neo4j import GraphDatabase
+
+          driver = GraphDatabase.driver(
+              "bolt://127.0.0.1:7687", auth=("neo4j", "ci-password")
+          )
+          with driver.session(database="neo4j") as session:
+              session.run(
+                  "MERGE (platform:LunarbitNode:Platform {node_id: $platform_id}) "
+                  "SET platform.display_name_private = 'CI platform' "
+                  "MERGE (order_node:LunarbitNode:Order {node_id: $order_id}) "
+                  "SET order_node.platform = 'CI' "
+                  "MERGE (platform)-[:USES]->(order_node)",
+                  platform_id="ci:platform",
+                  order_id="ci:order",
+              ).consume()
+          driver.close()
+          PY
       - run: docker build --file Dockerfile.public --tag lunarbit-public-api:ci .
       - run: >-
           docker run --detach --rm --name lunarbit-public-api --network host
@@ -133,6 +153,12 @@ jobs:
           - 7474:7474
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.22"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --extra graph
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -149,6 +175,26 @@ jobs:
             sleep 2
           done
           exit 1
+      - name: Seed synthetic CI graph
+        run: |
+          uv run python - <<'PY'
+          from neo4j import GraphDatabase
+
+          driver = GraphDatabase.driver(
+              "bolt://127.0.0.1:7687", auth=("neo4j", "ci-password")
+          )
+          with driver.session(database="neo4j") as session:
+              session.run(
+                  "MERGE (platform:LunarbitNode:Platform {node_id: $platform_id}) "
+                  "SET platform.display_name_private = 'CI platform' "
+                  "MERGE (order_node:LunarbitNode:Order {node_id: $order_id}) "
+                  "SET order_node.platform = 'CI' "
+                  "MERGE (platform)-[:USES]->(order_node)",
+                  platform_id="ci:platform",
+                  order_id="ci:order",
+              ).consume()
+          driver.close()
+          PY
       - name: Run production API smoke checks
         run: |
           docker run --detach --rm --name lunarbit-api --network host \
