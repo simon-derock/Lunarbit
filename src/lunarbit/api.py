@@ -777,7 +777,8 @@ def create_app(
                             "turn_index": turn_index,
                             "context_reused": prepared.context_reused,
                             "answer": answer.model_dump(mode="json"),
-                        }
+                        },
+                        separators=(",", ":"),
                     )
                     + "\n\n"
                 )
