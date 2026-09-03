@@ -26,16 +26,24 @@ from lunarbit.retrieval import (
 QUERY_WORKFLOW_VERSION = "query-workflow-v1.0.0"
 
 
+class QueryDisposition(StrEnum):
+    SUPPORTED = "supported"
+    CLARIFICATION_REQUIRED = "clarification_required"
+    UNSUPPORTED = "unsupported"
+
+
 class QueryPlan(ContractModel):
     question: str = Field(min_length=1, max_length=500)
     classification: QueryClassification
-    selected_templates: tuple[QueryTemplate, ...] = Field(min_length=1)
-    traversal: tuple[TraversalStep, ...] = Field(min_length=1)
+    selected_templates: tuple[QueryTemplate, ...]
+    traversal: tuple[TraversalStep, ...]
     policy: TraversalPolicy
+    disposition: QueryDisposition = QueryDisposition.SUPPORTED
+    disposition_reason: str | None = Field(default=None, max_length=300)
     workflow_version: str = QUERY_WORKFLOW_VERSION
 
 
-def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, ...]:
+def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, ...] | None:
     normalized = " ".join(question.casefold().split())
     # Platform-wide order questions have no merchant entity to bind. Route
     # them to the aggregate query instead of failing on a missing merchant.
@@ -59,6 +67,8 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
         return (QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,)
     if re.search(r"\b(?:show|list|find|search)\b.*\b(?:orders?|dishes?|items?)\b", normalized):
         return (QueryTemplate.FULLTEXT_EVIDENCE,)
+    if re.search(r"\b(?:orders?|times?)\b.*\b(?:from|at)\s+[a-z0-9]", normalized):
+        return (QueryTemplate.MERCHANT_ORDER_COUNT,)
     if any(
         token in normalized
         for token in ("which restaurants", "most orders", "most-ordered", "top restaurants")
@@ -77,7 +87,23 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
             QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,
             QueryTemplate.FINANCIAL_COMPONENT_SUM,
         )
-    return (QueryTemplate.MERCHANT_ORDER_COUNT,)
+    if any(token in normalized for token in ("how many orders", "number of orders", "order count")):
+        return None
+    return None
+
+
+def _disposition_for(
+    question: str, templates: tuple[QueryTemplate, ...] | None
+) -> tuple[QueryDisposition, str | None]:
+    if templates is not None:
+        return QueryDisposition.SUPPORTED, None
+    normalized = " ".join(question.casefold().split())
+    if any(token in normalized for token in ("how many orders", "number of orders", "order count")):
+        return (
+            QueryDisposition.CLARIFICATION_REQUIRED,
+            "merchant, platform, or time scope is required",
+        )
+    return QueryDisposition.UNSUPPORTED, "no governed operation covers this question"
 
 
 def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep, ...]:
@@ -138,7 +164,9 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
 
 def build_query_plan(question: str) -> QueryPlan:
     classification = classify_query(question)
-    templates = _templates_for(question, classification.intent)
+    selected = _templates_for(question, classification.intent)
+    disposition, reason = _disposition_for(question, selected)
+    templates = selected or ()
     policy = TraversalPolicy(
         maximum_depth=4,
         candidate_paths_per_step=2,
@@ -157,13 +185,15 @@ def build_query_plan(question: str) -> QueryPlan:
             RelationshipType.HAS_DELIVERY_MENTION,
         ),
     )
-    traversal = validate_traversal(_traversal_for(templates), policy)
+    traversal = validate_traversal(_traversal_for(templates), policy) if templates else ()
     return QueryPlan(
         question=question,
         classification=classification,
         selected_templates=templates,
         traversal=traversal,
         policy=policy,
+        disposition=disposition,
+        disposition_reason=reason,
     )
 
 

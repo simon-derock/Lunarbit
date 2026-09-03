@@ -164,6 +164,8 @@ def _public_query_plan(question: str) -> PublicQueryPlan:
     plan = build_query_plan(question)
     return PublicQueryPlan(
         intent=plan.classification.intent.value,
+        disposition=plan.disposition.value,
+        disposition_reason=plan.disposition_reason,
         selected_tools=tuple(template.value for template in plan.selected_templates),
         actions=tuple(step.action.value for step in plan.traversal),
         action_budget=plan.policy.maximum_actions,

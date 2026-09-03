@@ -5,6 +5,7 @@ from decimal import Decimal
 from lunarbit.agent import (
     AnswerDraft,
     AnswerStatus,
+    QueryDisposition,
     build_query_plan,
     finalize_answer,
 )
@@ -28,6 +29,21 @@ def test_query_plan_selects_bounded_governed_tools_for_price_history() -> None:
 def test_query_plan_supports_cross_restaurant_order_ranking() -> None:
     plan = build_query_plan("Which restaurants' orders are most?")
     assert plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
+
+
+def test_query_plan_does_not_default_unknown_questions_to_merchant_count() -> None:
+    plan = build_query_plan("What is my favorite color?")
+
+    assert plan.disposition is QueryDisposition.UNSUPPORTED
+    assert plan.selected_templates == ()
+    assert plan.traversal == ()
+
+
+def test_query_plan_requests_scope_for_unbound_order_count() -> None:
+    plan = build_query_plan("How many orders did I make?")
+
+    assert plan.disposition is QueryDisposition.CLARIFICATION_REQUIRED
+    assert plan.selected_templates == ()
 
 
 def test_answer_finalization_requires_claim_level_evidence() -> None:

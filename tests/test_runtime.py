@@ -61,6 +61,30 @@ def test_query_binding_supports_global_restaurant_ranking_without_name_slot() ->
     assert queries[0].parameters == {"limit": 20}
 
 
+def test_unsupported_plan_abstains_without_touching_graph() -> None:
+    class ExplodingReader:
+        def run(self, query):
+            raise AssertionError("unsupported questions must not access the graph")
+
+    request = RuntimeRequest(
+        question="What is my favorite color?",
+        slots=QuerySlots(),
+    )
+    result = retrieve_grounded_context(request, ExplodingReader())
+
+    assert result.status is RuntimeStatus.ABSTAINED
+    assert result.abstention_reason == "unsupported"
+    assert result.verification.citation_ids == ()
+
+
+def test_unbound_order_count_requests_scope_without_graph_access() -> None:
+    request = RuntimeRequest(question="How many orders did I make?", slots=QuerySlots())
+    result = retrieve_grounded_context(request, StubReader(()))
+
+    assert result.status is RuntimeStatus.ABSTAINED
+    assert result.abstention_reason == "clarification_required"
+
+
 def test_financial_filters_apply_before_optional_evidence_expansion() -> None:
     plan = build_query_plan("How much platform fee did I pay?")
     query = bind_query_plan(
