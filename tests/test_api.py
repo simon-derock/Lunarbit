@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -345,6 +347,89 @@ def test_private_chat_stream_emits_ordered_progress_and_terminal_events() -> Non
     assert event_names[-2:] == ["answer", "done"]
     assert "The evidence-backed total is INR 10.30." in response.text
     assert "source_hash" not in response.text
+
+
+class AbstainingPrivateAnswerBackend:
+    def answer(self, request: RuntimeRequest) -> PrivateGroundedAnswer:
+        return PrivateGroundedAnswer(
+            status="abstained",
+            direct_answer=None,
+            fact_count=0,
+            citation_ids=(),
+            verification_status="abstained",
+            limitations=("No reviewed evidence supports this request.",),
+            abstention_reason="insufficient_evidence",
+        )
+
+
+def test_private_chat_stream_terminates_cleanly_for_verified_abstention() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=AbstainingPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/chat/stream",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={"question": "How much platform fee did I pay on Swiggy?"},
+    )
+
+    assert response.status_code == 200
+    event_names = [
+        line.removeprefix("event: ")
+        for line in response.text.splitlines()
+        if line.startswith("event: ")
+    ]
+    assert event_names[-2:] == ["answer", "done"]
+    assert '"status":"abstained"' in response.text
+    assert "insufficient_evidence" in response.text
+
+
+def test_private_chat_stream_preserves_session_history_across_turns() -> None:
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+        )
+    )
+    headers = {"Authorization": "Bearer local-secret-token"}
+    first = client.post(
+        "/v1/private/chat/stream",
+        headers=headers,
+        json={"question": "How much platform fee did I pay on Swiggy?"},
+    )
+    assert first.status_code == 200
+    # The stream envelope is intentionally parsed from its terminal answer event.
+    terminal = [
+        line.removeprefix("data: ")
+        for line in first.text.splitlines()
+        if line.startswith("data: ") and '"session_id"' in line
+    ][-1]
+    first_payload = json.loads(terminal)
+    second = client.post(
+        "/v1/private/chat/stream",
+        headers=headers,
+        json={
+            "question": "How much platform fee did I pay on Swiggy?",
+            "session_id": first_payload["session_id"],
+        },
+    )
+
+    assert second.status_code == 200
+    history = client.get(
+        f"/v1/private/chat/{first_payload['session_id']}/history",
+        headers=headers,
+    )
+    assert history.status_code == 200
+    assert len(history.json()["turns"]) == 2
+    second_terminal = [
+        line.removeprefix("data: ")
+        for line in second.text.splitlines()
+        if line.startswith("data: ") and '"session_id"' in line
+    ][-1]
+    assert json.loads(second_terminal)["context_reused"] is True
 
 
 class StubPrivateWorkflow:
