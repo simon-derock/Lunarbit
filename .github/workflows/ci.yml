@@ -79,6 +79,7 @@ jobs:
           NEO4J_AUTH: neo4j/ci-password
         ports:
           - 7687:7687
+          - 7474:7474
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -128,6 +129,7 @@ jobs:
           NEO4J_AUTH: neo4j/ci-password
         ports:
           - 7687:7687
+          - 7474:7474
     steps:
       - uses: actions/checkout@v4
       - uses: docker/build-push-action@v6
