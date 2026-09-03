@@ -72,4 +72,70 @@ describe("SSE protocol parser", () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
     fetchMock.mockRestore();
   });
+
+  it("reassembles split SSE frames and delivers the complete answer contract", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('event: thinking\ndata: {"stage":"retrieval"}\n\n'));
+        const answer = JSON.stringify({
+          session_id: "session:test",
+          turn_index: 1,
+          context_reused: false,
+          answer: {
+            status: "verified",
+            direct_answer: "You placed 4 orders.",
+            calculation: null,
+            fact_count: 4,
+            citation_ids: ["runtime:citation:1"],
+            citations: [],
+            verification_status: "verified",
+            limitations: [],
+            abstention_reason: null,
+          },
+        });
+        const frame = `event: answer\ndata: ${answer}\n\nevent: done\ndata: {}\n\n`;
+        const bytes = encoder.encode(frame);
+        controller.enqueue(bytes.slice(0, 17));
+        controller.enqueue(bytes.slice(17));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const stages: string[] = [];
+    const result = await streamPrivateChat(
+      "How many orders did I place?",
+      (stage) => stages.push(stage),
+      vi.fn(),
+      vi.fn(),
+    );
+
+    expect(result.answer.direct_answer).toBe("You placed 4 orders.");
+    expect(stages).toEqual(["retrieval"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
+    fetchMock.mockRestore();
+  });
+
+  it("fails closed when the server emits a typed error event", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode('event: error\ndata: {"code":"answer_unavailable"}\n\n'),
+        );
+        controller.close();
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+
+    await expect(streamPrivateChat("Show my orders", vi.fn(), vi.fn(), vi.fn())).rejects.toThrow(
+      "answer_unavailable",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock.mockRestore();
+  });
 });

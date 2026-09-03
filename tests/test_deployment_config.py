@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from lunarbit.deployment_config import DeploymentConfigError, validate_deployment_environment
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _environment(**overrides: str) -> dict[str, str]:
@@ -39,3 +43,35 @@ def test_production_environment_returns_safe_typed_config() -> None:
 def test_production_environment_fails_closed(name: str, value: str, message: str) -> None:
     with pytest.raises(DeploymentConfigError, match=message):
         validate_deployment_environment(_environment(**{name: value}))
+
+
+@pytest.mark.parametrize("dockerfile", ("Dockerfile.api", "Dockerfile.public"))
+def test_api_images_declare_a_local_health_contract(dockerfile: str) -> None:
+    contents = (ROOT / dockerfile).read_text(encoding="utf-8")
+
+    assert "HEALTHCHECK" in contents
+    assert "http://127.0.0.1:8000/health" in contents
+    assert "timeout=3" in contents
+
+
+def test_api_image_provisions_the_non_root_session_directory() -> None:
+    contents = (ROOT / "Dockerfile.api").read_text(encoding="utf-8")
+
+    assert "mkdir -p /var/lib/lunarbit" in contents
+    assert "chown lunarbit:lunarbit /var/lib/lunarbit" in contents
+    assert 'VOLUME ["/var/lib/lunarbit"]' in contents
+
+
+def test_public_container_ci_supplies_the_live_graph_boundary() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "image: neo4j:5.26-community" in workflow
+    assert "--env NEO4J_URI=bolt://127.0.0.1:7687" in workflow
+    assert "--api-url http://127.0.0.1:8000" in workflow
+
+
+def test_ci_explicitly_loads_timeout_plugin_when_autoload_is_disabled() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert 'PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"' in workflow
+    assert "pytest -p pytest_timeout" in workflow

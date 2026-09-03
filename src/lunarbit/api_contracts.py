@@ -128,6 +128,8 @@ class PublicSnapshotSource(Protocol):
 
 class PublicQueryPlan(ContractModel):
     intent: str
+    disposition: str = "supported"
+    disposition_reason: str | None = None
     selected_tools: tuple[str, ...]
     actions: tuple[str, ...]
     action_budget: int

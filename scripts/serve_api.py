@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import sqlite3
+from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from lunarbit.api import DEFAULT_PUBLIC_ORIGINS, create_app
 from lunarbit.cohere import CohereClient
@@ -87,11 +90,30 @@ def main() -> int:
         if production_config is not None or os.environ.get("LUNARBIT_SESSION_DB")
         else None
     )
+    checkpoint_connection: sqlite3.Connection | None = None
     try:
+        if session_store is not None:
+            session_path = Path(
+                str(production_config.session_db)
+                if production_config is not None
+                else os.environ["LUNARBIT_SESSION_DB"]
+            )
+            checkpoint_path = session_path.with_name(
+                f"{session_path.stem}.langgraph{session_path.suffix}"
+            )
+            checkpoint_connection = sqlite3.connect(checkpoint_path, check_same_thread=False)
+            checkpointer = SqliteSaver(checkpoint_connection)
+            checkpointer.setup()
+        else:
+            checkpointer = None
         cohere = CohereClient(cohere_key, embedding_dimension=1536)
         retrieval_backend = HybridRetrievalBackend(HybridRetriever(graph, cohere))
         answer_backend = GovernedAnswerBackend(reader)
-        workflow = GraphRAGWorkflow(reader, planner=planner_from_environment())
+        workflow = GraphRAGWorkflow(
+            reader,
+            planner=planner_from_environment(),
+            checkpointer=checkpointer,
+        )
         app = create_app(
             public_snapshot_source=NavigationSnapshotSource(
                 public_reader,
@@ -116,6 +138,8 @@ def main() -> int:
         graph.close()
         if session_store is not None:
             session_store.close()
+        if checkpoint_connection is not None:
+            checkpoint_connection.close()
     return 0
 
 

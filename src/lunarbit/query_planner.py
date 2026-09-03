@@ -127,10 +127,30 @@ class ResilientQueryPlanner:
                 continue
             try:
                 proposal = planner.plan(question)
-                return build_query_plan_from_templates(question, proposal.operations), proposal
+                plan = build_query_plan_from_templates(question, proposal.operations)
+                self._validate_slots(plan, proposal)
+                return plan, proposal
             except (RuntimeError, ValueError, KeyError, IndexError, TypeError):
                 continue
         return build_query_plan(question), QuerySlots()
+
+    @staticmethod
+    def _validate_slots(plan: QueryPlan, slots: QuerySlots) -> None:
+        required: dict[QueryTemplate, tuple[str, ...]] = {
+            QueryTemplate.MERCHANT_ORDER_COUNT: ("merchant_name",),
+            QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: ("merchant_name", "item_name"),
+            QueryTemplate.DELIVERY_MENTION_COUNT: ("delivery_name",),
+            QueryTemplate.FINANCIAL_COMPONENT_SUM: ("component_type", "platform"),
+            QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: ("component_id",),
+            QueryTemplate.ORDER_RECONSTRUCTION: ("order_id",),
+            QueryTemplate.FULLTEXT_EVIDENCE: ("lexical_query",),
+        }
+        for template in plan.selected_templates:
+            missing = tuple(
+                name for name in required.get(template, ()) if getattr(slots, name) is None
+            )
+            if missing:
+                raise ValueError(f"structured plan missing required slots: {','.join(missing)}")
 
 
 def planner_from_environment() -> ResilientQueryPlanner:

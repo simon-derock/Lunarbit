@@ -659,3 +659,78 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Validation: ingestion configuration tests pass; Ruff and strict mypy pass.
   Private source documents, API keys, `samples/`, and multi-key chunking
   artifacts remain outside commits.
+
+### 2026-09-03 — Production contract hardening
+
+- Query planning now has explicit `supported`, `clarification_required`, and
+  `unsupported` dispositions. Unbound or out-of-scope questions abstain before
+  any Neo4j access; the disposition is visible in the safe public plan DTO.
+- Both API images declare local `/health` container probes. API and browser
+  contract coverage includes clean abstention SSE termination, bounded
+  session-history continuity, split SSE frame reassembly, and typed stream
+  errors.
+- Validation: Ruff, strict mypy, frontend Vitest, and the production Vite build
+  pass. A live local smoke verified `/health`, an Aura-backed public projection
+  (322 nodes / 105 edges), and a natural merchant order-count plan. The local
+  Starlette TestClient hangs even for a minimal FastAPI app in this environment;
+  real HTTP boundary checks are used for runtime verification.
+
+### 2026-09-03 — Durable LangGraph checkpoints
+
+- The API runtime now uses the compatible `langgraph-checkpoint-sqlite` 2.x
+  saver when `LUNARBIT_SESSION_DB` is configured. Workflow checkpoints are kept
+  in a separate `*.langgraph.sqlite3` file beside the conversation database,
+  initialized at startup, and closed during graceful shutdown.
+- The persistence contract is covered by reconstructing a workflow against a
+  reopened SQLite database and verifying its checkpoint state. The checkpointer
+  remains optional for in-memory tests and local experiments.
+
+### 2026-09-03 — Non-root container persistence path
+
+- The API image now creates `/var/lib/lunarbit` and grants ownership to the
+  non-root service user, allowing the documented SQLite conversation and
+  LangGraph checkpoint paths to initialize during production startup.
+- Validation: deployment contract tests pass and the API image rebuilds with
+  the hardened filesystem layout.
+
+- The API image also declares `/var/lib/lunarbit` as a volume so a deployment
+  platform can attach durable storage rather than silently losing session and
+  checkpoint state on container replacement.
+
+### 2026-09-03 — CI hang diagnostics
+
+- Added `pytest-timeout` to the development contract and a 60-second timeout
+  to the hosted Python suite. This converts deadlocked test infrastructure into
+  an actionable CI failure instead of an indefinitely running job.
+- Because CI disables third-party plugin autoload, the workflow explicitly
+  loads `pytest_timeout`; deployment configuration tests cover this invariant.
+
+### 2026-09-03 — Vercel private-chat boundary
+
+- Added `frontend/api/private/[...path].ts`, a server-side Vercel proxy for
+  private chat and session-history routes. It injects the bearer token only in
+  the server runtime, allows only GET/POST, forwards bounded request bodies,
+  and streams upstream SSE chunks without exposing credentials to the browser.
+- Validation: frontend TypeScript/Vite production build and all five Vitest
+  API/SSE tests pass. Vercel requires `LUNARBIT_API_URL` and
+  `LUNARBIT_PRIVATE_API_TOKEN` as server environment variables.
+
+- The proxy validates every wildcard path segment and accepts only HTTP(S)
+  upstream schemes, preventing traversal or arbitrary-target forwarding.
+- Added direct Vitest coverage for token injection, SSE passthrough, and
+  traversal rejection at the serverless handler boundary.
+- The proxy also rejects request bodies larger than 64 KiB before forwarding;
+  the boundary now has three direct security-contract tests.
+- Removed the optional `@vercel/node` package after dependency audit review;
+  the handler now uses local structural request/response types, eliminating
+  its vulnerable transitive runtime toolchain. Production dependencies have no
+  known vulnerabilities; the remaining audit finding is a low-severity
+  development-only esbuild advisory.
+
+### 2026-09-03 — Static-host browser security policy
+
+- Added `frontend/vercel.json` with CSP, frame, MIME, referrer, and permissions
+  headers. The policy intentionally adds no SPA rewrites, so `/api` functions
+  remain distinct from static assets.
+- Added a Vitest contract for the header set; frontend tests now cover nine
+  cases and the production build remains green.

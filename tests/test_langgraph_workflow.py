@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 import pytest
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from lunarbit.langgraph_workflow import (
     GraphRAGWorkflow,
@@ -56,6 +60,41 @@ def test_workflow_accepts_structured_model_plan_without_phrase_routing() -> None
     assert context.plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
 
 
+def test_workflow_rejects_unbound_model_slots_and_uses_platform_aggregate_fallback() -> None:
+    class Planner:
+        def plan(self, question):
+            return StructuredQueryProposal(operations=(QueryTemplate.MERCHANT_ORDER_COUNT,))
+
+    workflow = GraphRAGWorkflow(FakeReader(), planner=ResilientQueryPlanner(Planner(), None))
+    context = workflow.invoke("How many orders did I place on Swiggy?")
+
+    assert context.plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
+
+
+def test_workflow_routes_order_lists_to_fulltext_evidence() -> None:
+    workflow = GraphRAGWorkflow(FakeReader())
+    context = workflow.invoke(
+        "Show all my biryani orders",
+        slots=QuerySlots(lexical_query="show all my biryani orders"),
+    )
+
+    assert context.plan.selected_templates == (QueryTemplate.FULLTEXT_EVIDENCE,)
+
+
+def test_deterministic_plan_covers_remaining_governed_question_families() -> None:
+    from lunarbit.agent import build_query_plan
+
+    assert build_query_plan("How many times did Ram deliver my orders?").selected_templates == (
+        QueryTemplate.DELIVERY_MENTION_COUNT,
+    )
+    assert build_query_plan("Show evidence for money component MC-123").selected_templates == (
+        QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT,
+    )
+    assert build_query_plan("Reconstruct order ORD-4821").selected_templates == (
+        QueryTemplate.ORDER_RECONSTRUCTION,
+    )
+
+
 def test_workflow_rejects_prompt_extraction_before_graph_access() -> None:
     class ExplodingReader:
         def run(self, query):
@@ -86,3 +125,24 @@ def test_workflow_rejects_invalid_input_and_unknown_checkpoint() -> None:
         workflow.invoke("")
     with pytest.raises(LangGraphCheckpointError, match="checkpoint not found"):
         workflow.state(thread_id="missing")
+
+
+def test_sqlite_checkpointer_survives_workflow_reconstruction(tmp_path: Path) -> None:
+    database = sqlite3.connect(tmp_path / "checkpoints.sqlite3", check_same_thread=False)
+    saver = SqliteSaver(database)
+    saver.setup()
+    first = GraphRAGWorkflow(FakeReader(), checkpointer=saver)
+    first.invoke(
+        "How many orders came from Ember Kitchen?",
+        slots=QuerySlots(merchant_name="ember kitchen"),
+        thread_id="session:persistent",
+    )
+    database.close()
+
+    reopened_database = sqlite3.connect(tmp_path / "checkpoints.sqlite3", check_same_thread=False)
+    reopened = GraphRAGWorkflow(FakeReader(), checkpointer=SqliteSaver(reopened_database))
+    checkpoint = reopened.state(thread_id="session:persistent")
+
+    assert checkpoint is not None
+    assert checkpoint["status"] == "verified"
+    reopened_database.close()

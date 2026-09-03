@@ -165,7 +165,10 @@ The public repository is intentionally not a copy of the personal archive:
 - strict Pydantic contracts, content-addressed IDs, source hashes, and atomic archives protect provenance;
 - input guardrails reject prompt/secret extraction, control-character obfuscation, arbitrary Cypher/SQL/tool commands, and explicit off-scope model use without blocking ordinary food questions;
 - bearer-protected private routes, rate limiting, security headers, non-wildcard CORS, and public/private process separation are enforced at the API boundary;
-- private chat state is process-local, TTL-bound, turn-limited, and stores only normalized question/slot context plus answer status; operational traces retain scalar metadata only;
+- private chat state is SQLite-backed when `LUNARBIT_SESSION_DB` is configured,
+  TTL-bound and turn-limited; LangGraph checkpoints persist beside it while
+  storing only bounded workflow state, and operational traces retain scalar
+  metadata only;
 - public identifiers are aliases, not platform order IDs or invoice numbers;
 - no private PDFs, mailboxes, processed JSON, provider responses, API keys, or `.env` files are committed.
 
@@ -240,6 +243,8 @@ MEMORY.md                     append-only engineering handoff
 Implemented locally: deterministic extraction, mail-only order handling, rich agentic chunking, reversible resolution, Decimal financial truth, temporal economic compilation, Neo4j ingestion, HNSW/Lucene/BM25/RRF retrieval, Cohere reranking, citation verification, authenticated FastAPI answers, canonical-oracle evaluation, public projection, and the Nexus Insight boundary.
 
 Remaining release gates: human-reviewed natural-language evaluation, a deployed aggregate Neo4j connection, cloud deployment, and final public privacy review. Keeping these gates visible is part of the design: measured results, private artifacts, reviewed projections, and planned capabilities are never presented as the same thing.
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the provider-neutral production runbook, secret contract, durable-volume requirement, and browser/API routing boundary.
 
 ## Responsible use
 
