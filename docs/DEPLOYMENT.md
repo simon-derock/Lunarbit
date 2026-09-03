@@ -44,9 +44,12 @@ and must not be exposed through a browser bundle.
 
 ## Frontend routing
 
-The static frontend needs a same-origin reverse proxy for `/api/*` to the API
-service, or a deployment-specific server-side proxy that injects the private
-bearer token. Never put `LUNARBIT_PRIVATE_API_TOKEN` or provider keys in a
+The repository includes a Vercel serverless proxy at
+`frontend/api/private/[...path].ts` for `/api/private/*`. Configure its server
+environment with `LUNARBIT_API_URL` and `LUNARBIT_PRIVATE_API_TOKEN`; it keeps
+the bearer token server-side and streams chat responses through to FastAPI. A
+different host must provide an equivalent same-origin reverse proxy. Never put
+`LUNARBIT_PRIVATE_API_TOKEN` or provider keys in a
 `VITE_*` variable: Vite embeds those values into JavaScript sent to every
 visitor. Set `VITE_LUNARBIT_API_URL` only for the browser-safe public API origin.
 
