@@ -52,3 +52,11 @@ def test_api_images_declare_a_local_health_contract(dockerfile: str) -> None:
     assert "HEALTHCHECK" in contents
     assert "http://127.0.0.1:8000/health" in contents
     assert "timeout=3" in contents
+
+
+def test_public_container_ci_supplies_the_live_graph_boundary() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "image: neo4j:5.26-community" in workflow
+    assert "--env NEO4J_URI=bolt://127.0.0.1:7687" in workflow
+    assert "--api-url http://127.0.0.1:8000" in workflow

@@ -72,6 +72,13 @@ jobs:
     name: Public container boundary
     needs: python
     runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26-community
+        env:
+          NEO4J_AUTH: neo4j/ci-password
+        ports:
+          - 7687:7687
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -81,11 +88,18 @@ jobs:
           enable-cache: true
       - run: uv sync --locked --extra api --extra graph
       - run: docker build --file Dockerfile.public --tag lunarbit-public-api:ci .
-      - run: docker run --detach --rm --name lunarbit-public-api --publish 127.0.0.1:8012:8000 lunarbit-public-api:ci
+      - run: >-
+          docker run --detach --rm --name lunarbit-public-api --network host
+          --env NEO4J_URI=bolt://127.0.0.1:7687
+          --env NEO4J_USERNAME=neo4j
+          --env NEO4J_PASSWORD=ci-password
+          --env NEO4J_DATABASE=neo4j
+          --env LUNARBIT_PUBLIC_ALLOWED_ORIGINS=http://127.0.0.1:5173
+          lunarbit-public-api:ci
       - name: Audit the browser-facing boundary
         run: |
           for attempt in {1..20}; do
-            if uv run python scripts/verify_public_release.py --api-url http://127.0.0.1:8012 --origin http://127.0.0.1:5173; then
+            if uv run python scripts/verify_public_release.py --api-url http://127.0.0.1:8000 --origin http://127.0.0.1:5173; then
               exit 0
             fi
             sleep 1
