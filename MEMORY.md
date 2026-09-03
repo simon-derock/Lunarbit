@@ -684,3 +684,11 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - The persistence contract is covered by reconstructing a workflow against a
   reopened SQLite database and verifying its checkpoint state. The checkpointer
   remains optional for in-memory tests and local experiments.
+
+### 2026-09-03 — Non-root container persistence path
+
+- The API image now creates `/var/lib/lunarbit` and grants ownership to the
+  non-root service user, allowing the documented SQLite conversation and
+  LangGraph checkpoint paths to initialize during production startup.
+- Validation: deployment contract tests pass and the API image rebuilds with
+  the hardened filesystem layout.

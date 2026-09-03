@@ -54,6 +54,13 @@ def test_api_images_declare_a_local_health_contract(dockerfile: str) -> None:
     assert "timeout=3" in contents
 
 
+def test_api_image_provisions_the_non_root_session_directory() -> None:
+    contents = (ROOT / "Dockerfile.api").read_text(encoding="utf-8")
+
+    assert "mkdir -p /var/lib/lunarbit" in contents
+    assert "chown lunarbit:lunarbit /var/lib/lunarbit" in contents
+
+
 def test_public_container_ci_supplies_the_live_graph_boundary() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
