@@ -33,7 +33,7 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           set -o pipefail
-          uv run pytest -vv -x --tb=long --junitxml=pytest-report.xml 2>&1 | tee pytest-report.log
+          uv run pytest -vv -x --timeout=60 --tb=long --junitxml=pytest-report.xml 2>&1 | tee pytest-report.log
       - name: Retain Python contract diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
