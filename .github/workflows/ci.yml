@@ -33,7 +33,7 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           set -o pipefail
-          uv run pytest -vv -x --tb=long --junitxml=pytest-report.xml 2>&1 | tee pytest-report.log
+          uv run pytest -p pytest_timeout -vv -x --timeout=60 --tb=long --junitxml=pytest-report.xml 2>&1 | tee pytest-report.log
       - name: Retain Python contract diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -79,6 +79,7 @@ jobs:
           NEO4J_AUTH: neo4j/ci-password
         ports:
           - 7687:7687
+          - 7474:7474
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -87,6 +88,36 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked --extra api --extra graph
+      - name: Wait for Neo4j service
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:7474 >/dev/null; then
+              sleep 8
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Seed synthetic CI graph
+        run: |
+          uv run python - <<'PY'
+          from neo4j import GraphDatabase
+
+          driver = GraphDatabase.driver(
+              "bolt://127.0.0.1:7687", auth=("neo4j", "ci-password")
+          )
+          with driver.session(database="neo4j") as session:
+              session.run(
+                  "MERGE (platform:LunarbitNode:Platform {node_id: $platform_id}) "
+                  "SET platform.display_name_private = 'CI platform' "
+                  "MERGE (order_node:LunarbitNode:Order {node_id: $order_id}) "
+                  "SET order_node.platform = 'CI' "
+                  "MERGE (platform)-[:USES]->(order_node)",
+                  platform_id="ci:platform",
+                  order_id="ci:order",
+              ).consume()
+          driver.close()
+          PY
       - run: docker build --file Dockerfile.public --tag lunarbit-public-api:ci .
       - run: >-
           docker run --detach --rm --name lunarbit-public-api --network host
@@ -112,20 +143,71 @@ jobs:
     name: Production API container
     needs: python
     runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26-community
+        env:
+          NEO4J_AUTH: neo4j/ci-password
+        ports:
+          - 7687:7687
+          - 7474:7474
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.22"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --extra graph
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.api
           push: false
           tags: lunarbit-api:ci
+      - name: Wait for Neo4j service
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:7474 >/dev/null; then
+              sleep 8
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Seed synthetic CI graph
+        run: |
+          uv run python - <<'PY'
+          from neo4j import GraphDatabase
+
+          driver = GraphDatabase.driver(
+              "bolt://127.0.0.1:7687", auth=("neo4j", "ci-password")
+          )
+          with driver.session(database="neo4j") as session:
+              session.run(
+                  "MERGE (platform:LunarbitNode:Platform {node_id: $platform_id}) "
+                  "SET platform.display_name_private = 'CI platform' "
+                  "MERGE (order_node:LunarbitNode:Order {node_id: $order_id}) "
+                  "SET order_node.platform = 'CI' "
+                  "MERGE (platform)-[:USES]->(order_node)",
+                  platform_id="ci:platform",
+                  order_id="ci:order",
+              ).consume()
+          driver.close()
+          PY
       - name: Run production API smoke checks
         run: |
-          docker run --detach --rm --name lunarbit-api --publish 127.0.0.1:8014:8000 lunarbit-api:ci
+          docker run --detach --rm --name lunarbit-api --network host \
+            --env NEO4J_URI=bolt://127.0.0.1:7687 \
+            --env NEO4J_USERNAME=neo4j \
+            --env NEO4J_PASSWORD=ci-password \
+            --env NEO4J_DATABASE=neo4j \
+            --env COHERE_API_KEY=ci-placeholder \
+            --env LUNARBIT_PRIVATE_API_TOKEN=ci-placeholder \
+            lunarbit-api:ci
           for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:8014/health >/dev/null \
-              && curl --fail --silent http://127.0.0.1:8014/ready >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null \
+              && curl --fail --silent http://127.0.0.1:8000/ready >/dev/null; then
               exit 0
             fi
             sleep 1
