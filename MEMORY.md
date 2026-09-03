@@ -715,3 +715,5 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 
 - The proxy validates every wildcard path segment and accepts only HTTP(S)
   upstream schemes, preventing traversal or arbitrary-target forwarding.
+- Added direct Vitest coverage for token injection, SSE passthrough, and
+  traversal rejection at the serverless handler boundary.
