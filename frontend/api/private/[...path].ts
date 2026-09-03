@@ -1,4 +1,18 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+interface VercelRequest {
+  method?: string;
+  query: Record<string, string | string[] | undefined>;
+  body?: unknown;
+  headers: Record<string, string | undefined>;
+  url?: string;
+}
+
+interface VercelResponse {
+  status(code: number): VercelResponse;
+  json(body: unknown): void;
+  setHeader(name: string, value: string): void;
+  write(chunk: Uint8Array): void;
+  end(): void;
+}
 
 const ALLOWED_METHODS = new Set(["GET", "POST"]);
 const MAX_REQUEST_BYTES = 64 * 1024;

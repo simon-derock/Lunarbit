@@ -719,3 +719,8 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   traversal rejection at the serverless handler boundary.
 - The proxy also rejects request bodies larger than 64 KiB before forwarding;
   the boundary now has three direct security-contract tests.
+- Removed the optional `@vercel/node` package after dependency audit review;
+  the handler now uses local structural request/response types, eliminating
+  its vulnerable transitive runtime toolchain. Production dependencies have no
+  known vulnerabilities; the remaining audit finding is a low-severity
+  development-only esbuild advisory.
