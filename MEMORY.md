@@ -702,6 +702,8 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Added `pytest-timeout` to the development contract and a 60-second timeout
   to the hosted Python suite. This converts deadlocked test infrastructure into
   an actionable CI failure instead of an indefinitely running job.
+- Because CI disables third-party plugin autoload, the workflow explicitly
+  loads `pytest_timeout`; deployment configuration tests cover this invariant.
 
 ### 2026-09-03 — Vercel private-chat boundary
 
