@@ -68,4 +68,26 @@ describe("Vercel private API proxy", () => {
     expect(response.json).toHaveBeenCalledWith({ error: "invalid private API path" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("rejects oversized bodies before contacting the upstream API", async () => {
+    const response = responseDouble();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handler(
+      {
+        method: "POST",
+        query: { path: "chat/stream" },
+        headers: { "content-length": String(64 * 1024 + 1) },
+        body: {},
+      } as never,
+      response as never,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(413);
+    expect(response.json).toHaveBeenCalledWith({
+      error: "request body exceeds the configured limit",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
