@@ -159,7 +159,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked --extra graph
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.api
