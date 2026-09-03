@@ -59,6 +59,7 @@ def test_api_image_provisions_the_non_root_session_directory() -> None:
 
     assert "mkdir -p /var/lib/lunarbit" in contents
     assert "chown lunarbit:lunarbit /var/lib/lunarbit" in contents
+    assert 'VOLUME ["/var/lib/lunarbit"]' in contents
 
 
 def test_public_container_ci_supplies_the_live_graph_boundary() -> None:
