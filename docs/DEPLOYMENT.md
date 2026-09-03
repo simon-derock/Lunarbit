@@ -52,6 +52,8 @@ different host must provide an equivalent same-origin reverse proxy. Never put
 `LUNARBIT_PRIVATE_API_TOKEN` or provider keys in a
 `VITE_*` variable: Vite embeds those values into JavaScript sent to every
 visitor. Set `VITE_LUNARBIT_API_URL` only for the browser-safe public API origin.
+`frontend/vercel.json` applies a restrictive CSP and standard browser security
+headers; keep those headers enabled in any equivalent static-host configuration.
 
 ## Release checks
 

@@ -724,3 +724,11 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
   its vulnerable transitive runtime toolchain. Production dependencies have no
   known vulnerabilities; the remaining audit finding is a low-severity
   development-only esbuild advisory.
+
+### 2026-09-03 — Static-host browser security policy
+
+- Added `frontend/vercel.json` with CSP, frame, MIME, referrer, and permissions
+  headers. The policy intentionally adds no SPA rewrites, so `/api` functions
+  remain distinct from static assets.
+- Added a Vitest contract for the header set; frontend tests now cover nine
+  cases and the production build remains green.
