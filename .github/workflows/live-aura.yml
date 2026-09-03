@@ -37,7 +37,7 @@ jobs:
       LUNARBIT_SESSION_DB: /tmp/lunarbit-conversations.sqlite3
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.22"
           python-version: "3.12"
