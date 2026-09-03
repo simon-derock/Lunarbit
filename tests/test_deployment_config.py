@@ -68,3 +68,10 @@ def test_public_container_ci_supplies_the_live_graph_boundary() -> None:
     assert "image: neo4j:5.26-community" in workflow
     assert "--env NEO4J_URI=bolt://127.0.0.1:7687" in workflow
     assert "--api-url http://127.0.0.1:8000" in workflow
+
+
+def test_ci_explicitly_loads_timeout_plugin_when_autoload_is_disabled() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert 'PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"' in workflow
+    assert "pytest -p pytest_timeout" in workflow

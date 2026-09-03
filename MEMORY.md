@@ -702,3 +702,35 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Added `pytest-timeout` to the development contract and a 60-second timeout
   to the hosted Python suite. This converts deadlocked test infrastructure into
   an actionable CI failure instead of an indefinitely running job.
+- Because CI disables third-party plugin autoload, the workflow explicitly
+  loads `pytest_timeout`; deployment configuration tests cover this invariant.
+
+### 2026-09-03 — Vercel private-chat boundary
+
+- Added `frontend/api/private/[...path].ts`, a server-side Vercel proxy for
+  private chat and session-history routes. It injects the bearer token only in
+  the server runtime, allows only GET/POST, forwards bounded request bodies,
+  and streams upstream SSE chunks without exposing credentials to the browser.
+- Validation: frontend TypeScript/Vite production build and all five Vitest
+  API/SSE tests pass. Vercel requires `LUNARBIT_API_URL` and
+  `LUNARBIT_PRIVATE_API_TOKEN` as server environment variables.
+
+- The proxy validates every wildcard path segment and accepts only HTTP(S)
+  upstream schemes, preventing traversal or arbitrary-target forwarding.
+- Added direct Vitest coverage for token injection, SSE passthrough, and
+  traversal rejection at the serverless handler boundary.
+- The proxy also rejects request bodies larger than 64 KiB before forwarding;
+  the boundary now has three direct security-contract tests.
+- Removed the optional `@vercel/node` package after dependency audit review;
+  the handler now uses local structural request/response types, eliminating
+  its vulnerable transitive runtime toolchain. Production dependencies have no
+  known vulnerabilities; the remaining audit finding is a low-severity
+  development-only esbuild advisory.
+
+### 2026-09-03 — Static-host browser security policy
+
+- Added `frontend/vercel.json` with CSP, frame, MIME, referrer, and permissions
+  headers. The policy intentionally adds no SPA rewrites, so `/api` functions
+  remain distinct from static assets.
+- Added a Vitest contract for the header set; frontend tests now cover nine
+  cases and the production build remains green.
