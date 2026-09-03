@@ -92,6 +92,7 @@ jobs:
         run: |
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:7474 >/dev/null; then
+              sleep 8
               exit 0
             fi
             sleep 2
@@ -142,6 +143,7 @@ jobs:
         run: |
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:7474 >/dev/null; then
+              sleep 8
               exit 0
             fi
             sleep 2
