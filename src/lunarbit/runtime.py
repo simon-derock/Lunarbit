@@ -10,7 +10,7 @@ from typing import Any, Protocol, Self
 from neo4j import READ_ACCESS, Driver, GraphDatabase
 from pydantic import Field
 
-from lunarbit.agent import QueryPlan, build_query_plan
+from lunarbit.agent import QueryDisposition, QueryPlan, build_query_plan
 from lunarbit.models import ContractModel
 from lunarbit.retrieval import (
     EvidenceCitation,
@@ -402,6 +402,25 @@ def retrieve_grounded_context(
     plan: QueryPlan | None = None,
 ) -> GroundedContext:
     plan = plan or build_query_plan(request.question)
+    if plan.disposition is not QueryDisposition.SUPPORTED:
+        claim_id = _claim_id(request, plan)
+        reason: str | None = plan.disposition.value
+        return GroundedContext(
+            status=RuntimeStatus.ABSTAINED,
+            question=request.question,
+            plan=plan,
+            fact_count=0,
+            limitations=(plan.disposition_reason or "The question needs a governed operation.",),
+            citations=(),
+            verification=EvidenceVerification(
+                status=VerificationStatus.ABSTAINED,
+                covered_claim_ids=(),
+                missing_claim_ids=(claim_id,),
+                citation_ids=(),
+                abstention_reason=reason,
+            ),
+            abstention_reason=reason,
+        )
     queries = bind_query_plan(plan, request.slots)
     rows, query_complete = _execute_bounded(plan, queries, reader)
     claim_id = _claim_id(request, plan)
