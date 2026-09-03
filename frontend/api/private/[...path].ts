@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const ALLOWED_METHODS = new Set(["GET", "POST"]);
+const MAX_REQUEST_BYTES = 64 * 1024;
 
 function reject(response: VercelResponse, status: number, message: string): void {
   response.status(status).json({ error: message });
@@ -10,6 +11,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
   if (!ALLOWED_METHODS.has(request.method ?? "")) {
     response.setHeader("Allow", "GET, POST");
     reject(response, 405, "method not allowed");
+    return;
+  }
+  const contentLength = Number(request.headers["content-length"] ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+    reject(response, 413, "request body exceeds the configured limit");
     return;
   }
 
