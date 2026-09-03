@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from lunarbit.deployment_config import DeploymentConfigError, validate_deployment_environment
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _environment(**overrides: str) -> dict[str, str]:
@@ -39,3 +43,12 @@ def test_production_environment_returns_safe_typed_config() -> None:
 def test_production_environment_fails_closed(name: str, value: str, message: str) -> None:
     with pytest.raises(DeploymentConfigError, match=message):
         validate_deployment_environment(_environment(**{name: value}))
+
+
+@pytest.mark.parametrize("dockerfile", ("Dockerfile.api", "Dockerfile.public"))
+def test_api_images_declare_a_local_health_contract(dockerfile: str) -> None:
+    contents = (ROOT / dockerfile).read_text(encoding="utf-8")
+
+    assert "HEALTHCHECK" in contents
+    assert "http://127.0.0.1:8000/health" in contents
+    assert "timeout=3" in contents
