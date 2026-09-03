@@ -1,0 +1,67 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+
+const ALLOWED_METHODS = new Set(["GET", "POST"]);
+
+function reject(response: VercelResponse, status: number, message: string): void {
+  response.status(status).json({ error: message });
+}
+
+export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
+  if (!ALLOWED_METHODS.has(request.method ?? "")) {
+    response.setHeader("Allow", "GET, POST");
+    reject(response, 405, "method not allowed");
+    return;
+  }
+
+  const apiOrigin = process.env.LUNARBIT_API_URL?.replace(/\/$/, "");
+  const token = process.env.LUNARBIT_PRIVATE_API_TOKEN;
+  if (!apiOrigin || !token) {
+    reject(response, 503, "private API proxy is not configured");
+    return;
+  }
+
+  let target: URL;
+  try {
+    target = new URL(`/v1/private/${request.query.path instanceof Array ? request.query.path.join("/") : request.query.path ?? ""}`, apiOrigin);
+    if (request.url?.includes("?")) target.search = request.url.slice(request.url.indexOf("?"));
+  } catch {
+    reject(response, 503, "private API proxy is not configured");
+    return;
+  }
+
+  const body = request.method === "POST" ? JSON.stringify(request.body ?? {}) : undefined;
+  let upstream: globalThis.Response;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers: {
+        Accept: request.headers.accept ?? "application/json",
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        Authorization: `Bearer ${token}`,
+      },
+      body,
+    });
+  } catch {
+    reject(response, 502, "private API is unavailable");
+    return;
+  }
+
+  response.status(upstream.status);
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
+  if (!upstream.body) {
+    response.end();
+    return;
+  }
+  const reader = upstream.body.getReader();
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      response.write(Buffer.from(chunk.value));
+    }
+  } finally {
+    reader.releaseLock();
+    response.end();
+  }
+}
