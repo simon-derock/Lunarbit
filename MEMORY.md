@@ -712,3 +712,6 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Validation: frontend TypeScript/Vite production build and all five Vitest
   API/SSE tests pass. Vercel requires `LUNARBIT_API_URL` and
   `LUNARBIT_PRIVATE_API_TOKEN` as server environment variables.
+
+- The proxy validates every wildcard path segment and accepts only HTTP(S)
+  upstream schemes, preventing traversal or arbitrary-target forwarding.
