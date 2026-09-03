@@ -659,3 +659,18 @@ UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv sync --extra dev --extra agent
 - Validation: ingestion configuration tests pass; Ruff and strict mypy pass.
   Private source documents, API keys, `samples/`, and multi-key chunking
   artifacts remain outside commits.
+
+### 2026-09-03 — Production contract hardening
+
+- Query planning now has explicit `supported`, `clarification_required`, and
+  `unsupported` dispositions. Unbound or out-of-scope questions abstain before
+  any Neo4j access; the disposition is visible in the safe public plan DTO.
+- Both API images declare local `/health` container probes. API and browser
+  contract coverage includes clean abstention SSE termination, bounded
+  session-history continuity, split SSE frame reassembly, and typed stream
+  errors.
+- Validation: Ruff, strict mypy, frontend Vitest, and the production Vite build
+  pass. A live local smoke verified `/health`, an Aura-backed public projection
+  (322 nodes / 105 edges), and a natural merchant order-count plan. The local
+  Starlette TestClient hangs even for a minimal FastAPI app in this environment;
+  real HTTP boundary checks are used for runtime verification.
