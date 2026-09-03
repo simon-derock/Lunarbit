@@ -244,6 +244,8 @@ Implemented locally: deterministic extraction, mail-only order handling, rich ag
 
 Remaining release gates: human-reviewed natural-language evaluation, a deployed aggregate Neo4j connection, cloud deployment, and final public privacy review. Keeping these gates visible is part of the design: measured results, private artifacts, reviewed projections, and planned capabilities are never presented as the same thing.
 
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the provider-neutral production runbook, secret contract, durable-volume requirement, and browser/API routing boundary.
+
 ## Responsible use
 
 The source archive belongs to its data owner and is not distributed with this repository. Process only records you are authorized to access, retain, and analyze. Public demonstrations should use synthetic or manually redacted evidence.
