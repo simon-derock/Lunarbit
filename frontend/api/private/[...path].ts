@@ -20,9 +20,24 @@ export default async function handler(request: VercelRequest, response: VercelRe
     return;
   }
 
+  const rawPath = request.query.path instanceof Array ? request.query.path.join("/") : request.query.path ?? "";
+  const pathSegments = rawPath.split("/");
+  if (
+    pathSegments.some(
+      (segment) => !segment || segment === "." || segment === ".." || !/^[A-Za-z0-9._~:%-]+$/.test(segment),
+    )
+  ) {
+    reject(response, 400, "invalid private API path");
+    return;
+  }
+
   let target: URL;
   try {
-    target = new URL(`/v1/private/${request.query.path instanceof Array ? request.query.path.join("/") : request.query.path ?? ""}`, apiOrigin);
+    target = new URL(`/v1/private/${pathSegments.join("/")}`, apiOrigin);
+    if (!/[a-z]+:$/i.test(target.protocol) || !["http:", "https:"].includes(target.protocol)) {
+      reject(response, 503, "private API proxy is not configured");
+      return;
+    }
     if (request.url?.includes("?")) target.search = request.url.slice(request.url.indexOf("?"));
   } catch {
     reject(response, 503, "private API proxy is not configured");
