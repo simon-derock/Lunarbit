@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from langgraph.checkpoint.sqlite import SqliteSaver
 from neo4j import Driver, GraphDatabase
 
-from lunarbit.api import DEFAULT_PUBLIC_ORIGINS, create_app
+from lunarbit.api import DEFAULT_PUBLIC_ORIGINS, create_app, parse_public_origins
 from lunarbit.cohere import CohereClient
 from lunarbit.conversation import SQLiteConversationStore
 from lunarbit.deployment_config import validate_deployment_environment
@@ -138,6 +138,8 @@ def main() -> int:
             allowed_origins=(
                 production_config.allowed_origins
                 if production_config is not None
+                else parse_public_origins(os.environ.get("LUNARBIT_PUBLIC_ALLOWED_ORIGINS"))
+                if os.environ.get("LUNARBIT_PUBLIC_ALLOWED_ORIGINS")
                 else DEFAULT_PUBLIC_ORIGINS
             ),
             conversation_store=session_store,
