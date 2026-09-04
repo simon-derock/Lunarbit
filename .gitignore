@@ -43,3 +43,6 @@ coverage/
 # Local tooling and operating-system files.
 .DS_Store
 *.log
+
+# Profile README is maintained outside the Lunarbit project tree.
+simon-derock/
