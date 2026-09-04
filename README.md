@@ -242,7 +242,7 @@ MEMORY.md                     append-only engineering handoff
 
 Implemented locally: deterministic extraction, mail-only order handling, rich agentic chunking, reversible resolution, Decimal financial truth, temporal economic compilation, Neo4j ingestion, HNSW/Lucene/BM25/RRF retrieval, Cohere reranking, citation verification, authenticated FastAPI answers, canonical-oracle evaluation, public projection, and the Nexus Insight boundary.
 
-Remaining release gates: human-reviewed natural-language evaluation, a deployed aggregate Neo4j connection, cloud deployment, and final public privacy review. Keeping these gates visible is part of the design: measured results, private artifacts, reviewed projections, and planned capabilities are never presented as the same thing.
+Remaining release gates: human-reviewed natural-language evaluation, cloud hosting with a durable session volume, live browser E2E coverage, and final public privacy review. The complete economic graph is already loaded and verified in Neo4j Aura; measured results, private artifacts, reviewed projections, and planned capabilities are never presented as the same thing.
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the provider-neutral production runbook, secret contract, durable-volume requirement, and browser/API routing boundary.
 
