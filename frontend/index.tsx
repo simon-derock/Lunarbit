@@ -20,6 +20,8 @@ const EMPTY_SNAPSHOT: Snapshot = {
   disclosure: "Waiting for the verified public Neo4j projection.",
 };
 
+const SNAPSHOT_CACHE_KEY = "lunarbit.public.snapshot.v1";
+
 /* ---------------------------------------------------------------- *
  * Minimal flat menu — a rule-bordered plate, no glass, no radius
  * ---------------------------------------------------------------- */
@@ -160,7 +162,7 @@ export function Console() {
   const [panel, setPanel] = useState<"filters" | "findings" | null>("findings");
   const [ask, setAsk] = useState("");
   const [liveSnapshot, setLiveSnapshot] = useState<Snapshot | null>(null);
-  const [apiState, setApiState] = useState<"loading" | "live" | "error">("loading");
+  const [apiState, setApiState] = useState<"loading" | "cached" | "live" | "error">("loading");
   const [queryState, setQueryState] = useState<string | null>(null);
   const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
@@ -214,10 +216,26 @@ export function Console() {
   useEffect(() => {
     let active = true;
     setApiState("loading");
+    // Rehydrate the last verified projection first so a refresh never leaves
+    // the canvas empty while Aura responds. The network result below always
+    // replaces this cache, so it cannot become the source of truth.
+    try {
+      const cached = window.sessionStorage.getItem(SNAPSHOT_CACHE_KEY);
+      if (cached) {
+        const payload = JSON.parse(cached) as Parameters<typeof mapPublicSnapshot>[0];
+        if (payload && Array.isArray(payload.nodes) && Array.isArray(payload.edges) && active) {
+          setLiveSnapshot(mapPublicSnapshot(payload));
+          setApiState("cached");
+        }
+      }
+    } catch {
+      // Browser storage is optional (private mode and hardened browsers).
+    }
     fetchPublicSnapshot()
       .then((payload) => {
         if (active) {
           setLiveSnapshot(mapPublicSnapshot(payload));
+          try { window.sessionStorage.setItem(SNAPSHOT_CACHE_KEY, JSON.stringify(payload)); } catch { /* optional */ }
           setApiState("live");
         }
       })
