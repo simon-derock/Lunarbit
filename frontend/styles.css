@@ -101,7 +101,7 @@ body {
   header .plate button { min-width: 0; }
   header .plate .tag { flex: 0 0 auto; }
   header .tag { letter-spacing: 0.12em; }
-  .github-link { height: 32px; justify-content: center; padding-inline: 8px; }
+  .github-link { width: 38px !important; max-width: 38px !important; flex: 0 0 38px !important; height: 32px; justify-content: center; padding-inline: 0; }
   .github-link span { display: none; }
   footer { padding: 10px !important; padding-bottom: 14px !important; gap: 6px !important; }
   footer > div:first-child { width: 100%; max-width: none; }

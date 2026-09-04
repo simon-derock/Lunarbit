@@ -149,7 +149,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // surrounding controls. The previous 220px padding made every formation
     // look like a tiny thumbnail on wide screens.
     const compact = size.w > 0 && size.w < 600;
-    fg.zoomToFit(compact ? 26 : 84, compact ? 26 : 180);
+    fg.zoomToFit(compact ? 0 : 84, compact ? 26 : 180);
   }, [size.w]);
   useEffect(() => {
     tickCount.current = 0;
