@@ -11,6 +11,7 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 from langgraph.checkpoint.sqlite import SqliteSaver
+from neo4j import Driver, GraphDatabase
 
 from lunarbit.api import DEFAULT_PUBLIC_ORIGINS, create_app
 from lunarbit.cohere import CohereClient
@@ -45,6 +46,30 @@ def _required_environment(name: str) -> str:
     return value
 
 
+def _neo4j_auth(username: str | None, password: str | None) -> tuple[str, str] | None:
+    if (username is None) != (password is None):
+        raise ValueError("NEO4J_USERNAME and NEO4J_PASSWORD must be supplied together")
+    if username is None:
+        return None
+    assert password is not None
+    return (username, password)
+
+
+def _connect_neo4j(
+    uri: str,
+    *,
+    username: str | None,
+    password: str | None,
+) -> Driver:
+    driver = GraphDatabase.driver(
+        uri,
+        auth=_neo4j_auth(username, password),
+        max_connection_lifetime=300,
+    )
+    driver.verify_connectivity()
+    return driver
+
+
 def main() -> int:
     args = _args()
     load_dotenv(".env", override=False)
@@ -63,24 +88,10 @@ def main() -> int:
     )
     username = os.environ.get("NEO4J_USERNAME") or None
     password = os.environ.get("NEO4J_PASSWORD") or None
-    graph = Neo4jHybridGraph.connect(
-        uri,
-        database=database,
-        username=username,
-        password=password,
-    )
-    reader = Neo4jGraphReader.connect(
-        uri,
-        database=database,
-        username=username,
-        password=password,
-    )
-    public_reader = Neo4jAggregateReader.connect(
-        uri,
-        database=database,
-        username=username,
-        password=password,
-    )
+    driver = _connect_neo4j(uri, username=username, password=password)
+    graph = Neo4jHybridGraph(driver, database=database)
+    reader = Neo4jGraphReader(driver, database=database)
+    public_reader = Neo4jAggregateReader(driver, database=database)
     session_store = (
         SQLiteConversationStore(
             str(production_config.session_db)
@@ -133,9 +144,7 @@ def main() -> int:
         )
         uvicorn.run(app, host=args.host, port=args.port)
     finally:
-        public_reader.close()
-        reader.close()
-        graph.close()
+        driver.close()
         if session_store is not None:
             session_store.close()
         if checkpoint_connection is not None:
