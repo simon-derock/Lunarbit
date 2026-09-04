@@ -65,5 +65,13 @@ headers; keep those headers enabled in any equivalent static-host configuration.
 5. Verify the mounted volume survives replacement and that private routes reject
    missing or invalid bearer tokens.
 
+## GitHub security prerequisites
+
+Keep the repository **Dependency graph** enabled under *Settings → Security &
+analysis*. The pull-request dependency-review workflow depends on that GitHub
+feature; if it is disabled, the workflow reports a configuration failure even
+when the dependency diff is safe. Dependabot security updates and the review
+check should remain enabled for the default branch.
+
 Do not publish `data/`, PDFs, mailboxes, processed private JSONL, `.env` files,
 or generated private graph archives.
