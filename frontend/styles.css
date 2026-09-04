@@ -29,9 +29,9 @@
   --color-border: var(--border);
   --color-input: var(--border);
   --color-ring: var(--primary);
-  --font-display: "Fraunces", "Instrument Serif", Georgia, serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-sans: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
 
 }
 
@@ -114,10 +114,12 @@ body {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.01em;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Small caps instrument label */
@@ -151,9 +153,9 @@ body {
 
 /* Brandmark — compact title case logotype for the Lunarbit lockup. */
 @utility brandmark {
-  font-family: var(--font-mono);
-  font-weight: 400;
-  letter-spacing: 0.02em;
+  font-family: var(--font-display);
+  font-weight: 560;
+  letter-spacing: -0.025em;
   text-transform: none;
   line-height: 1;
 }
