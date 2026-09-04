@@ -284,7 +284,7 @@ export function Console() {
   return (
     <main
       style={theme.vars as CSSProperties}
-      className="relative h-screen w-full overflow-hidden bg-background text-foreground"
+      className={`theme-${themeId} relative h-screen w-full overflow-hidden bg-background text-foreground`}
     >
       <GraphSurface
         nodes={nodes}

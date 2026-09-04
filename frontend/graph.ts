@@ -592,6 +592,36 @@ export const THEMES: ThemePreset[] = [
   },
 
   {
+    id: "aurum-dust",
+    name: "Aurum Dust",
+    hint: "Obsidian velvet · floating champagne gold",
+    vars: {
+      "--background": "#12100d",
+      "--surface": "#1d1812",
+      "--foreground": "#f8f0dc",
+      "--muted-foreground": "#b7a888",
+      "--border": "#443722",
+      "--primary": "#e6bd67",
+      "--primary-foreground": "#12100d",
+      "--accent": "#f4d58b",
+    },
+    palette: {
+      paper: "#12100d",
+      ink: "#f8f0dc",
+      edge: "rgba(214,171,86,0.34)",
+      edgeHot: "rgba(255,239,184,0.98)",
+      layers: {
+        evidence: "#fff4cf",
+        commerce: "#e6bd67",
+        product: "#f4d58b",
+        identity: "#b99043",
+        financial: "#ffe8a8",
+        intelligence: "#81652e",
+      },
+      chroma: ["#fff4cf", "#ffe8a8", "#f4d58b", "#e6bd67", "#b99043", "#81652e"],
+    },
+  },
+  {
     id: "velvet",
     name: "Velvet Graphite",
     hint: "Graphite-plum ground · high-contrast rose signal",
@@ -1108,7 +1138,7 @@ export const VIZ_PROFILES: VizProfile[] = [
     formStrength: 0.9,
     // Rose Quartz gives the cortex silhouette a warm, dimensional ground;
     // the near-black Cerise field made the dense dendrites read as flat ink.
-    preferredTheme: "velvet",
+    preferredTheme: "aurum-dust",
   },
   {
     id: "selene",
