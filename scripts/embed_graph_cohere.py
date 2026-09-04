@@ -172,7 +172,9 @@ def _ingest(
     identifiers = vector_identifiers(PROVIDER, EMBED_MODEL, dimension)
     if (username is None) != (password is None):
         raise ValueError("Neo4j username and password must be supplied together")
-    auth = (username, password) if username is not None else None
+    auth: tuple[str, str] | None = None
+    if username is not None and password is not None:
+        auth = (username, password)
     driver = GraphDatabase.driver(uri, auth=auth)
     try:
         driver.verify_connectivity()
