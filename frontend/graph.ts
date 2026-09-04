@@ -1076,7 +1076,9 @@ export const VIZ_PROFILES: VizProfile[] = [
     scale: 0.62,
     formation: "brain",
     formStrength: 0.9,
-    preferredTheme: "cerise",
+    // Rose Quartz gives the cortex silhouette a warm, dimensional ground;
+    // the near-black Cerise field made the dense dendrites read as flat ink.
+    preferredTheme: "rose",
   },
   {
     id: "selene",
