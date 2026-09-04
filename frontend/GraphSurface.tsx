@@ -145,8 +145,12 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     prog.current += 2;
     // Keep a generous visual margin so style changes never crop or over-zoom
     // the complete graph beneath the surrounding inspector plates.
-    fg.zoomToFit(220, 230);
-  }, []);
+    // Keep the projection large enough to read while leaving room for the
+    // surrounding controls. The previous 220px padding made every formation
+    // look like a tiny thumbnail on wide screens.
+    const compact = size.w > 0 && size.w < 600;
+    fg.zoomToFit(compact ? 26 : 84, compact ? 26 : 180);
+  }, [size.w]);
   useEffect(() => {
     tickCount.current = 0;
     userRef.current = false;
@@ -155,9 +159,6 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
   const onTick = useCallback(() => {
     if (userRef.current) return;
     tickCount.current += 1;
-    // Frame once after the first layout sample; repeatedly animating zoomToFit
-    // during every eighth tick made dense live projections feel unresponsive.
-    if (tickCount.current === 1) fit();
   }, [fit]);
   const markUser = useCallback(() => {
     if (prog.current > 0) prog.current -= 1;
@@ -781,10 +782,12 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             height={size.h}
             graphData={data as never}
             backgroundColor={palette.paper}
-            warmupTicks={12}
-            cooldownTicks={72}
-            d3AlphaDecay={0.065}
-            d3VelocityDecay={0.58}
+            warmupTicks={0}
+            // A short bounded settle keeps style changes responsive; the
+            // formation spring continues to hold structured layouts after it.
+            cooldownTicks={viz.formStrength > 0 ? 42 : 36}
+            d3AlphaDecay={0.11}
+            d3VelocityDecay={0.62}
             enableNodeDrag
             enableZoomInteraction
             enablePanInteraction

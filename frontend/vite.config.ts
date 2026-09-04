@@ -22,7 +22,9 @@ export default defineConfig(({ mode }) => {
   };
   return {
   plugins: [react(), tailwindcss()],
-  server: { port: 5173, strictPort: true, proxy: { "/api": proxy } },
+  // Match API routes only; a broad `/api` key also captures Vite's `/api.ts`
+  // module request and forwards it to FastAPI, preventing the app from booting.
+  server: { port: 5173, strictPort: true, proxy: { "/api/": proxy } },
   build: { sourcemap: true },
   };
 });
