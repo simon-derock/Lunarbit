@@ -592,6 +592,36 @@ export const THEMES: ThemePreset[] = [
   },
 
   {
+    id: "velvet",
+    name: "Velvet Graphite",
+    hint: "Graphite-plum ground · high-contrast rose signal",
+    vars: {
+      "--background": "#17141b",
+      "--surface": "#211b25",
+      "--foreground": "#f5f1f3",
+      "--muted-foreground": "#b4a3ad",
+      "--border": "#3a2d38",
+      "--primary": "#e56b86",
+      "--primary-foreground": "#17141b",
+      "--accent": "#f3a9b8",
+    },
+    palette: {
+      paper: "#17141b",
+      ink: "#f5f1f3",
+      edge: "rgba(168,92,114,0.42)",
+      edgeHot: "rgba(247,232,236,0.96)",
+      layers: {
+        evidence: "#f7e8ec",
+        commerce: "#e56b86",
+        product: "#f3a9b8",
+        identity: "#bb6c84",
+        financial: "#f0c5cf",
+        intelligence: "#855268",
+      },
+      chroma: ["#f7e8ec", "#f0c5cf", "#e56b86", "#f3a9b8", "#bb6c84", "#855268"],
+    },
+  },
+  {
     id: "cobalt",
     name: "Cobalt",
     hint: "Deep sea navy · ice blue signal",
@@ -1078,7 +1108,7 @@ export const VIZ_PROFILES: VizProfile[] = [
     formStrength: 0.9,
     // Rose Quartz gives the cortex silhouette a warm, dimensional ground;
     // the near-black Cerise field made the dense dendrites read as flat ink.
-    preferredTheme: "rose",
+    preferredTheme: "velvet",
   },
   {
     id: "selene",
