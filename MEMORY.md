@@ -2,15 +2,15 @@
 
 ## Session handoff
 
-- Last updated: 2026-09-02
-- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, and citation identifiers are implemented and pushed; remaining gates are provenance-rich graph focus, durable sessions, HITL, full analytics, live E2E coverage, and production security.
+- Last updated: 2026-09-04
+- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, citation identifiers, and complete economic graph ingestion are implemented and pushed; remaining gates are human-reviewed language quality, durable production hosting, HITL, live E2E coverage, and final security/privacy review.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `7bf7f74` (`feat(deploy): enforce validated production launcher mode`), pushed to `main`.
-- Recent commits: `589d489` live authenticated SSE smoke, `d977881` manual Aura release workflow, `7bf7f74` validated production launcher.
+- Last verified implementation commit: `a460e63` (`fix(api): share resilient Aura driver across services`), pushed to `main`.
+- Recent commits: `5b17804` profile-artifact hygiene, `c6afc39` Neo4j credential typing, `a460e63` shared Aura driver.
 - Last passing checks: 265 Python tests, Ruff format/lint, strict MyPy across 43 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, production API container health/readiness smoke checks, and sanitized deployment preflight.
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, or abstention quality drops.
-- Deployment verification: `Dockerfile.api` built as `lunarbit-api:ci`; a real container with the configured environment returned `/health` 200, `/ready` 200 with `graph=configured`, a 322-node/105-edge Aura navigation projection, and authenticated SSE chat events. The verification container was stopped after the smoke test.
+- Deployment verification: the complete economic archive was loaded idempotently into Aura and verified at exactly 53,983 nodes and 85,607 relationships (298 write batches; replay unchanged). The production launcher returned `/health` 200, `/ready` 200 with `graph=configured`, a live 346-node/99-edge bounded navigation projection, authenticated hybrid retrieval (`verified`, 30 dense + 30 lexical candidates, 10 evidence citations), and ordered SSE chat events. The local smoke server used a temporary writable session volume and was stopped after verification.
 
 ## Goal-loop scope (2026-09-01)
 
@@ -115,7 +115,7 @@ The finish line is a deployable, privacy-safe financial-intelligence product, no
   - Added a private `/v1/private/chat` contract with TTL-bound process-local sessions, bounded follow-up context, explicit slot carry-forward, high-confidence platform/fee inference, safe missing-scope abstention, and generic expired-session handling.
   - Added generated request correlation IDs and a bounded privacy-safe trace sink for routing, retrieval, verification, abstention, latency, and chat-turn metadata; trace attributes cannot contain raw questions, answers, evidence, secrets, or Cypher.
 - In progress: Public privacy review and cloud deployment preparation. The current public UI consumes only the reviewed FastAPI contract.
-- Pending external input: Public deployment target, Aura read-only credentials, and final privacy-reviewed API exposure. Provider credentials load from the ignored `.env`; do not expose or commit them.
+- Pending external input: public deployment target, durable host volume, and final privacy-reviewed API exposure. Aura credentials are configured locally and provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
   graph navigation, and RaBitQ quantization as first-class planned production
   capabilities. The design retains full-precision vectors for reranking and
