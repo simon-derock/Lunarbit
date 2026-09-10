@@ -392,3 +392,40 @@ body {
     radial-gradient(ellipse 120% 110% at 50% 50%, #faf7ef 0%, #f3efe5 58%, #e6dece 100%) !important;
   background-size: 28px 28px, 28px 28px, 100% 100%;
 }
+
+.theme-architectural-constellation {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(142, 203, 222, .12) 0 1px, transparent 1.6px),
+    linear-gradient(rgba(142, 203, 222, .035) 1px, transparent 1px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #142435 0%, #0c151f 52%, #080d14 100%) !important;
+  background-size: 170px 170px, 42px 42px, 100% 100%;
+}
+
+.theme-neural-cartography {
+  background:
+    radial-gradient(ellipse 54% 52% at 50% 46%, rgba(217, 184, 255, .16), transparent 72%),
+    radial-gradient(circle at 18% 28%, rgba(255, 159, 156, .18) 0 1px, transparent 1.7px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #241b35 0%, #160f24 52%, #0d0914 100%) !important;
+}
+
+.theme-financial-circuitry {
+  background:
+    linear-gradient(rgba(125, 190, 139, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 190, 139, .035) 1px, transparent 1px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #17231b 0%, #0d1410 54%, #080a09 100%) !important;
+  background-size: 32px 32px, 32px 32px, 100% 100%;
+}
+
+.theme-glass-observatory {
+  background:
+    radial-gradient(ellipse 52% 48% at 50% 44%, rgba(183, 221, 255, .16), transparent 70%),
+    radial-gradient(circle at 14% 24%, rgba(233, 244, 255, .22) 0 1px, transparent 1.7px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #152943 0%, #0b1728 52%, #060b14 100%) !important;
+}
+
+.theme-museum-archive {
+  background:
+    linear-gradient(rgba(119, 111, 99, .05) 1px, transparent 1px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #f7f2e8 0%, #eee8dc 58%, #ddd2c1 100%) !important;
+  background-size: 26px 26px, 100% 100%;
+}

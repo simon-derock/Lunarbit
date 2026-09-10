@@ -796,7 +796,19 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             height={size.h}
             graphData={data as never}
             backgroundColor={
-              ["#12100d", "#07191c", "#080b16", "#0a0b0f", "#061012", "#f3efe5"].includes(palette.paper)
+              [
+                "#12100d",
+                "#07191c",
+                "#080b16",
+                "#0a0b0f",
+                "#061012",
+                "#f3efe5",
+                "#0b1119",
+                "#100d19",
+                "#0b0d0d",
+                "#080d16",
+                "#eee8dc",
+              ].includes(palette.paper)
                 ? "rgba(0,0,0,0)"
                 : palette.paper
             }
