@@ -90,7 +90,14 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
   }, [focus, edges]);
 
   /* ---------- formation: pull nodes onto a silhouette ---------- */
-  const targets = useMemo(() => formationTargets(viz.formation, nodes), [viz.formation, nodes]);
+  const targets = useMemo(() => {
+    const base = formationTargets(viz.formation, nodes);
+    const mobileScale = size.w > 0 && size.w < 600 ? 0.58 : 1;
+    if (mobileScale === 1) return base;
+    return new Map(
+      [...base].map(([id, point]) => [id, { x: point.x * mobileScale, y: point.y * mobileScale }]),
+    );
+  }, [viz.formation, nodes, size.w]);
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
   const strengthRef = useRef(viz.formStrength);
@@ -149,7 +156,14 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // surrounding controls. The previous 220px padding made every formation
     // look like a tiny thumbnail on wide screens.
     const compact = size.w > 0 && size.w < 600;
-    fg.zoomToFit(compact ? 0 : 84, compact ? 26 : 180);
+    // Keep the complete formation comfortably inside the viewport. The live
+    // projection is dense enough that tight framing reads as over-zoomed,
+    // especially on narrow phone screens.
+    fg.zoomToFit(compact ? 340 : 150, compact ? 0 : 220);
+    // Mobile browsers have a short usable height once the header and dock
+    // are accounted for; apply a deterministic second scale to avoid a
+    // formation filling the entire phone viewport.
+    if (compact) fg.zoom(0.24, 0);
   }, [size.w]);
   useEffect(() => {
     tickCount.current = 0;
@@ -191,7 +205,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     const intro = introRef.current;
     const dense = nodes.length > 220 || scale < 0.55;
     // screen-space compensation: marks stay legible when the fit zooms out
-    const zc = Math.min(4, Math.max(0.9, 1.35 / scale));
+    const zc = Math.min(2.4, Math.max(0.72, 1.0 / scale));
     const r = (3.4 + Math.sqrt(n.weight) * 1.8) * viz.scale * zc * (0.65 + intro * 0.35);
     const hair = Math.max(0.55, 1.1 / scale);
     const seed = hash(n.id);
@@ -584,9 +598,9 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     }
 
     const show = viz.labels === "all" || active || (viz.labels === "hubs" && n.weight > 12);
-    if (show && scale > 0.45) {
+    if (show && (scale > 0.45 || active)) {
       ctx.globalAlpha = (dim ? 0.15 : 0.92) * intro;
-      ctx.font = `${Math.max(3.2, 8.4 / scale)}px "IBM Plex Mono", ui-monospace, monospace`;
+      ctx.font = `${active ? Math.max(9, Math.min(14, 8.4 / Math.max(scale, 0.6))) : Math.max(3.2, 8.4 / scale)}px "IBM Plex Mono", ui-monospace, monospace`;
       ctx.fillStyle = active ? palette.ink : fade(color, 0.72);
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
@@ -781,7 +795,11 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             width={size.w}
             height={size.h}
             graphData={data as never}
-            backgroundColor={palette.paper}
+            backgroundColor={
+              ["#12100d", "#07191c", "#080b16", "#0a0b0f", "#061012", "#f3efe5"].includes(palette.paper)
+                ? "rgba(0,0,0,0)"
+                : palette.paper
+            }
             warmupTicks={0}
             // A short bounded settle keeps style changes responsive; the
             // formation spring continues to hold structured layouts after it.
@@ -839,9 +857,10 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             }) as never}
             onNodeDragEnd={((raw: unknown) => {
               const n = raw as GraphNode & Pt & { fx?: number; fy?: number };
-              n.fx = undefined;
-              n.fy = undefined;
-              fgRef.current?.d3ReheatSimulation?.();
+              // Preserve the user-authored position instead of rubber-banding
+              // formed layouts back to their generated target.
+              n.fx = n.x;
+              n.fy = n.y;
             }) as never}
             onZoom={markUser as never}
             onBackgroundClick={() => {

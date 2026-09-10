@@ -21,6 +21,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
 };
 
 const SNAPSHOT_CACHE_KEY = "lunarbit.public.snapshot.v1";
+const LUNARBIT_PRODUCT_URL = "https://github.com/simon-derock/Lunarbit";
 
 /* ---------------------------------------------------------------- *
  * Minimal flat menu — a rule-bordered plate, no glass, no radius
@@ -48,11 +49,11 @@ function Menu({
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
+    const onDoc = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("pointerdown", onDoc);
+    return () => document.removeEventListener("pointerdown", onDoc);
   }, [open]);
 
   return (
@@ -74,7 +75,7 @@ function Menu({
       </button>
       {open && (
         <div
-          className="plate absolute z-50 mt-[-1px] max-h-[22rem] overflow-y-auto no-scrollbar"
+          className={`menu-popover menu-popover-${align} absolute z-50 mt-[-1px] max-h-[22rem] overflow-y-auto no-scrollbar`}
           style={{ width, [align === "end" ? "right" : "left"]: 0 }}
         >
           {options.map((o) => (
@@ -284,7 +285,7 @@ export function Console() {
   return (
     <main
       style={theme.vars as CSSProperties}
-      className={`theme-${themeId} relative h-screen w-full overflow-hidden bg-background text-foreground`}
+      className={`app-shell theme-${themeId} relative h-screen w-full overflow-hidden bg-background text-foreground`}
     >
       <GraphSurface
         nodes={nodes}
@@ -315,18 +316,30 @@ export function Console() {
       {/* top bar */}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-4">
         <div className="pointer-events-auto flex items-baseline gap-2.5 px-1 pt-1">
-          <h1 className="brandmark text-[18px] tracking-[0.08em] text-foreground">Lunarbit</h1>
-          <span className="text-[9px] tracking-[0.08em] text-muted-foreground">by Philip Simon Derock</span>
+          <h1 className="text-foreground">
+            <a
+              href={LUNARBIT_PRODUCT_URL}
+              aria-label="Open Lunarbit project"
+              className='inline-flex items-baseline whitespace-nowrap text-[19px] font-medium leading-none tracking-normal antialiased [font-family:-apple-system,BlinkMacSystemFont,"SF_Pro_Display","Helvetica_Neue",Arial,sans-serif]'
+            >
+              <span className="mr-0 inline-block text-[1.1em] font-semibold leading-none tracking-normal">
+                L
+              </span>
+              <span className="inline-block leading-none tracking-normal">
+                unarbit
+              </span>
+            </a>
+          </h1>
         </div>
 
 
-        <div className="pointer-events-auto flex flex-wrap justify-end gap-2">
+        <div className="header-controls pointer-events-auto flex flex-wrap justify-end gap-2">
           <Menu
             tag="view"
             value={profileId}
             onChange={setProfileId}
-            align="end"
-            width="19rem"
+            align="start"
+            width="17rem"
             options={GRAPH_PROFILES.map((p) => ({ id: p.id, name: p.name, hint: p.scope }))}
           />
           <Menu
@@ -465,6 +478,23 @@ export function Console() {
           )
         )}
       </div>
+
+      {selected && (
+        <div className="mobile-selection pointer-events-auto absolute inset-x-3 top-[7.2rem] z-20">
+          <div className="border border-border bg-background/95 px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="tag">selected · {selected.type}</div>
+                <div className="mt-1 truncate text-[13px] text-foreground">{selected.label}</div>
+                <div className="mt-1 text-[9px] text-muted-foreground">
+                  {selected.layer} · conf {selected.confidence.toFixed(2)} · {selected.source_count} sources
+                </div>
+              </div>
+              <button className="tag shrink-0 hover:text-foreground" onClick={() => setSelected(null)}>close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* bottom dock */}
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2 p-4">

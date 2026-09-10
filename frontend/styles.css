@@ -56,6 +56,22 @@ body {
   height: 100%;
 }
 
+.app-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+}
+.mobile-selection { display: none; }
+
+.menu-popover {
+  background: var(--background);
+  border: 1px solid var(--border);
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.menu-popover-start { left: 0; }
+.menu-popover-end { right: 0; }
+.menu-popover::-webkit-scrollbar { display: none; }
+
 .ask-submit {
   display: grid;
   width: 27px;
@@ -85,6 +101,7 @@ body {
 
 @media (max-width: 800px) {
   body { font-size: 11px; overflow: hidden; }
+  .mobile-selection { display: block; }
 }
 @media (max-width: 560px) {
   header { padding: 10px !important; }
@@ -100,15 +117,40 @@ body {
   header .plate { min-width: 0; width: 100%; height: 32px; padding-inline: 7px; }
   header .plate button { min-width: 0; }
   header .plate .tag { flex: 0 0 auto; }
+  .header-controls .plate.absolute {
+    width: min(16rem, calc(100vw - 28px)) !important;
+    max-width: calc(100vw - 28px);
+  }
+  .menu-popover {
+    position: fixed !important;
+    top: 70px !important;
+    right: 10px !important;
+    left: auto !important;
+    height: auto !important;
+    width: min(12rem, calc(100vw - 44px)) !important;
+    max-width: calc(100vw - 44px);
+    max-height: min(36dvh, 18rem);
+    display: block !important;
+    overflow-y: auto !important;
+    background: color-mix(in oklab, var(--surface) 97%, var(--foreground));
+  }
+  .menu-popover-start { left: 10px !important; right: auto !important; width: min(12rem, calc(100vw - 44px)) !important; max-width: calc(100vw - 44px); }
+  .menu-popover-end { right: 10px !important; left: auto !important; }
+  .header-controls { gap: 4px !important; align-items: center; }
+  .menu-popover > button { display: flex !important; width: 100%; min-height: 30px; height: auto !important; padding: 4px 6px; }
   header .tag { letter-spacing: 0.12em; }
-  .github-link { width: 38px !important; max-width: 38px !important; flex: 0 0 38px !important; height: 32px; justify-content: center; padding-inline: 0; }
+  .github-link { width: 32px !important; max-width: 32px !important; flex: 0 0 32px !important; height: 32px; justify-content: center; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; transform: translateY(-1px); }
   .github-link span { display: none; }
-  footer { padding: 10px !important; padding-bottom: 14px !important; gap: 6px !important; }
-  footer > div:first-child { width: 100%; max-width: none; }
+  header { z-index: 30; }
+  footer { z-index: 30; flex-direction: column; align-items: stretch; padding: 10px !important; padding-bottom: calc(14px + env(safe-area-inset-bottom)) !important; gap: 6px !important; }
+  footer > div:first-child { width: 100%; max-width: none; align-items: stretch; }
   footer > div:first-child > div:first-child { width: 100%; }
   footer .w-\[19rem\] { width: 100%; }
   footer .w-\[34rem\] { width: 100%; max-width: none; }
   footer .ask-submit { width: 32px; height: 32px; }
+  footer > div:last-child { min-width: 0; }
+  footer > div:last-child { width: 100%; max-width: none; }
+  footer input { min-width: 0; }
 }
 
 body {
@@ -153,14 +195,84 @@ body {
 
 /* Brandmark — compact title case logotype for the Lunarbit lockup. */
 @utility brandmark {
-  font-family: var(--font-display);
-  font-weight: 560;
-  letter-spacing: -0.025em;
+  font-family: "Inter", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 650;
+  font-variation-settings: normal;
+  font-synthesis: none;
+  letter-spacing: -0.035em;
   text-transform: none;
   line-height: 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+.brandmark a { color: inherit; text-decoration: none; }
+.brandmark a:hover { color: var(--foreground); }
+.brandmark-initial {
+  display: inline-block;
+  vertical-align: -0.025em;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.055em;
+}
+.brandmark-tail {
+  display: inline-block;
+  vertical-align: baseline;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
 }
 
-.github-link { order: -1; display: inline-flex; height: 36px; align-items: center; gap: 7px; border: 1px solid var(--border); padding: 0 10px; color: var(--muted-foreground); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; transition: color 160ms ease, border-color 160ms ease; }
+.header-controls > .relative > button,
+.header-controls > .github-link {
+  border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface) 64%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground) 10%, transparent);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.header-controls > .relative > button:hover,
+.header-controls > .github-link:hover {
+  border-color: color-mix(in oklab, var(--foreground) 48%, transparent);
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  transform: translateY(-1px);
+}
+
+/* Final command-bar treatment: controls are typography, not containers. */
+.header-controls > .relative > button,
+.header-controls > .github-link {
+  height: 30px !important;
+  min-width: 0 !important;
+  padding: 0 5px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: color-mix(in oklab, var(--foreground) 72%, var(--muted-foreground));
+}
+.header-controls > .relative > button:hover,
+.header-controls > .github-link:hover {
+  color: var(--foreground);
+  background: transparent !important;
+  box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--foreground) 58%, transparent) !important;
+}
+
+/* Invisible-at-rest command bar: the controls emerge through typography and
+   a hairline hover cue rather than persistent boxes. */
+.header-controls > .relative > button,
+.header-controls > .github-link {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.header-controls > .relative > button:hover,
+.header-controls > .github-link:hover {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--foreground) 55%, transparent);
+  transform: none;
+}
+
+.github-link { order: -1; display: inline-flex; align-self: center; height: 36px; align-items: center; gap: 7px; border: 1px solid var(--border); padding: 0 10px; color: var(--muted-foreground); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; transition: color 160ms ease, border-color 160ms ease; }
 .github-link svg { width: 14px; height: 14px; fill: currentColor; }
 .github-link:hover { border-color: color-mix(in oklab, var(--border) 35%, var(--foreground)); color: var(--foreground); }
 
@@ -208,9 +320,75 @@ body {
   background-image:
     radial-gradient(circle at 12% 22%, rgba(244,213,139,.34) 0 1px, transparent 1.8px),
     radial-gradient(circle at 72% 66%, rgba(230,189,103,.24) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 42% 82%, rgba(255,239,184,.18) 0 .8px, transparent 1.6px),
     radial-gradient(ellipse at center, transparent 42%, rgba(18,16,13,.36) 100%);
-  background-size: 180px 220px, 260px 300px, 100% 100%;
+  background-size: 180px 220px, 260px 300px, 340px 260px, 100% 100%;
   opacity: .2;
   mix-blend-mode: screen;
   animation: aurum-drift 24s linear infinite;
+}
+
+/* A luminous gold cosmos rather than the flat paper treatment used by the
+   other palettes. The transparent graph canvas lets this depth show through. */
+.theme-aurum-dust {
+  background:
+    radial-gradient(ellipse 62% 58% at 50% 47%, rgba(190,139,39,.48) 0%, rgba(111,73,12,.34) 32%, transparent 70%),
+    radial-gradient(ellipse 42% 36% at 51% 48%, rgba(255,224,132,.14) 0%, transparent 72%),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #342106 0%, #1b1204 48%, #090702 100%) !important;
+}
+
+.theme-abyssal-opal {
+  background:
+    radial-gradient(ellipse 56% 58% at 50% 46%, rgba(95,190,183,.28) 0%, rgba(45,91,108,.2) 34%, transparent 72%),
+    radial-gradient(ellipse 38% 32% at 53% 48%, rgba(187,167,255,.15) 0%, transparent 72%),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #123b3f 0%, #0a2428 48%, #051114 100%) !important;
+}
+
+.theme-nocturne-bloom {
+  background:
+    radial-gradient(ellipse 46% 42% at 51% 46%, rgba(255,143,156,.18) 0%, rgba(189,169,255,.14) 34%, transparent 72%),
+    radial-gradient(circle at 14% 22%, rgba(255,224,191,.28) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 82% 68%, rgba(189,169,255,.2) 0 1px, transparent 1.8px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #17213b 0%, #0c1428 52%, #060912 100%) !important;
+}
+
+/* Premium editorial atmospheres for the three new graph studies. */
+@keyframes observatory-drift {
+  from { background-position: 0 0, 42px 86px, 0 0; }
+  to { background-position: 150px -110px, -90px 150px, 0 0; }
+}
+
+.theme-obsidian-observatory {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(213, 181, 119, .12) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 22% 70%, rgba(237, 240, 242, .16) 0 1px, transparent 1.7px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #171b22 0%, #0d1016 48%, #07080b 100%) !important;
+}
+
+.theme-obsidian-observatory .grain,
+.theme-black-opal .grain {
+  background-image:
+    radial-gradient(circle at 16% 22%, rgba(255, 244, 215, .3) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 74% 66%, rgba(215, 221, 226, .2) 0 1px, transparent 1.7px),
+    radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, .36) 100%);
+  background-size: 190px 220px, 270px 300px, 100% 100%;
+  opacity: .18;
+  mix-blend-mode: screen;
+  animation: observatory-drift 30s linear infinite;
+}
+
+.theme-black-opal {
+  background:
+    radial-gradient(ellipse 58% 58% at 50% 45%, rgba(72, 194, 180, .2) 0%, rgba(74, 79, 173, .16) 34%, transparent 72%),
+    radial-gradient(circle at 18% 28%, rgba(155, 231, 207, .2) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 82% 68%, rgba(184, 164, 255, .18) 0 1px, transparent 1.8px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #102c30 0%, #081a1e 50%, #041012 100%) !important;
+}
+
+.theme-ivory-ledger {
+  background:
+    linear-gradient(rgba(117, 110, 98, .055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(117, 110, 98, .035) 1px, transparent 1px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #faf7ef 0%, #f3efe5 58%, #e6dece 100%) !important;
+  background-size: 28px 28px, 28px 28px, 100% 100%;
 }
