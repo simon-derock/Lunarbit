@@ -21,6 +21,7 @@ class NodeLabel(StrEnum):
     ORDER = "Order"
     PLATFORM = "Platform"
     MERCHANT = "Merchant"
+    MERCHANT_IDENTITY = "MerchantIdentity"
     OUTLET = "Outlet"
     LEGAL_ENTITY = "LegalEntity"
     ENTITY_MENTION = "EntityMention"
@@ -60,6 +61,8 @@ class RelationshipType(StrEnum):
     HAS_FINANCIAL_EVENT = "HAS_FINANCIAL_EVENT"
     EVENT_FOR_COMPONENT = "EVENT_FOR_COMPONENT"
     SUPERSEDES = "SUPERSEDES"
+    CANONICAL_OF = "CANONICAL_OF"
+    DELIVERED_BY = "DELIVERED_BY"
 
 
 class GraphNode(ContractModel):

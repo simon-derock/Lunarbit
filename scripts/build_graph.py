@@ -20,6 +20,7 @@ from lunarbit.graph import (
     NodeLabel,
     RelationshipType,
 )
+from lunarbit.identity import build_canonical_merchants
 from lunarbit.models import EntityType, SourceDocument, SourceMessage
 from lunarbit.product import ItemEvidenceObservation, MerchantItem
 from lunarbit.resolve import (
@@ -44,6 +45,11 @@ def _args() -> argparse.Namespace:
     parser.add_argument("--entity-root", type=Path, required=True)
     parser.add_argument("--product-root", type=Path, required=True)
     parser.add_argument("--finance-root", type=Path, required=True)
+    parser.add_argument(
+        "--merchant-aliases",
+        type=Path,
+        help="Reviewed JSON object mapping normalized source names to canonical names.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -58,6 +64,17 @@ def _read[T: BaseModel](path: Path, model: type[T]) -> tuple[T, ...]:
 
 def _nid(kind: str, value: object) -> str:
     return f"{kind}:{value}"
+
+
+def _read_aliases(path: Path | None) -> dict[str, str]:
+    if path is None:
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str) for key, value in payload.items()
+    ):
+        raise ValueError("merchant aliases must be a JSON object of string-to-string values")
+    return payload
 
 
 def _rid(
@@ -116,6 +133,10 @@ def main() -> int:
     order_decisions = _read(args.order_root / "decisions.jsonl", ResolutionDecision)
     mentions = _read(args.entity_root / "mentions.jsonl", EntityEvidenceMention)
     merchants = _read(args.entity_root / "merchants.jsonl", CanonicalMerchant)
+    merchant_identities = build_canonical_merchants(
+        merchants,
+        reviewed_aliases=_read_aliases(args.merchant_aliases),
+    )
     outlets = _read(args.entity_root / "outlets.jsonl", ProvisionalOutlet)
     legal_entities = _read(args.entity_root / "legal_entities.jsonl", CanonicalLegalEntity)
     delivery_mentions = _read(args.entity_root / "delivery_mentions.jsonl", DeliveryPartnerMention)
@@ -332,6 +353,29 @@ def main() -> int:
                     RelationshipType.EVALUATED_BY,
                     _nid("mention", mention_id),
                     _nid("resolution", resolution_id),
+                )
+            )
+    for identity in merchant_identities:
+        identity_node = _nid("merchant_identity", identity.identity_id)
+        nodes.append(
+            GraphNode(
+                node_id=identity_node,
+                labels=(NodeLabel.MERCHANT_IDENTITY,),
+                properties={
+                    "canonical_name_private": identity.canonical_name_private,
+                    "normalized_name_private": identity.normalized_name_private,
+                    "aliases_private": " | ".join(identity.aliases_private),
+                    "platforms": ",".join(platform.value for platform in identity.platforms),
+                    "privacy_class": "private",
+                },
+            )
+        )
+        for listing_id in identity.listing_ids:
+            relationships.append(
+                _relationship(
+                    RelationshipType.CANONICAL_OF,
+                    _nid("merchant", listing_id),
+                    identity_node,
                 )
             )
     for outlet in outlets:
