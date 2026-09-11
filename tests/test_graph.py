@@ -14,7 +14,7 @@ from lunarbit.graph import (
     neo4j_write_batches,
 )
 from lunarbit.resolve import ProvisionalOutlet, ResolutionStatus
-from scripts.build_graph import _primary_outlet_ids
+from scripts.build_graph import _item_quality_status, _primary_outlet_ids
 
 
 def test_canonical_graph_rejects_duplicate_nodes_and_orphan_relationships() -> None:
@@ -106,3 +106,8 @@ def test_outlet_paths_dedupe_provider_listings_under_one_merchant_identity() -> 
         (second, first), {listing_a: identity_id, listing_b: identity_id}
     )
     assert selected == frozenset({first.outlet_id})
+
+
+def test_numeric_item_names_are_explicitly_quarantined_without_mutating_source() -> None:
+    assert _item_quality_status("14.90") == "numeric_extraction_quarantined"
+    assert _item_quality_status("Chicken biryani") == "normal_item_identity"

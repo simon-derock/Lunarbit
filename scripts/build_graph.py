@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import defaultdict
 from hashlib import sha256
 from pathlib import Path
@@ -36,6 +37,19 @@ from lunarbit.resolve import (
     ProvisionalOutlet,
     ResolutionDecision,
 )
+
+_NUMERIC_ITEM_NAME = re.compile(r"^[0-9]+(?:[.,][0-9]+)?$")
+
+
+def _item_quality_status(display_name: str) -> str:
+    """Classify item names without changing source evidence."""
+
+    return (
+        "numeric_extraction_quarantined"
+        if _NUMERIC_ITEM_NAME.fullmatch(display_name.strip())
+        else "normal_item_identity"
+    )
+
 
 GRAPH_ARCHIVE_VERSION = "1.0.0"
 
@@ -314,6 +328,7 @@ def main() -> int:
     for decision in (*order_decisions, *entity_decisions):
         nodes.append(_decision_node(decision))
     bundle_by_order = {bundle.order_id: bundle for bundle in order_bundles}
+    orders_with_outlets = {outlet.order_id for outlet in outlets}
     for order in orders:
         order_node = _nid("order", order.order_id)
         nodes.append(
@@ -325,6 +340,11 @@ def main() -> int:
                     "platform": order.platform.value,
                     "order_type": order.category.value,
                     "identity_status": order.identity_status.value,
+                    "merchant_resolution_status": (
+                        "merchant_linked"
+                        if order.order_id in orders_with_outlets
+                        else "merchant_unresolved_no_evidence"
+                    ),
                     "privacy_class": "private",
                 },
             )
@@ -543,6 +563,7 @@ def main() -> int:
                 properties={
                     "display_name_private": item.display_name_private,
                     "normalized_name_private": item.normalized_name_private,
+                    "quality_status": _item_quality_status(item.display_name_private),
                     "privacy_class": "private",
                 },
             )
