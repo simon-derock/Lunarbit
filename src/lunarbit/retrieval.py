@@ -235,10 +235,11 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"normalized_name", "limit"}),
     ),
     QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: (
-        "MATCH (merchant:Merchant)<-[:OUTLET_OF]-(outlet:Outlet)"
+        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
+        "<-[:OUTLET_OF]-(outlet:Outlet)"
         "<-[:ORDERED_FROM]-(order:Order)-[:HAS_ITEM_OBSERVATION]->"
         "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
-        "WHERE merchant.normalized_name_private = $merchant_name "
+        "WHERE identity.normalized_name_private CONTAINS $merchant_name "
         "AND item.normalized_name_private CONTAINS $item_name "
         "MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
         "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "

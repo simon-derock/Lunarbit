@@ -53,6 +53,9 @@ def test_query_binding_requires_typed_slots_and_keeps_values_out_of_cypher() -> 
     with pytest.raises(ValueError, match="item_name"):
         bind_query_plan(plan, QuerySlots(merchant_name="sample kitchen"))
 
+    assert "MerchantIdentity" in queries[0].cypher
+    assert "CONTAINS $merchant_name" in queries[0].cypher
+
 
 def test_query_binding_supports_global_restaurant_ranking_without_name_slot() -> None:
     plan = build_query_plan("Which restaurants' orders are most?")
