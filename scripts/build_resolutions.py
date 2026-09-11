@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel
 
@@ -26,6 +26,7 @@ from lunarbit.finance import (
 )
 from lunarbit.models import (
     CandidateFactType,
+    EntityType,
     EvidenceChunk,
     FinancialRole,
     OrderEvidence,
@@ -50,6 +51,31 @@ from lunarbit.resolve import (
 
 RESOLUTION_ARCHIVE_VERSION = "1.0.0"
 _ORDER_ID_TOKEN = re.compile(r"(?<!\d)\d{10,15}(?!\d)")
+_RESTAURANT_FIELD = re.compile(r"(?im)^\s*restaurant\s*:\s*([^\r\n]+)")
+_ISSUED_ON_BEHALF = re.compile(r"(?im)^\s*issued on behalf of\s*\r?\n?\s*([^\r\n]+)")
+_ORDER_FROM_SUBJECT = re.compile(r"(?i)\border from\s+(.+?)\s*$")
+_NON_ENTITY_MERCHANTS = frozenset(
+    {"a different restaurant", "another restaurant", "different restaurant"}
+)
+
+
+def _merchant_candidate_from_message(subject: str, body: str) -> str | None:
+    """Extract a merchant only from deterministic email fields, never prose."""
+
+    candidates: list[str] = []
+    for pattern, text in (
+        (_RESTAURANT_FIELD, body),
+        (_ISSUED_ON_BEHALF, body),
+        (_ORDER_FROM_SUBJECT, subject),
+    ):
+        match = pattern.search(text)
+        if match:
+            candidates.append(match.group(1).strip(" .\t"))
+    for candidate in candidates:
+        normalized = " ".join(candidate.split()).casefold()
+        if normalized and normalized not in _NON_ENTITY_MERCHANTS:
+            return " ".join(candidate.split())
+    return None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -186,6 +212,55 @@ def _entity_mentions(
                     source_id=chunk.source_id,
                     platform=platform_by_source_id[chunk.source_id],
                     order_ids=order_ids,
+                )
+            )
+    # Agentic extraction can omit a clearly labelled restaurant even when the
+    # source email is unambiguous. Add one deterministic, source-grounded
+    # fallback mention per message/order pair; it never infers from free prose.
+    order_ids_by_message: dict[str, set[UUID]] = defaultdict(set)
+    for bundle in order_archive.bundles:
+        for message_id in bundle.message_ids:
+            order_ids_by_message[message_id].add(bundle.order_id)
+    existing_pairs = {
+        (mention.source_id, order_id)
+        for mention in mentions
+        if mention.entity_type is EntityType.MERCHANT
+        for order_id in mention.order_ids
+    }
+    chunks_by_source: dict[str, list[EvidenceChunk]] = defaultdict(list)
+    for chunk in chunks_by_id.values():
+        chunks_by_source[chunk.source_id].append(chunk)
+    message_by_id = {message.message_id: message for message in messages}
+    for message_id, order_ids in sorted(order_ids_by_message.items()):
+        message = message_by_id[message_id]
+        candidate = _merchant_candidate_from_message(
+            message.subject_private, message.body_text_private
+        )
+        if candidate is None:
+            continue
+        source_chunks = sorted(
+            chunks_by_source.get(message_id, ()), key=lambda chunk: str(chunk.chunk_id)
+        )
+        if not source_chunks:
+            continue
+        normalized = " ".join(candidate.split()).casefold()
+        for order_id in sorted(order_ids, key=str):
+            if (message_id, order_id) in existing_pairs:
+                continue
+            chunk = source_chunks[0]
+            mentions.append(
+                EntityEvidenceMention(
+                    mention_id=uuid5(
+                        NAMESPACE_URL,
+                        f"lunarbit-email-merchant-fallback-v1:{message_id}:{normalized}",
+                    ),
+                    entity_type=EntityType.MERCHANT,
+                    raw_value_private=candidate,
+                    normalized_value_private=normalized,
+                    source_chunk_id=chunk.chunk_id,
+                    source_id=message_id,
+                    platform=message.platform,
+                    order_ids=(order_id,),
                 )
             )
     return tuple(mentions)
