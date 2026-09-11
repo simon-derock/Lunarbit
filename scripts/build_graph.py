@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 from hashlib import sha256
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -158,6 +160,25 @@ def _delivery_identity_records(
     return tuple(nodes), tuple(relationships)
 
 
+def _primary_outlet_ids(
+    outlets: tuple[ProvisionalOutlet, ...],
+    merchant_identity_by_listing: dict[UUID, UUID] | None = None,
+) -> frozenset[UUID]:
+    """Select one deterministic outlet path per order and canonical merchant.
+
+    Duplicate resolution candidates remain graph nodes and retain their source
+    links; only their duplicate ``ORDERED_FROM`` edge is suppressed.
+    """
+
+    grouped: dict[tuple[UUID, UUID], list[UUID]] = defaultdict(list)
+    for outlet in outlets:
+        identity_id = (merchant_identity_by_listing or {}).get(
+            outlet.merchant_id, outlet.merchant_id
+        )
+        grouped[(outlet.order_id, identity_id)].append(outlet.outlet_id)
+    return frozenset(min(ids, key=str) for ids in grouped.values())
+
+
 def main() -> int:
     args = _args()
     inventory = args.processed_root / "_inventory"
@@ -194,6 +215,12 @@ def main() -> int:
     )
     nodes.extend(delivery_identity_nodes)
     relationships.extend(delivery_identity_relationships)
+    merchant_identity_by_listing = {
+        listing_id: identity.identity_id
+        for identity in merchant_identities
+        for listing_id in identity.listing_ids
+    }
+    primary_outlet_ids = _primary_outlet_ids(outlets, merchant_identity_by_listing)
     for platform in ("swiggy", "zomato"):
         nodes.append(
             GraphNode(
@@ -432,25 +459,35 @@ def main() -> int:
                 labels=(NodeLabel.OUTLET,),
                 properties={
                     "identity_status": outlet.identity_status.value,
+                    "quality_status": (
+                        "primary_order_merchant_resolution"
+                        if outlet.outlet_id in primary_outlet_ids
+                        else "duplicate_order_merchant_resolution"
+                    ),
                     "privacy_class": "private",
                 },
             )
         )
-        relationships.extend(
-            (
+        outlet_relationships = (
+            _relationship(
+                RelationshipType.OUTLET_OF,
+                outlet_node,
+                _nid("merchant", outlet.merchant_id),
+            ),
+            _relationship(
+                RelationshipType.RESOLVES_TO,
+                _nid("resolution", outlet.resolution_id),
+                outlet_node,
+            ),
+        )
+        if outlet.outlet_id in primary_outlet_ids:
+            outlet_relationships = (
                 _relationship(
                     RelationshipType.ORDERED_FROM, _nid("order", outlet.order_id), outlet_node
                 ),
-                _relationship(
-                    RelationshipType.OUTLET_OF, outlet_node, _nid("merchant", outlet.merchant_id)
-                ),
-                _relationship(
-                    RelationshipType.RESOLVES_TO,
-                    _nid("resolution", outlet.resolution_id),
-                    outlet_node,
-                ),
+                *outlet_relationships,
             )
-        )
+        relationships.extend(outlet_relationships)
         for mention_id in outlet.mention_ids:
             relationships.append(
                 _relationship(
