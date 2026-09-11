@@ -85,6 +85,29 @@ def test_unbound_order_count_requests_scope_without_graph_access() -> None:
     assert result.abstention_reason == "clarification_required"
 
 
+def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_count": 14,
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How many orders from KMS Hakkim?",
+            slots=QuerySlots(merchant_name="kms hakkim"),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.direct_answer == "The graph links this merchant to 14 source-backed orders."
+
+
 def test_financial_filters_apply_before_optional_evidence_expansion() -> None:
     plan = build_query_plan("How much platform fee did I pay?")
     query = bind_query_plan(

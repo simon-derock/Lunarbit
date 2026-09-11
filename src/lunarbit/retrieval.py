@@ -218,7 +218,7 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
     QueryTemplate.MERCHANT_ORDER_COUNT: (
         "MATCH (merchant:Merchant)<-[:OUTLET_OF]-(outlet:Outlet)"
         "<-[:ORDERED_FROM]-(order:Order) "
-        "WHERE merchant.normalized_name_private = $normalized_name "
+        "WHERE merchant.normalized_name_private CONTAINS $normalized_name "
         "MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
         "(chunk:EvidenceChunk) "
         "WITH count(DISTINCT order) AS order_count, "
