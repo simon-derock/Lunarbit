@@ -36,6 +36,10 @@ _NODE_TITLES: dict[PublicNodeLabel, tuple[str, str]] = {
         "Reconciliation runs",
         "Aggregate deterministic reconciliation topology",
     ),
+    PublicNodeLabel.PERSON: (
+        "Delivery participants",
+        "Pseudonymous delivery-participant topology",
+    ),
 }
 
 _PUBLIC_NODE_ORDER = tuple(PublicNodeLabel)
@@ -94,6 +98,7 @@ def _class_case(variable: str) -> str:
         f"OR {variable}:CanonicalItem OR {variable}:ComparableItemGroup THEN 'Item' "
         f"WHEN {variable}:MoneyComponent OR {variable}:FinancialEvent THEN 'MoneyComponent' "
         f"WHEN {variable}:ReconciliationRun THEN 'Reconciliation' "
+        f"WHEN {variable}:PersonIdentity THEN 'Person' "
         f"WHEN {variable}:Document OR {variable}:SourceMessage OR {variable}:EvidenceChunk "
         f"OR {variable}:AgenticRegion OR {variable}:Assertion THEN 'Evidence' "
         f"ELSE NULL END"
@@ -135,6 +140,7 @@ _NAVIGATION_LABELS = (
     "FinancialEvent",
     "ReconciliationRun",
     "PersonMention",
+    "PersonIdentity",
     "EvidenceChunk",
     "AgenticRegion",
     "EntityMention",
@@ -149,6 +155,8 @@ _NAVIGATION_NODE_CYPHER = (
     "WHERE $label IN labels(node) "
     "AND NOT ($label = 'Merchant' AND node:Merchant "
     "AND EXISTS { MATCH (node)-[:CANONICAL_OF]->(:MerchantIdentity) }) "
+    "AND NOT ($label = 'PersonMention' AND node:PersonMention "
+    "AND EXISTS { MATCH (node)-[:RESOLVED_TO]->(:PersonIdentity) }) "
     "RETURN node.node_id AS canonical_id, labels(node) AS labels, "
     "node.platform AS platform, node.order_type AS order_type, "
     "node.display_name_private AS display_name_private, "
@@ -158,6 +166,7 @@ _NAVIGATION_NODE_CYPHER = (
     "node.observed_amount AS observed_amount, node.amount AS amount, "
     "node.currency AS currency, node.component_type AS component_type, "
     "node.status AS status, node.scope AS scope "
+    ", node.public_id AS public_id, node.public_label AS public_label "
     "ORDER BY COUNT { (node)--() } DESC, node.node_id LIMIT $limit"
 )
 
@@ -430,6 +439,8 @@ def _navigation_label(labels: object) -> PublicNodeLabel:
         return PublicNodeLabel.ORDER
     if values & {"MerchantIdentity", "Merchant", "Outlet"}:
         return PublicNodeLabel.MERCHANT
+    if "PersonIdentity" in values:
+        return PublicNodeLabel.PERSON
     if values & {"ItemObservation", "MerchantItem"}:
         return PublicNodeLabel.ITEM
     if values & {"MoneyComponent", "FinancialEvent"}:
@@ -481,6 +492,10 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
     elif label is PublicNodeLabel.RECONCILIATION:
         title = "Deterministic reconciliation"
         subtitle = str(row.get("status") or "reviewed run")
+    elif label is PublicNodeLabel.PERSON:
+        public_id = str(row.get("public_id") or "participant")
+        title = str(row.get("public_label") or f"Delivery participant {public_id}")
+        subtitle = "Pseudonymous delivery participant"
     elif "PersonMention" in label_values:
         title = f"Delivery participant {alias[-6:].upper()}"
         subtitle = "Anonymized delivery mention"

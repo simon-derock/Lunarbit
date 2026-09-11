@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,11 @@ def _connection(args: argparse.Namespace) -> tuple[str, str, tuple[str, str] | N
     if (username is None) != (password is None):
         raise ValueError("NEO4J_USERNAME and NEO4J_PASSWORD must be supplied together")
     return uri, database, None if username is None else (username, password)
+
+
+def _canonical_relationship_id(listing_id: str, identity_id: str) -> str:
+    digest = sha256(f"CANONICAL_OF|{listing_id}|{identity_id}".encode()).hexdigest()[:24]
+    return f"relationship:canonical_of:{digest}"
 
 
 def _plan(tx: Any, aliases: dict[str, str]) -> dict[str, Any]:
@@ -86,6 +92,14 @@ def _plan(tx: Any, aliases: dict[str, str]) -> dict[str, Any]:
 
 def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
     plan = _plan(tx, aliases)
+    unkeyed_rows = list(
+        tx.run(
+            "MATCH ()-[stale:CANONICAL_OF]->() "
+            "WHERE stale.relationship_id IS NULL "
+            "DELETE stale "
+            "RETURN count(*) AS removed"
+        )
+    )
     legacy_rows = list(
         tx.run(
             "MATCH (legacy:MerchantIdentity) "
@@ -105,6 +119,13 @@ def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
         identity_id = f"merchant_identity:{_identity_uuid(key)}"
         platforms = sorted({str(listing["platform"]) for listing in group["listings"]})
         alias_names = sorted({str(listing["name"]) for listing in group["listings"]})
+        listing_rows = [
+            {
+                "listing_id": str(listing["node_id"]),
+                "relationship_id": _canonical_relationship_id(str(listing["node_id"]), identity_id),
+            }
+            for listing in group["listings"]
+        ]
         tx.run(
             "MERGE (identity:LunarbitNode:MerchantIdentity {node_id: $node_id}) "
             "SET identity.canonical_name_private = $canonical_name, "
@@ -112,18 +133,19 @@ def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
             "identity.aliases_private = $aliases, identity.platforms = $platforms, "
             "identity.privacy_class = 'private' "
             "WITH identity "
-            "UNWIND $listing_ids AS listing_id "
-            "MATCH (listing:Merchant {node_id: listing_id}) "
+            "UNWIND $listing_rows AS listing_row "
+            "MATCH (listing:Merchant {node_id: listing_row.listing_id}) "
             "OPTIONAL MATCH (listing)-[stale:CANONICAL_OF]->(other:MerchantIdentity) "
             "WHERE other.node_id <> identity.node_id "
             "DELETE stale "
-            "MERGE (listing)-[:CANONICAL_OF]->(identity)",
+            "MERGE (listing)-[:CANONICAL_OF "
+            "{relationship_id: listing_row.relationship_id}]->(identity)",
             node_id=identity_id,
             canonical_name=canonical_name,
             normalized_name=key,
             aliases=" | ".join(alias_names),
             platforms=",".join(platforms),
-            listing_ids=[str(listing["node_id"]) for listing in group["listings"]],
+            listing_rows=listing_rows,
         ).consume()
     cleanup = list(
         tx.run(
@@ -139,6 +161,7 @@ def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
         "canonical_identities": int(plan["canonical_identities"]),
         "provider_edges": int(plan["provider_edges"]),
         "legacy_identities_removed": int(legacy_rows[0]["removed"]) if legacy_rows else 0,
+        "unkeyed_relationships_removed": int(unkeyed_rows[0]["removed"]) if unkeyed_rows else 0,
         "stale_identities_removed": int(cleanup[0]["removed"]) if cleanup else 0,
     }
 

@@ -68,6 +68,7 @@ class PublicNodeLabel(StrEnum):
     MONEY_COMPONENT = "MoneyComponent"
     EVIDENCE = "Evidence"
     RECONCILIATION = "Reconciliation"
+    PERSON = "Person"
 
 
 class PublicNode(ContractModel):

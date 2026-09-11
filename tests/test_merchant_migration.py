@@ -21,3 +21,4 @@ def test_apply_keeps_canonical_identity_in_public_graph_namespace() -> None:
     assert "DETACH DELETE legacy" in source
     assert "DELETE stale" in source
     assert "stale_identities_removed" in source
+    assert "relationship_id: listing_row.relationship_id" in source
