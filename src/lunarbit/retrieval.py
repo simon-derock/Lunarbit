@@ -137,6 +137,7 @@ def validate_traversal(
 class QueryTemplate(StrEnum):
     MERCHANT_ORDER_RANKING = "merchant_order_ranking"
     MERCHANT_ORDER_COUNT = "merchant_order_count"
+    MERCHANT_SPEND_TOTAL = "merchant_spend_total"
     MERCHANT_ITEM_PRICE_HISTORY = "merchant_item_price_history"
     DELIVERY_MENTION_COUNT = "delivery_mention_count"
     FINANCIAL_COMPONENT_SUM = "financial_component_sum"
@@ -235,6 +236,22 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "item.source_id AS source_id, item.source_hash AS source_hash, "
         "identity.canonical_name_private AS merchant_name",
         frozenset({"normalized_name", "limit"}),
+    ),
+    QueryTemplate.MERCHANT_SPEND_TOTAL: (
+        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
+        "<-[:OUTLET_OF]-(outlet:Outlet)<-[:ORDERED_FROM]-(order:Order) "
+        "WHERE identity.normalized_name_private CONTAINS $merchant_name "
+        "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        "WHERE component.component_type IN "
+        "['customer_total', 'invoice_total', 'payment_assertion'] "
+        "MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "RETURN order.node_id AS order_id, component.component_type AS component_type, "
+        "component.amount AS amount, component.currency AS currency, "
+        "identity.canonical_name_private AS merchant_name, chunk.node_id AS chunk_id, "
+        "chunk.source_hash AS source_hash, source.node_id AS source_id "
+        "ORDER BY order.node_id, component.component_type LIMIT $limit",
+        frozenset({"merchant_name", "limit"}),
     ),
     QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: (
         "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"

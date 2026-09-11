@@ -57,6 +57,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"limit": limit}
     if template is QueryTemplate.MERCHANT_ORDER_COUNT:
         return {"normalized_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
+    if template is QueryTemplate.MERCHANT_SPEND_TOTAL:
+        return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
     if template is QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY:
         return {
             "merchant_name": _require(slots.merchant_name, "merchant_name"),
@@ -325,6 +327,59 @@ def _synthesize(
         )
     if QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY in plan.selected_templates:
         return _price_history_synthesis(rows)
+    if QueryTemplate.MERCHANT_SPEND_TOTAL in plan.selected_templates:
+        merchant_names = {
+            str(row["merchant_name"]) for row in rows if row.get("merchant_name") is not None
+        }
+        if len(merchant_names) > 1:
+            return (
+                0,
+                None,
+                None,
+                ("The merchant phrase matched multiple reviewed restaurant identities.",),
+            )
+        totals_by_order: dict[str, tuple[Decimal, str, str]] = {}
+        ambiguous_orders: set[str] = set()
+        priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
+        for row in rows:
+            order_id = row.get("order_id")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            component_type = str(row.get("component_type", ""))
+            if order_id is None or amount is None or currency is None:
+                continue
+            candidate = (Decimal(str(amount)), str(currency), component_type)
+            current = totals_by_order.get(str(order_id))
+            candidate_priority = priority.get(component_type, 0)
+            current_priority = priority.get(current[2], 0) if current is not None else -1
+            if current is None or candidate_priority > current_priority:
+                totals_by_order[str(order_id)] = candidate
+            elif candidate_priority == current_priority and (
+                current[0] != candidate[0] or current[1] != candidate[1]
+            ):
+                ambiguous_orders.add(str(order_id))
+        for order_id in ambiguous_orders:
+            totals_by_order.pop(order_id, None)
+        if not totals_by_order:
+            return (0, None, None, ("No source-backed customer total was available.",))
+        currencies = {value[1] for value in totals_by_order.values()}
+        if len(currencies) != 1:
+            return (0, None, None, ("The merchant totals use multiple currencies.",))
+        currency = currencies.pop()
+        total = sum((value[0] for value in totals_by_order.values()), Decimal("0"))
+        limitations = ["Customer totals are preferred; invoice totals are used only when needed."]
+        if ambiguous_orders:
+            limitations.append(
+                f"{len(ambiguous_orders)} orders were excluded because their source totals "
+                "conflict."
+            )
+        return (
+            len(totals_by_order),
+            f"Source-backed spend at this merchant is {currency} {total:.2f} "
+            f"across {len(totals_by_order)} orders.",
+            None,
+            tuple(limitations),
+        )
     if QueryTemplate.MERCHANT_ORDER_COUNT in plan.selected_templates:
         merchant_names = {
             str(row["merchant_name"]) for row in rows if row.get("merchant_name") is not None

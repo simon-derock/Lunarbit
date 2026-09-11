@@ -131,6 +131,57 @@ def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     assert result.direct_answer is None
 
 
+def test_merchant_spend_uses_customer_totals_once_per_order() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_id": "order:1",
+                "component_type": "invoice_total",
+                "amount": "120.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim Kalyana Biriyani",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+            {
+                "order_id": "order:1",
+                "component_type": "customer_total",
+                "amount": "100.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim Kalyana Biriyani",
+                "chunk_id": "chunk:2",
+                "source_id": "message:1",
+                "source_hash": "b" * 64,
+            },
+            {
+                "order_id": "order:2",
+                "component_type": "customer_total",
+                "amount": "80.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim Kalyana Biriyani",
+                "chunk_id": "chunk:3",
+                "source_id": "message:2",
+                "source_hash": "c" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How much did I spend at KMS Hakkim?",
+            slots=QuerySlots(merchant_name="kms hakkim"),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.fact_count == 2
+    assert (
+        result.direct_answer
+        == "Source-backed spend at this merchant is INR 180.00 across 2 orders."
+    )
+
+
 def test_financial_filters_apply_before_optional_evidence_expansion() -> None:
     plan = build_query_plan("How much platform fee did I pay?")
     query = bind_query_plan(

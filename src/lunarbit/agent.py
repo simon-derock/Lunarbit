@@ -69,6 +69,10 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
         return (QueryTemplate.FULLTEXT_EVIDENCE,)
     if re.search(r"\b(?:orders?|times?)\b.*\b(?:from|at)\s+[a-z0-9]", normalized):
         return (QueryTemplate.MERCHANT_ORDER_COUNT,)
+    if any(token in normalized for token in ("spent", "spend", "spending")) and re.search(
+        r"\b(?:from|at)\s+[a-z0-9]", normalized
+    ):
+        return (QueryTemplate.MERCHANT_SPEND_TOTAL,)
     if any(
         token in normalized
         for token in ("which restaurants", "most orders", "most-ordered", "top restaurants")
@@ -117,6 +121,7 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
         in {
             QueryTemplate.MERCHANT_ORDER_RANKING,
             QueryTemplate.MERCHANT_ORDER_COUNT,
+            QueryTemplate.MERCHANT_SPEND_TOTAL,
             QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,
             QueryTemplate.ORDER_RECONSTRUCTION,
         }
@@ -139,7 +144,11 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
         )
     if any(
         template
-        in {QueryTemplate.FINANCIAL_COMPONENT_SUM, QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT}
+        in {
+            QueryTemplate.FINANCIAL_COMPONENT_SUM,
+            QueryTemplate.MERCHANT_SPEND_TOTAL,
+            QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT,
+        }
         for template in templates
     ):
         steps.extend(

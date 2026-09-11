@@ -31,6 +31,12 @@ def test_query_plan_supports_cross_restaurant_order_ranking() -> None:
     assert plan.selected_templates == (QueryTemplate.MERCHANT_ORDER_RANKING,)
 
 
+def test_query_plan_supports_merchant_spend_aggregation() -> None:
+    plan = build_query_plan("How much did I spend at KMS Hakkim?")
+
+    assert plan.selected_templates == (QueryTemplate.MERCHANT_SPEND_TOTAL,)
+
+
 def test_query_plan_does_not_default_unknown_questions_to_merchant_count() -> None:
     plan = build_query_plan("What is my favorite color?")
 
