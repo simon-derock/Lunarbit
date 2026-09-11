@@ -21,6 +21,7 @@ from neo4j import READ_ACCESS, Driver, GraphDatabase
 from lunarbit.public import PublicEdge, PublicMetric, PublicNode, PublicNodeLabel, PublicSnapshot
 
 _RELATIONSHIP = re.compile(r"^[A-Z_]+$")
+_NUMERIC_ITEM = re.compile(r"^[0-9]+(?:[.,][0-9]+)?$")
 
 _NODE_TITLES: dict[PublicNodeLabel, tuple[str, str]] = {
     PublicNodeLabel.PLATFORM: ("Commerce platforms", "Aggregate platform topology"),
@@ -475,8 +476,13 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
         )
         subtitle = f"{platform} merchant" if platform else "Merchant entity"
     elif label is PublicNodeLabel.ITEM:
-        title = str(row.get("raw_name_private") or row.get("display_name_private") or "Food item")
-        subtitle = f"{platform} item" if platform else "Food item observation"
+        item_name = str(row.get("raw_name_private") or row.get("display_name_private") or "")
+        if _NUMERIC_ITEM.fullmatch(item_name.strip()):
+            title = "Unresolved item observation"
+            subtitle = "Numeric extraction quarantined"
+        else:
+            title = item_name or "Food item"
+            subtitle = f"{platform} item" if platform else "Food item observation"
     elif label is PublicNodeLabel.PLATFORM:
         title = str(row.get("display_name_private") or platform or "Food-commerce platform")
         subtitle = "Food-commerce platform"

@@ -208,3 +208,18 @@ def test_navigation_projection_is_dense_anonymized_and_frontend_closed() -> None
     assert all(node.id.startswith("pub:node:") for node in snapshot.nodes)
     assert all("private-1" not in str(node.model_dump()) for node in snapshot.nodes)
     assert_public_payload(payload)
+
+
+def test_numeric_only_item_names_are_quarantined_at_public_boundary() -> None:
+    from lunarbit.public_projection import _navigation_node
+
+    node = _navigation_node(
+        {
+            "canonical_id": "item:numeric",
+            "labels": ["LunarbitNode", "MerchantItem"],
+            "display_name_private": "14.90",
+        }
+    )
+
+    assert node.title == "Unresolved item observation"
+    assert node.subtitle == "Numeric extraction quarantined"
