@@ -84,9 +84,9 @@ def test_workflow_routes_order_lists_to_fulltext_evidence() -> None:
 def test_deterministic_plan_covers_remaining_governed_question_families() -> None:
     from lunarbit.agent import build_query_plan
 
-    assert build_query_plan("How many times did Courier Alpha deliver my orders?").selected_templates == (
-        QueryTemplate.DELIVERY_MENTION_COUNT,
-    )
+    assert build_query_plan(
+        "How many times did Courier Alpha deliver my orders?"
+    ).selected_templates == (QueryTemplate.DELIVERY_MENTION_COUNT,)
     assert build_query_plan("Show evidence for money component MC-123").selected_templates == (
         QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT,
     )
