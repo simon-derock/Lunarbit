@@ -14,6 +14,14 @@ AUDITS: dict[str, str] = {
     "food_orders_missing_outlet": (
         "MATCH (order:Order) "
         "WHERE order.order_type <> 'instamart' "
+        "AND coalesce(order.merchant_resolution_status, '') <> 'merchant_unresolved_no_evidence' "
+        "AND NOT (order)-[:ORDERED_FROM]->(:Outlet) "
+        "RETURN count(order) AS count"
+    ),
+    "food_orders_quarantined_without_outlet": (
+        "MATCH (order:Order) "
+        "WHERE order.order_type <> 'instamart' "
+        "AND order.merchant_resolution_status = 'merchant_unresolved_no_evidence' "
         "AND NOT (order)-[:ORDERED_FROM]->(:Outlet) "
         "RETURN count(order) AS count"
     ),
