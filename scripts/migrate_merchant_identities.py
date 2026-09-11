@@ -53,37 +53,52 @@ def _plan(tx: Any, aliases: dict[str, str]) -> dict[str, Any]:
             "ORDER BY merchant.node_id"
         )
     )
-    groups: dict[str, list[dict[str, Any]]] = {}
+    groups: dict[str, dict[str, Any]] = {}
     for row in rows:
         source_key = " ".join(str(row["normalized"]).split()).casefold()
         canonical = aliases.get(source_key, str(row["name"]))
-        groups.setdefault(" ".join(canonical.split()).casefold(), []).append(dict(row))
+        canonical_name = " ".join(canonical.split())
+        group = groups.setdefault(
+            canonical_name.casefold(),
+            {"canonical_name": canonical_name, "listings": []},
+        )
+        group["listings"].append(dict(row))
     return {
         "merchant_listings": len(rows),
         "canonical_identities": len(groups),
-        "provider_edges": sum(len(listings) for listings in groups.values()),
+        "provider_edges": sum(len(group["listings"]) for group in groups.values()),
         "groups": [
             {
-                "canonical_name": min(
-                    (str(listing["name"]) for listing in listings),
-                    key=lambda name: (len(name), name.casefold()),
-                ),
+                "canonical_name": str(group["canonical_name"]),
                 "listings": [
                     {
                         "node_id": listing["node_id"],
                         "name": listing["name"],
                         "platform": listing["platform"],
                     }
-                    for listing in listings
+                    for listing in group["listings"]
                 ],
             }
-            for listings in groups.values()
+            for group in groups.values()
         ],
     }
 
 
 def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
     plan = _plan(tx, aliases)
+    legacy_rows = list(
+        tx.run(
+            "MATCH (legacy:MerchantIdentity) "
+            "WHERE NOT legacy:LunarbitNode "
+            "MATCH (keeper:LunarbitNode:MerchantIdentity {node_id: legacy.node_id}) "
+            "WITH legacy, keeper "
+            "MATCH (listing:Merchant)-[:CANONICAL_OF]->(legacy) "
+            "MERGE (listing)-[:CANONICAL_OF]->(keeper) "
+            "WITH DISTINCT legacy "
+            "DETACH DELETE legacy "
+            "RETURN count(*) AS removed"
+        )
+    )
     for group in plan["groups"]:
         canonical_name = str(group["canonical_name"])
         key = " ".join(canonical_name.split()).casefold()
@@ -99,6 +114,9 @@ def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
             "WITH identity "
             "UNWIND $listing_ids AS listing_id "
             "MATCH (listing:Merchant {node_id: listing_id}) "
+            "OPTIONAL MATCH (listing)-[stale:CANONICAL_OF]->(other:MerchantIdentity) "
+            "WHERE other.node_id <> identity.node_id "
+            "DELETE stale "
             "MERGE (listing)-[:CANONICAL_OF]->(identity)",
             node_id=identity_id,
             canonical_name=canonical_name,
@@ -107,10 +125,21 @@ def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
             platforms=",".join(platforms),
             listing_ids=[str(listing["node_id"]) for listing in group["listings"]],
         ).consume()
+    cleanup = list(
+        tx.run(
+            "MATCH (identity:MerchantIdentity) "
+            "WHERE NOT (()-[:CANONICAL_OF]->(identity)) "
+            "WITH collect(identity) AS stale "
+            "FOREACH (identity IN stale | DETACH DELETE identity) "
+            "RETURN size(stale) AS removed"
+        )
+    )
     return {
         "merchant_listings": int(plan["merchant_listings"]),
         "canonical_identities": int(plan["canonical_identities"]),
         "provider_edges": int(plan["provider_edges"]),
+        "legacy_identities_removed": int(legacy_rows[0]["removed"]) if legacy_rows else 0,
+        "stale_identities_removed": int(cleanup[0]["removed"]) if cleanup else 0,
     }
 
 

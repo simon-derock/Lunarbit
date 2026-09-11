@@ -17,3 +17,7 @@ def test_alias_manifest_is_normalized_and_reviewed(tmp_path) -> None:
 def test_apply_keeps_canonical_identity_in_public_graph_namespace() -> None:
     source = inspect.getsource(migration._apply)
     assert "MERGE (identity:LunarbitNode:MerchantIdentity" in source
+    assert 'canonical_name": str(group["canonical_name"])' in inspect.getsource(migration._plan)
+    assert "DETACH DELETE legacy" in source
+    assert "DELETE stale" in source
+    assert "stale_identities_removed" in source
