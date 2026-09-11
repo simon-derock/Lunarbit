@@ -62,6 +62,16 @@ def test_governed_queries_are_read_only_parameterized_and_bounded() -> None:
             QueryTemplate.MERCHANT_ORDER_COUNT,
             {"normalized_name": "sample kitchen", "limit": 20, "cypher": "DELETE n"},
         )
+
+
+def test_delivery_query_supports_pseudonymous_identity_ids() -> None:
+    query = governed_query(
+        QueryTemplate.DELIVERY_MENTION_COUNT,
+        {"normalized_name": "556326", "limit": 20},
+    )
+
+    assert "identity.public_id = $normalized_name" in query.cypher
+    assert "person_public_id" in query.cypher
     with pytest.raises(ValueError, match="row limit"):
         governed_query(
             QueryTemplate.MERCHANT_ORDER_COUNT,

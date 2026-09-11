@@ -339,6 +339,9 @@ def _synthesize(
         )
     if QueryTemplate.DELIVERY_MENTION_COUNT in plan.selected_templates:
         order_ids = {str(row["order_id"]) for row in rows if row.get("order_id") is not None}
+        person_ids = {
+            str(row["person_public_id"]) for row in rows if row.get("person_public_id") is not None
+        }
         count = len(order_ids)
         noun = "order" if count == 1 else "orders"
         return (
@@ -351,8 +354,13 @@ def _synthesize(
             ),
             None,
             (
-                "Repeated names are mention-level evidence unless a reviewed person identity "
-                "resolution exists.",
+                (
+                    f"Reviewed pseudonymous delivery participant {next(iter(person_ids))} "
+                    "is linked by the graph."
+                    if len(person_ids) == 1
+                    else "Repeated names are mention-level evidence unless a reviewed person "
+                    "identity resolution exists."
+                ),
             ),
         )
     count = len(rows)

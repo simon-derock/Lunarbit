@@ -294,6 +294,30 @@ def test_delivery_answer_counts_orders_without_overclaiming_person_identity() ->
     assert "mention-level" in result.limitations[0]
 
 
+def test_delivery_answer_reports_reviewed_pseudonymous_identity() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_id": "order:1",
+                "person_public_id": "556326",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How many orders did delivery participant 556326 deliver?",
+            slots=QuerySlots(delivery_name="556326"),
+        ),
+        reader,
+    )
+
+    assert result.fact_count == 1
+    assert "556326" in result.limitations[0]
+
+
 def test_merchant_order_answer_uses_the_consistent_graph_aggregate() -> None:
     reader = StubReader(
         (
