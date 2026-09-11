@@ -20,6 +20,8 @@ CREATE CONSTRAINT platform_node_id IF NOT EXISTS
 FOR (node:Platform) REQUIRE node.node_id IS UNIQUE;
 CREATE CONSTRAINT merchant_node_id IF NOT EXISTS
 FOR (node:Merchant) REQUIRE node.node_id IS UNIQUE;
+CREATE CONSTRAINT merchant_identity_node_id IF NOT EXISTS
+FOR (node:MerchantIdentity) REQUIRE node.node_id IS UNIQUE;
 CREATE CONSTRAINT outlet_node_id IF NOT EXISTS
 FOR (node:Outlet) REQUIRE node.node_id IS UNIQUE;
 CREATE CONSTRAINT legal_entity_node_id IF NOT EXISTS

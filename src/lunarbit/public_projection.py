@@ -88,7 +88,8 @@ def _class_case(variable: str) -> str:
         f"CASE "
         f"WHEN {variable}:Platform THEN 'Platform' "
         f"WHEN {variable}:Order THEN 'Order' "
-        f"WHEN {variable}:Merchant OR {variable}:Outlet THEN 'Merchant' "
+        f"WHEN {variable}:MerchantIdentity OR {variable}:Merchant "
+        f"OR {variable}:Outlet THEN 'Merchant' "
         f"WHEN {variable}:ItemObservation OR {variable}:MerchantItem "
         f"OR {variable}:CanonicalItem OR {variable}:ComparableItemGroup THEN 'Item' "
         f"WHEN {variable}:MoneyComponent OR {variable}:FinancialEvent THEN 'MoneyComponent' "
@@ -126,6 +127,7 @@ _NAVIGATION_LABELS = (
     "Platform",
     "Order",
     "Merchant",
+    "MerchantIdentity",
     "Outlet",
     "ItemObservation",
     "MerchantItem",
@@ -145,9 +147,13 @@ _NAVIGATION_LABELS = (
 _NAVIGATION_NODE_CYPHER = (
     "MATCH (node:LunarbitNode) "
     "WHERE $label IN labels(node) "
+    "AND NOT ($label = 'Merchant' AND node:Merchant "
+    "AND EXISTS { MATCH (node)-[:CANONICAL_OF]->(:MerchantIdentity) }) "
     "RETURN node.node_id AS canonical_id, labels(node) AS labels, "
     "node.platform AS platform, node.order_type AS order_type, "
     "node.display_name_private AS display_name_private, "
+    "node.canonical_name_private AS canonical_name_private, "
+    "node.aliases_private AS aliases_private, "
     "node.raw_name_private AS raw_name_private, "
     "node.observed_amount AS observed_amount, node.amount AS amount, "
     "node.currency AS currency, node.component_type AS component_type, "
@@ -422,7 +428,7 @@ def _navigation_label(labels: object) -> PublicNodeLabel:
         return PublicNodeLabel.PLATFORM
     if "Order" in values:
         return PublicNodeLabel.ORDER
-    if values & {"Merchant", "Outlet"}:
+    if values & {"MerchantIdentity", "Merchant", "Outlet"}:
         return PublicNodeLabel.MERCHANT
     if values & {"ItemObservation", "MerchantItem"}:
         return PublicNodeLabel.ITEM
@@ -453,7 +459,9 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
     alias = _public_alias(canonical_id)
     platform = str(row.get("platform") or "").title()
     if label is PublicNodeLabel.MERCHANT:
-        title = str(row.get("display_name_private") or "Merchant alias")
+        title = str(
+            row.get("canonical_name_private") or row.get("display_name_private") or "Merchant alias"
+        )
         subtitle = f"{platform} merchant" if platform else "Merchant entity"
     elif label is PublicNodeLabel.ITEM:
         title = str(row.get("raw_name_private") or row.get("display_name_private") or "Food item")
