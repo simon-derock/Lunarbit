@@ -91,7 +91,7 @@ def _apply(tx: Any, aliases: dict[str, str]) -> dict[str, int]:
         platforms = sorted({str(listing["platform"]) for listing in group["listings"]})
         alias_names = sorted({str(listing["name"]) for listing in group["listings"]})
         tx.run(
-            "MERGE (identity:MerchantIdentity {node_id: $node_id}) "
+            "MERGE (identity:LunarbitNode:MerchantIdentity {node_id: $node_id}) "
             "SET identity.canonical_name_private = $canonical_name, "
             "identity.normalized_name_private = $normalized_name, "
             "identity.aliases_private = $aliases, identity.platforms = $platforms, "
