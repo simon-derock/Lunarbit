@@ -40,3 +40,5 @@ def test_integrity_audits_are_read_only_and_return_all_checks() -> None:
         not any(keyword in query.upper() for keyword in ("CREATE", "MERGE", "DELETE", "SET"))
         for query in session.queries
     )
+    assert "orders_with_duplicate_canonical_outlet_paths" in result
+    assert "orders_with_multiple_canonical_merchants" in result

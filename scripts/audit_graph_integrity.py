@@ -22,6 +22,18 @@ AUDITS: dict[str, str] = {
         "WITH order, count(*) AS outlets WHERE outlets > 1 "
         "RETURN count(order) AS count"
     ),
+    "orders_with_duplicate_canonical_outlet_paths": (
+        "MATCH (order:Order)-[:ORDERED_FROM]->(outlet:Outlet)-[:OUTLET_OF]->"
+        "(merchant:Merchant)-[:CANONICAL_OF]->(identity:MerchantIdentity) "
+        "WITH order, identity, count(outlet) AS paths WHERE paths > 1 "
+        "RETURN count(*) AS count"
+    ),
+    "orders_with_multiple_canonical_merchants": (
+        "MATCH (order:Order)-[:ORDERED_FROM]->(outlet:Outlet)-[:OUTLET_OF]->"
+        "(merchant:Merchant)-[:CANONICAL_OF]->(identity:MerchantIdentity) "
+        "WITH order, count(DISTINCT identity) AS merchants WHERE merchants > 1 "
+        "RETURN count(order) AS count"
+    ),
     "numeric_only_item_names": (
         "MATCH (item:MerchantItem) "
         "WHERE item.display_name_private =~ '[0-9]+([.,][0-9]+)?' "
