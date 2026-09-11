@@ -44,7 +44,11 @@ def item_name_from_table_row(
         )
     for value in candidates:
         cleaned = " ".join(value.split()).strip(" -:|")
-        if len(cleaned) >= 2 and not _NON_ITEM_LABEL.search(cleaned):
+        if (
+            len(cleaned) >= 2
+            and not _NUMBER_ONLY.fullmatch(cleaned)
+            and not _NON_ITEM_LABEL.search(cleaned)
+        ):
             return cleaned
     return None
 
