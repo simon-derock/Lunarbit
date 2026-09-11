@@ -39,6 +39,9 @@ from lunarbit.resolve import (
 )
 
 _NUMERIC_ITEM_NAME = re.compile(r"^[0-9]+(?:[.,][0-9]+)?$")
+_NON_ENTITY_MERCHANT_NAMES = frozenset(
+    {"a different restaurant", "another restaurant", "different restaurant"}
+)
 
 
 def _item_quality_status(display_name: str) -> str:
@@ -49,6 +52,12 @@ def _item_quality_status(display_name: str) -> str:
         if _NUMERIC_ITEM_NAME.fullmatch(display_name.strip())
         else "normal_item_identity"
     )
+
+
+def _is_entity_merchant(name: str) -> bool:
+    """Reject instructional restaurant phrases, not source evidence."""
+
+    return " ".join(name.split()).casefold() not in _NON_ENTITY_MERCHANT_NAMES
 
 
 GRAPH_ARCHIVE_VERSION = "1.0.0"
@@ -208,12 +217,20 @@ def main() -> int:
     order_bundles = _read(args.order_root / "bundles.jsonl", OrderDocumentBundle)
     order_decisions = _read(args.order_root / "decisions.jsonl", ResolutionDecision)
     mentions = _read(args.entity_root / "mentions.jsonl", EntityEvidenceMention)
-    merchants = _read(args.entity_root / "merchants.jsonl", CanonicalMerchant)
+    merchants = tuple(
+        merchant
+        for merchant in _read(args.entity_root / "merchants.jsonl", CanonicalMerchant)
+        if _is_entity_merchant(merchant.normalized_name_private)
+    )
     merchant_identities = build_canonical_merchants(
         merchants,
         reviewed_aliases=_read_aliases(args.merchant_aliases),
     )
-    outlets = _read(args.entity_root / "outlets.jsonl", ProvisionalOutlet)
+    outlets = tuple(
+        outlet
+        for outlet in _read(args.entity_root / "outlets.jsonl", ProvisionalOutlet)
+        if outlet.merchant_id in {merchant.merchant_id for merchant in merchants}
+    )
     legal_entities = _read(args.entity_root / "legal_entities.jsonl", CanonicalLegalEntity)
     delivery_mentions = _read(args.entity_root / "delivery_mentions.jsonl", DeliveryPartnerMention)
     entity_decisions = _read(args.entity_root / "decisions.jsonl", ResolutionDecision)
