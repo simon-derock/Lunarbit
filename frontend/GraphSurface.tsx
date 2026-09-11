@@ -597,13 +597,26 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
       ctx.stroke();
     }
 
-    const show = viz.labels === "all" || active || (viz.labels === "hubs" && n.weight > 12);
-    if (show && (scale > 0.45 || active)) {
-      ctx.globalAlpha = (dim ? 0.15 : 0.92) * intro;
-      ctx.font = `${active ? Math.max(9, Math.min(14, 8.4 / Math.max(scale, 0.6))) : Math.max(3.2, 8.4 / scale)}px "IBM Plex Mono", ui-monospace, monospace`;
-      ctx.fillStyle = active ? palette.ink : fade(color, 0.72);
+    // Names are part of the graph's meaning, not a hover-only decoration.
+    // Keep every node addressable in every visual system, while using a
+    // restrained screen-space hierarchy so dense projections stay legible.
+    const show = true;
+    if (show && (scale > 0.2 || active)) {
+      const labelSize = active
+        ? Math.max(10, Math.min(14, 8.4 / Math.max(scale, 0.6)))
+        : dense
+          ? Math.max(4.8, Math.min(7.2, 6.8 / Math.max(scale, 0.7)))
+          : Math.max(6.2, Math.min(9.5, 7.6 / Math.max(scale, 0.7)));
+      ctx.globalAlpha = (dim ? 0.12 : active ? 1 : 0.78) * intro;
+      ctx.font = `${active ? 500 : 400} ${labelSize}px "IBM Plex Mono", ui-monospace, monospace`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
+      // A hairline paper keyline keeps labels readable over bright graph
+      // marks without adding cards or dashboard chrome to the canvas.
+      ctx.strokeStyle = fade(palette.paper, isDark ? 0.72 : 0.9);
+      ctx.lineWidth = Math.max(1.5, labelSize * 0.22);
+      ctx.strokeText(n.label, n.x + r * 2.9, n.y);
+      ctx.fillStyle = active ? palette.ink : fade(color, 0.82);
       ctx.fillText(n.label, n.x + r * 2.9, n.y);
     }
     ctx.globalAlpha = 1;
