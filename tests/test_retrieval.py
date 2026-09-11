@@ -63,6 +63,11 @@ def test_governed_queries_are_read_only_parameterized_and_bounded() -> None:
             {"normalized_name": "sample kitchen", "limit": 20, "cypher": "DELETE n"},
         )
 
+    ranking = governed_query(QueryTemplate.MERCHANT_ORDER_RANKING, {"limit": 5})
+    assert ranking.cypher.index("LIMIT $limit") < ranking.cypher.index(
+        "OPTIONAL MATCH (identity)<-[:CANONICAL_OF]"
+    )
+
 
 def test_delivery_query_supports_pseudonymous_identity_ids() -> None:
     query = governed_query(

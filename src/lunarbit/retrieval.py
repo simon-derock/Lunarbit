@@ -202,17 +202,23 @@ class GovernedQuery(ContractModel):
 
 _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
     QueryTemplate.MERCHANT_ORDER_RANKING: (
-        "MATCH (merchant:Merchant)<-[:OUTLET_OF]-(outlet:Outlet)"
+        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
+        "<-[:OUTLET_OF]-(outlet:Outlet)"
         "<-[:ORDERED_FROM]-(order:Order) "
-        "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
+        "WITH identity, count(DISTINCT order) AS order_count "
+        "ORDER BY order_count DESC, identity.canonical_name_private LIMIT $limit "
+        "OPTIONAL MATCH (identity)<-[:CANONICAL_OF]-(evidence_merchant:Merchant)"
+        "<-[:OUTLET_OF]-(evidence_outlet:Outlet)"
+        "<-[:ORDERED_FROM]-(evidence_order:Order) "
+        "OPTIONAL MATCH (evidence_order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
         "(chunk:EvidenceChunk) "
-        "WITH merchant, count(DISTINCT order) AS order_count, "
+        "WITH identity, order_count, "
         "collect(DISTINCT {chunk_id: chunk.node_id, source_id: source.node_id, "
-        "source_hash: chunk.source_hash})[..$limit] AS evidence "
+        "source_hash: chunk.source_hash})[..1] AS evidence "
         "UNWIND CASE WHEN size(evidence) = 0 THEN [null] ELSE evidence END AS item "
-        "RETURN merchant.display_name_private AS merchant_name, order_count, "
+        "RETURN identity.canonical_name_private AS merchant_name, order_count, "
         "item.chunk_id AS chunk_id, item.source_id AS source_id, item.source_hash AS source_hash "
-        "ORDER BY order_count DESC, merchant_name LIMIT $limit",
+        "ORDER BY order_count DESC, merchant_name",
         frozenset({"limit"}),
     ),
     QueryTemplate.MERCHANT_ORDER_COUNT: (
