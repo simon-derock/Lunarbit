@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from lunarbit.agentic import _atomic_private_write, load_agentic_evidence_bundles
 from lunarbit.agentic_quality import AgenticRegionRecord
+from lunarbit.delivery_identity import build_delivery_identities
 from lunarbit.finance import MoneyComponent, ReconciliationRun
 from lunarbit.graph import (
     CanonicalGraph,
@@ -117,6 +118,46 @@ def _decision_node(decision: ResolutionDecision) -> GraphNode:
     )
 
 
+def _delivery_identity_records(
+    delivery_mentions: tuple[DeliveryPartnerMention, ...],
+) -> tuple[tuple[GraphNode, ...], tuple[GraphRelationship, ...]]:
+    """Materialize stable pseudonymous delivery identities and order paths."""
+
+    nodes: list[GraphNode] = []
+    relationships: list[GraphRelationship] = []
+    for identity in build_delivery_identities(delivery_mentions):
+        identity_node = _nid("person_identity", identity.person_id)
+        nodes.append(
+            GraphNode(
+                node_id=identity_node,
+                labels=(NodeLabel.PERSON_IDENTITY,),
+                properties={
+                    "public_id": identity.public_id,
+                    "public_label": f"Delivery participant {identity.public_id}",
+                    "identity_status": "stable_pseudonymous_projection",
+                    "privacy_class": "pseudonymous",
+                },
+            )
+        )
+        for mention_id in identity.mention_ids:
+            relationships.append(
+                _relationship(
+                    RelationshipType.RESOLVED_TO,
+                    _nid("mention", mention_id),
+                    identity_node,
+                )
+            )
+        for order_id in identity.order_ids:
+            relationships.append(
+                _relationship(
+                    RelationshipType.DELIVERED_BY,
+                    _nid("order", order_id),
+                    identity_node,
+                )
+            )
+    return tuple(nodes), tuple(relationships)
+
+
 def main() -> int:
     args = _args()
     inventory = args.processed_root / "_inventory"
@@ -148,6 +189,11 @@ def main() -> int:
 
     nodes: list[GraphNode] = []
     relationships: list[GraphRelationship] = []
+    delivery_identity_nodes, delivery_identity_relationships = _delivery_identity_records(
+        delivery_mentions
+    )
+    nodes.extend(delivery_identity_nodes)
+    relationships.extend(delivery_identity_relationships)
     for platform in ("swiggy", "zomato"):
         nodes.append(
             GraphNode(
