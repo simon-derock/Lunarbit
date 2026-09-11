@@ -17,6 +17,22 @@ AUDITS: dict[str, str] = {
         "AND NOT (order)-[:ORDERED_FROM]->(:Outlet) "
         "RETURN count(order) AS count"
     ),
+    "orders_without_platform": (
+        "MATCH (order:Order) WHERE NOT (order)-[:PLACED_ON]->(:Platform) "
+        "RETURN count(order) AS count"
+    ),
+    "orders_without_resolution": (
+        "MATCH (order:Order) WHERE NOT (order)<-[:RESOLVES_TO]-(:ResolutionDecision) "
+        "RETURN count(order) AS count"
+    ),
+    "item_observations_without_evidence": (
+        "MATCH (observation:ItemObservation) WHERE NOT (observation)-[:EVIDENCED_BY]->"
+        "(:EvidenceChunk) RETURN count(observation) AS count"
+    ),
+    "money_components_without_evidence": (
+        "MATCH (component:MoneyComponent) WHERE NOT (component)-[:EVIDENCED_BY]->"
+        "(:EvidenceChunk) RETURN count(component) AS count"
+    ),
     "orders_with_multiple_outlets": (
         "MATCH (order:Order)-[:ORDERED_FROM]->(:Outlet) "
         "WITH order, count(*) AS outlets WHERE outlets > 1 "
