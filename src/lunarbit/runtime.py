@@ -326,6 +326,16 @@ def _synthesize(
     if QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY in plan.selected_templates:
         return _price_history_synthesis(rows)
     if QueryTemplate.MERCHANT_ORDER_COUNT in plan.selected_templates:
+        merchant_names = {
+            str(row["merchant_name"]) for row in rows if row.get("merchant_name") is not None
+        }
+        if len(merchant_names) > 1:
+            return (
+                0,
+                None,
+                None,
+                ("The merchant phrase matched multiple reviewed restaurant identities.",),
+            )
         counts = {int(row["order_count"]) for row in rows if row.get("order_count") is not None}
         if len(counts) > 1:
             raise ValueError("merchant-order rows returned conflicting aggregate counts")

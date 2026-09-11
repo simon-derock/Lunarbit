@@ -96,6 +96,7 @@ def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
                 "chunk_id": "chunk:1",
                 "source_id": "message:1",
                 "source_hash": "a" * 64,
+                "merchant_name": "KMS Hakkim Kalyana Biriyani",
             },
         )
     )
@@ -109,6 +110,25 @@ def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
 
     assert result.status is RuntimeStatus.VERIFIED
     assert result.direct_answer == "The graph links this merchant to 14 source-backed orders."
+
+
+def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
+    reader = StubReader(
+        (
+            {"order_count": 10, "merchant_name": "Hotel Alpha"},
+            {"order_count": 8, "merchant_name": "Hotel Beta"},
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How many orders from Hotel?",
+            slots=QuerySlots(merchant_name="hotel"),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.ABSTAINED
+    assert result.direct_answer is None
 
 
 def test_financial_filters_apply_before_optional_evidence_expansion() -> None:

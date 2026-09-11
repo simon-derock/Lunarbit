@@ -222,16 +222,18 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"limit"}),
     ),
     QueryTemplate.MERCHANT_ORDER_COUNT: (
-        "MATCH (merchant:Merchant)<-[:OUTLET_OF]-(outlet:Outlet)"
+        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
+        "<-[:OUTLET_OF]-(outlet:Outlet)"
         "<-[:ORDERED_FROM]-(order:Order) "
-        "WHERE merchant.normalized_name_private CONTAINS $normalized_name "
+        "WHERE identity.normalized_name_private CONTAINS $normalized_name "
         "MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
         "(chunk:EvidenceChunk) "
-        "WITH count(DISTINCT order) AS order_count, "
+        "WITH identity, count(DISTINCT order) AS order_count, "
         "collect(DISTINCT {chunk_id: chunk.node_id, source_id: source.node_id, "
         "source_hash: chunk.source_hash})[..$limit] AS evidence "
         "UNWIND evidence AS item RETURN order_count, item.chunk_id AS chunk_id, "
-        "item.source_id AS source_id, item.source_hash AS source_hash",
+        "item.source_id AS source_id, item.source_hash AS source_hash, "
+        "identity.canonical_name_private AS merchant_name",
         frozenset({"normalized_name", "limit"}),
     ),
     QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: (
