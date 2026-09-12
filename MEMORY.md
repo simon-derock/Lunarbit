@@ -237,8 +237,8 @@ Copy the XML below as initialization context when handing Lunarbit to another co
     <contracts>src/lunarbit/api_contracts.py contains Pydantic response/request contracts and protocols; src/lunarbit/api.py contains route orchestration.</contracts>
   </interfaces>
   <verification>
-    <commands>UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q --ignore=tests/test_mistral_runner.py</commands>
-    <expected>Ruff clean, strict MyPy clean, 231 committed tests passing. The untracked mistral runner test is not part of the committed gate.</expected>
+    <commands>UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff format --check src scripts tests; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src scripts tests; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict --no-incremental src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q; cd frontend &amp;&amp; npm test -- --run &amp;&amp; npm run build</commands>
+    <expected>Ruff clean, strict MyPy clean, 311 Python tests passing, 9 frontend tests passing, and a successful TypeScript/Vite production build.</expected>
     <review>Run git diff --check, inspect staged diff, and confirm no private paths or credentials before every commit.</review>
   </verification>
   <git>
@@ -259,11 +259,11 @@ Copy the XML below as initialization context when handing Lunarbit to another co
 
 ## Next actions — ordered
 
-1. Add provenance-rich citation and graph-focus response contracts with red/green tests.
-2. Add durable authenticated conversation checkpoints and HITL state transitions.
-3. Wire citation cards, graph highlighting, history, reconnect, and accessibility into the frontend.
-4. Add the focused financial analytics/evaluation layer and A/B measurement harness.
-5. Complete CI/CD, deployment security, live Playwright coverage, privacy audit, and cloud release rehearsal.
+1. Complete a human-reviewed language-quality golden set and measure answer/citation/abstention regressions.
+2. Add explicit HITL state transitions for identity ambiguity and mutation proposals while keeping graph writes read-only by default.
+3. Add live browser E2E coverage for the deployed frontend, SSE chat, citations, graph focus, reconnect, and mobile layout.
+4. Complete cloud release rehearsal: Aura secrets, durable session volume, HTTPS/CORS, monitoring, backups, rollback, and privacy review.
+5. Publish the reviewed public deployment and record its image digest, schema/index versions, and release evidence.
 
 ## Decisions — append-only, newest first
 
