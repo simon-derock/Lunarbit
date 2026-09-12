@@ -3213,8 +3213,11 @@ Control: mandatory `MEMORY.md` start/end protocol and conflict reconciliation.
   four `NEO4J_*` environment variables; explicit CLI values remain supported.
 - Require an idempotent write and a post-write count equality check against the
   archive before exposing the graph to the API.
-- Current verified Aura baseline: 48,518 nodes and 69,527 relationships from
-  `data/processed/_graph/canonical_v1_20260823d`.
+- Current verified Aura baseline: 53,983 nodes and 85,607 relationships from
+  the complete idempotent economic-corpus load. The latest integrity audit
+  reports zero duplicate canonical outlet paths, zero orders with multiple
+  canonical merchants, and one intentionally quarantined food record with no
+  restaurant evidence.
 
 ## 32. Final standard
 
