@@ -70,6 +70,7 @@ def main() -> int:
 
     openapi = _required_json(_request(f"{api_url}/openapi.json", timeout=args.timeout))
     health = _required_json(_request(f"{api_url}/health", timeout=args.timeout))
+    ready = _required_json(_request(f"{api_url}/ready", timeout=args.timeout))
     snapshot_status, snapshot, snapshot_cors_origin = _request(
         f"{api_url}/v1/public/snapshot",
         origin=args.origin,
@@ -94,6 +95,7 @@ def main() -> int:
     assert_public_release(
         openapi=openapi,
         health=health,
+        ready=ready,
         snapshot=snapshot,
         snapshot_cors_origin=snapshot_cors_origin,
         showcase=showcase,

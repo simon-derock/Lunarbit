@@ -16,8 +16,8 @@ docker run --rm --publish 8000:8000 \
   lunarbit-public-api
 ```
 
-Without Neo4j configuration, the service serves the reviewed synthetic mirror.
-To expose the aggregate topology, provide only a read-only Neo4j account:
+The live public launcher requires Neo4j so that the browser never silently
+falls back to a synthetic graph. Provide only a read-only Neo4j account:
 
 ```sh
 docker run --rm --publish 8000:8000 \
@@ -55,6 +55,7 @@ deployed origin:
 
 ```sh
 curl --fail https://your-public-api.example/health
+curl --fail https://your-public-api.example/ready
 curl --fail https://your-public-api.example/v1/public/snapshot
 curl --fail --request POST https://your-public-api.example/v1/public/showcase-answer \
   --header 'content-type: application/json' \
@@ -75,9 +76,9 @@ uv run python scripts/verify_public_release.py \
   --origin https://your-nexus-insight.example
 ```
 
-It checks the documented route surface, exact CORS origin, public-payload
-validator, reviewed showcase trace, and absence of private retrieval routes. It
-does not print API response bodies.
+It checks the documented route surface, health and readiness, exact CORS origin,
+public-payload validator, reviewed showcase trace, and absence of private
+retrieval routes. It does not print API response bodies.
 
 The same audit, public container build, repository-hygiene check, Python suite,
 and Nexus Insight build run in [the GitHub Actions workflow](../.github/workflows/ci.yml)

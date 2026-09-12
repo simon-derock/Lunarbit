@@ -14,6 +14,7 @@ def test_public_release_audit_accepts_the_deployed_public_contract() -> None:
     assert_public_release(
         openapi=client.get("/openapi.json").json(),
         health=client.get("/health").json(),
+        ready=client.get("/ready").json(),
         snapshot=client.get("/v1/public/snapshot", headers={"Origin": origin}).json(),
         snapshot_cors_origin=client.get(
             "/v1/public/snapshot", headers={"Origin": origin}
@@ -34,6 +35,7 @@ def test_public_release_audit_rejects_private_routes_and_payload_leaks() -> None
         assert_public_release(
             openapi={"paths": {"/health": {}, "/v1/private/retrieval": {}}},
             health={"status": "ok", "service": "lunarbit-api", "version": "1.0.0"},
+            ready={"status": "ready", "graph": "configured"},
             snapshot={"mode": "synthetic_mirror"},
             snapshot_cors_origin="https://demo.example",
             showcase={"status": "verified", "answer": {"safe": "value"}},
@@ -46,6 +48,7 @@ def test_public_release_audit_rejects_private_routes_and_payload_leaks() -> None
             openapi={
                 "paths": {
                     "/health": {},
+                    "/ready": {},
                     "/v1/public/snapshot": {},
                     "/v1/query/plan": {},
                     "/v1/public/showcase-answer": {},
@@ -53,6 +56,30 @@ def test_public_release_audit_rejects_private_routes_and_payload_leaks() -> None
                 }
             },
             health={"status": "ok", "service": "lunarbit-api", "version": "1.0.0"},
+            ready={"status": "ready", "graph": "configured"},
+            snapshot={"source_hash": "a" * 64},
+            snapshot_cors_origin="https://demo.example",
+            showcase={"status": "verified", "answer": {"safe": "value"}},
+            private_route_status=404,
+            expected_origin="https://demo.example",
+        )
+
+
+def test_public_release_audit_rejects_unready_graph() -> None:
+    with pytest.raises(PublicReleaseAuditError, match="readiness"):
+        assert_public_release(
+            openapi={
+                "paths": {
+                    "/health": {},
+                    "/ready": {},
+                    "/v1/public/snapshot": {},
+                    "/v1/query/plan": {},
+                    "/v1/public/showcase-answer": {},
+                    "/v1/demo/answers/{answer_key}": {},
+                }
+            },
+            health={"status": "ok", "service": "lunarbit-api"},
+            ready={"status": "degraded", "graph": "unavailable"},
             snapshot={"source_hash": "a" * 64},
             snapshot_cors_origin="https://demo.example",
             showcase={"status": "verified", "answer": {"safe": "value"}},

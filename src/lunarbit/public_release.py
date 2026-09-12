@@ -13,6 +13,7 @@ from lunarbit.public import assert_public_payload
 _REQUIRED_PUBLIC_PATHS = frozenset(
     {
         "/health",
+        "/ready",
         "/v1/public/snapshot",
         "/v1/query/plan",
         "/v1/public/showcase-answer",
@@ -35,6 +36,7 @@ def assert_public_release(
     *,
     openapi: object,
     health: object,
+    ready: object,
     snapshot: object,
     snapshot_cors_origin: str | None,
     showcase: object,
@@ -54,6 +56,9 @@ def assert_public_release(
     health_payload = _mapping(health, name="health")
     if health_payload.get("status") != "ok" or health_payload.get("service") != "lunarbit-api":
         raise PublicReleaseAuditError("public health contract is not ready")
+    ready_payload = _mapping(ready, name="ready")
+    if ready_payload.get("status") != "ready":
+        raise PublicReleaseAuditError("public readiness contract is not ready")
     if snapshot_cors_origin != expected_origin:
         raise PublicReleaseAuditError("public snapshot CORS origin is not explicitly allowed")
     if private_route_status != 404:
