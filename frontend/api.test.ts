@@ -92,6 +92,8 @@ describe("SSE protocol parser", () => {
             verification_status: "verified",
             limitations: [],
             abstention_reason: null,
+            review_required: true,
+            review_reason: "identity_ambiguity",
           },
         });
         const frame = `event: answer\ndata: ${answer}\n\nevent: done\ndata: {}\n\n`;
@@ -113,6 +115,8 @@ describe("SSE protocol parser", () => {
     );
 
     expect(result.answer.direct_answer).toBe("You placed 4 orders.");
+    expect(result.answer.review_required).toBe(true);
+    expect(result.answer.review_reason).toBe("identity_ambiguity");
     expect(stages).toEqual(["retrieval"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
