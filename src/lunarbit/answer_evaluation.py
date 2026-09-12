@@ -33,6 +33,8 @@ class AnswerGolden(ContractModel):
     expected_calculation: str | None = Field(default=None, repr=False)
     minimum_citations: int = Field(ge=0)
     expected_abstention_reason: str | None = None
+    expected_review_required: bool = False
+    expected_review_reason: str | None = None
 
     @model_validator(mode="after")
     def expectation_is_coherent(self) -> AnswerGolden:
@@ -50,6 +52,8 @@ class AnswerGolden(ContractModel):
             or self.expected_abstention_reason is None
         ):
             raise ValueError("abstention goldens cannot expect answer content")
+        if self.expected_review_required != (self.expected_review_reason is not None):
+            raise ValueError("review goldens require a review flag and reason together")
         return self
 
 
@@ -62,6 +66,7 @@ class AnswerCaseOutcome(ContractModel):
     fact_count_matches: bool
     citation_supports: bool
     abstention_matches: bool
+    review_matches: bool
     latency_ms: Decimal = Field(ge=Decimal("0"))
 
 
@@ -73,6 +78,7 @@ class AnswerEvaluationSummary(ContractModel):
     fact_count_accuracy: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
     citation_support_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
     abstention_accuracy: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    review_accuracy: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
     p50_latency_ms: Decimal = Field(ge=Decimal("0"))
     p95_latency_ms: Decimal = Field(ge=Decimal("0"))
 
@@ -91,6 +97,7 @@ class AnswerVariantComparison(ContractModel):
     status_accuracy_delta: Decimal
     answer_exact_match_delta: Decimal
     citation_support_rate_delta: Decimal
+    review_accuracy_delta: Decimal
     p95_latency_delta_ms: Decimal
     candidate_non_regression: bool
 
@@ -115,11 +122,15 @@ def compare_answer_variants(
         citation_support_rate_delta=(
             candidate_summary.citation_support_rate - baseline_summary.citation_support_rate
         ),
+        review_accuracy_delta=(
+            candidate_summary.review_accuracy - baseline_summary.review_accuracy
+        ),
         p95_latency_delta_ms=candidate_summary.p95_latency_ms - baseline_summary.p95_latency_ms,
         candidate_non_regression=(
             candidate_summary.status_accuracy >= baseline_summary.status_accuracy
             and candidate_summary.citation_support_rate >= baseline_summary.citation_support_rate
             and candidate_summary.abstention_accuracy >= baseline_summary.abstention_accuracy
+            and candidate_summary.review_accuracy >= baseline_summary.review_accuracy
         ),
     )
 
@@ -164,6 +175,10 @@ def evaluate_grounded_answers(
                 abstention_matches=(
                     observed.abstention_reason == golden.expected_abstention_reason
                 ),
+                review_matches=(
+                    observed.review_required == golden.expected_review_required
+                    and observed.review_reason == golden.expected_review_reason
+                ),
                 latency_ms=latency_ms,
             )
         )
@@ -184,6 +199,7 @@ def evaluate_grounded_answers(
             fact_count_accuracy=_rate(tuple(value.fact_count_matches for value in values)),
             citation_support_rate=_rate(tuple(value.citation_supports for value in values)),
             abstention_accuracy=_rate(abstentions) if abstentions else Decimal("1"),
+            review_accuracy=_rate(tuple(value.review_matches for value in values)),
             p50_latency_ms=_percentile(latencies, Decimal("0.50")),
             p95_latency_ms=_percentile(latencies, Decimal("0.95")),
         ),

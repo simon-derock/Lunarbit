@@ -77,8 +77,37 @@ def test_answer_evaluation_scores_exactness_support_and_abstention() -> None:
     assert report.summary.fact_count_accuracy == Decimal("1")
     assert report.summary.citation_support_rate == Decimal("1")
     assert report.summary.abstention_accuracy == Decimal("1")
+    assert report.summary.review_accuracy == Decimal("1")
     assert report.summary.p95_latency_ms >= report.summary.p50_latency_ms
     assert report.outcomes[1].calculation_matches is False
+
+
+def test_answer_evaluation_scores_hitl_review_state() -> None:
+    golden = _golden("case:review", status=RuntimeStatus.ABSTAINED).model_copy(
+        update={
+            "expected_review_required": True,
+            "expected_review_reason": "identity_ambiguity",
+        }
+    )
+
+    def run(_: RuntimeRequest) -> PrivateGroundedAnswer:
+        return PrivateGroundedAnswer(
+            status="abstained",
+            direct_answer=None,
+            calculation=None,
+            fact_count=0,
+            citation_ids=(),
+            verification_status="abstained",
+            limitations=(),
+            abstention_reason="no_graph_facts",
+            review_required=True,
+            review_reason="identity_ambiguity",
+        )
+
+    report = evaluate_grounded_answers((golden,), run)
+
+    assert report.summary.review_accuracy == Decimal("1")
+    assert report.outcomes[0].review_matches is True
 
 
 def test_answer_evaluation_rejects_duplicate_case_identity() -> None:
