@@ -2,15 +2,16 @@
 
 ## Session handoff
 
-- Last updated: 2026-09-04
-- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, citation identifiers, and complete economic graph ingestion are implemented and pushed; remaining gates are human-reviewed language quality, durable production hosting, HITL, live E2E coverage, and final security/privacy review.
+- Last updated: 2026-09-12
+- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, session continuity, Cortex favicon, citation identifiers, canonical merchant identity resolution, evidence-backed spend totals, and complete economic graph ingestion are implemented and pushed; remaining gates are human-reviewed language quality, durable production hosting, HITL, live E2E coverage, and final security/privacy review.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `a460e63` (`fix(api): share resilient Aura driver across services`), pushed to `main`.
-- Recent commits: `5b17804` profile-artifact hygiene, `c6afc39` Neo4j credential typing, `a460e63` shared Aura driver.
-- Last passing checks: 265 Python tests, Ruff format/lint, strict MyPy across 43 modules, repository hygiene, frontend Vitest (3 tests), frontend TypeScript/Vite production build, live Aura snapshot, live private chat follow-up, browser-origin SSE proxy smoke test, production API container health/readiness smoke checks, and sanitized deployment preflight.
+- Last verified implementation commit: `4bfc86e` (`fix(audit): distinguish quarantined food orders`), pushed to `main`.
+- Recent commits: `19483ab` evidence-backed merchant spend totals, `44051d9` ambiguous merchant-prefix guard, `1d2f526` canonical merchant price history, `44385fe` canonical restaurant identity ranking, `4bfc86e` quarantined-order audit classification.
+- Last passing checks: 311 Python tests, Ruff format/lint, strict MyPy across 45 modules, repository hygiene, frontend Vitest (9 tests), frontend TypeScript/Vite production build, live Aura snapshot and chat verification from the latest completed runtime pass, browser-origin SSE proxy smoke test, and production API image build/non-root inspection.
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, or abstention quality drops.
 - Deployment verification: the complete economic archive was loaded idempotently into Aura and verified at exactly 53,983 nodes and 85,607 relationships (298 write batches; replay unchanged). The production launcher returned `/health` 200, `/ready` 200 with `graph=configured`, a live 346-node/99-edge bounded navigation projection, authenticated hybrid retrieval (`verified`, 30 dense + 30 lexical candidates, 10 evidence citations), and ordered SSE chat events. The local smoke server used a temporary writable session volume and was stopped after verification.
+- Latest graph-integrity audit: zero orders missing canonical outlets, zero duplicate canonical outlet paths, zero orders with multiple canonical merchants, zero numeric-only item names, zero evidence-less item observations, and zero unnormalized delivery mentions. One unresolved food record remains intentionally quarantined because its source contains no restaurant evidence; it is not counted as a graph defect.
 
 ## Goal-loop scope (2026-09-01)
 
