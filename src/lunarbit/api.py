@@ -400,6 +400,8 @@ def create_app(
             verification_status=context.verification.status.value,
             limitations=context.limitations,
             abstention_reason=context.abstention_reason,
+            review_required=context.review_required,
+            review_reason=context.review_reason,
         )
 
     @app.get("/health", response_model=HealthResponse)

@@ -156,6 +156,8 @@ class GroundedContext(ContractModel):
     citations: tuple[EvidenceCitation, ...]
     verification: EvidenceVerification
     abstention_reason: str | None = None
+    review_required: bool = False
+    review_reason: str | None = None
 
 
 def _claim_id(request: RuntimeRequest, plan: QueryPlan) -> str:
@@ -493,6 +495,12 @@ def retrieve_grounded_context(
                 abstention_reason=reason,
             ),
             abstention_reason=reason,
+            review_required=plan.disposition is QueryDisposition.CLARIFICATION_REQUIRED,
+            review_reason=(
+                "clarification_required"
+                if plan.disposition is QueryDisposition.CLARIFICATION_REQUIRED
+                else None
+            ),
         )
     queries = bind_query_plan(plan, request.slots)
     rows, query_complete = _execute_bounded(plan, queries, reader)

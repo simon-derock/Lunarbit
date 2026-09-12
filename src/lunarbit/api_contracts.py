@@ -75,6 +75,8 @@ class PrivateGroundedAnswer(ContractModel):
     verification_status: str
     limitations: tuple[str, ...]
     abstention_reason: str | None
+    review_required: bool = False
+    review_reason: str | None = None
 
 
 class PrivateCitation(ContractModel):

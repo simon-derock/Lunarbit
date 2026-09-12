@@ -86,6 +86,8 @@ def test_unbound_order_count_requests_scope_without_graph_access() -> None:
 
     assert result.status is RuntimeStatus.ABSTAINED
     assert result.abstention_reason == "clarification_required"
+    assert result.review_required is True
+    assert result.review_reason == "clarification_required"
 
 
 def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
