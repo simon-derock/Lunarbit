@@ -71,6 +71,7 @@ def test_answer_evaluation_scores_exactness_support_and_abstention() -> None:
     report = evaluate_grounded_answers(goldens, run)
 
     assert report.summary.cases == 3
+    assert report.evaluation_version == "grounded-answer-evaluation-v1.1.0"
     assert report.summary.status_accuracy == Decimal("1")
     assert report.summary.answer_exact_match == Decimal("1")
     assert report.summary.calculation_exact_match == Decimal("0.6666666666666666666666666667")

@@ -12,7 +12,7 @@ from lunarbit.api import PrivateGroundedAnswer
 from lunarbit.models import ContractModel
 from lunarbit.runtime import RuntimeRequest, RuntimeStatus
 
-ANSWER_EVALUATION_VERSION = "grounded-answer-evaluation-v1.0.0"
+ANSWER_EVALUATION_VERSION = "grounded-answer-evaluation-v1.1.0"
 
 
 class AnswerFamily(StrEnum):
