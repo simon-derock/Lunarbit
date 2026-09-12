@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  fetchPublicSnapshot,
   mapPublicSnapshot,
   parseSseFrame,
   streamPrivateChat,
@@ -47,6 +48,28 @@ describe("public snapshot adapter", () => {
     expect(snapshot.graph_edges[0]?.relationship_type).toBe("ORDERED_FROM");
     expect(snapshot.metrics[0]?.scope).toBe("neo4j_aggregate_projection");
     expect(snapshot.findings).toHaveLength(6);
+  });
+
+  it("retries a transient public projection failure before succeeding", async () => {
+    vi.stubGlobal("window", { setTimeout });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("temporarily unavailable", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+    try {
+      const result = await fetchPublicSnapshot();
+      expect(result.mode).toBe("neo4j_aggregate_projection");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      fetchMock.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -149,18 +172,44 @@ describe("SSE protocol parser", () => {
     );
     const citations: StreamAnswer["citations"] = [];
     const focus: string[][] = [];
+    const lifecycle: string[] = [];
 
     const result = await streamPrivateChat(
       "How many orders did I place?",
       vi.fn(),
-      (citation) => citations.push(citation),
-      (nodeIds) => focus.push(nodeIds),
+      (citation) => {
+        lifecycle.push("citation");
+        citations.push(citation);
+      },
+      (nodeIds) => {
+        lifecycle.push("graph_focus");
+        focus.push(nodeIds);
+      },
     );
 
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citation_id).toBe("runtime:citation:1");
     expect(focus).toEqual([["pub:order:alpha", "pub:merchant:ember"]]);
     expect(result.context_reused).toBe(true);
+    expect(lifecycle).toEqual(["citation", "graph_focus"]);
+    fetchMock.mockRestore();
+  });
+
+  it("fails closed when a stream ends before an answer event", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: thinking\ndata: {"stage":"retrieval"}\n\n'));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+
+    await expect(streamPrivateChat("Show my orders", vi.fn(), vi.fn(), vi.fn())).rejects.toThrow(
+      "chat stream ended without an answer",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     fetchMock.mockRestore();
   });
 
