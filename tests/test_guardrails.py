@@ -14,6 +14,20 @@ def test_api_rejects_wildcard_or_empty_cors_configuration() -> None:
         create_app(allowed_origins=())
 
 
+@pytest.mark.parametrize(
+    "origin",
+    (
+        "javascript:alert(1)",
+        "https://app.example/path",
+        "https://user:password@app.example",
+        "https://app.example/?redirect=internal",
+    ),
+)
+def test_api_rejects_malformed_or_credentialed_cors_origins(origin: str) -> None:
+    with pytest.raises(ValueError, match=r"valid HTTP\(S\) origins"):
+        create_app(allowed_origins=(origin,))
+
+
 def test_api_sets_security_headers_and_disables_response_caching() -> None:
     response = TestClient(create_app()).get("/health")
 
@@ -22,6 +36,10 @@ def test_api_sets_security_headers_and_disables_response_caching() -> None:
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["cross-origin-resource-policy"] == "same-origin"
     assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["content-security-policy"] == (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    )
+    assert response.headers["x-permitted-cross-domain-policies"] == "none"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
 

@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable, Generator, Sequence
 from secrets import compare_digest
 from time import monotonic, sleep
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -99,6 +100,23 @@ def validate_public_origins(origins: Sequence[str]) -> tuple[str, ...]:
         raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS must contain at least one origin")
     if "*" in normalized:
         raise ValueError("LUNARBIT_PUBLIC_ALLOWED_ORIGINS cannot contain a wildcard")
+    for origin in normalized:
+        parsed = urlparse(origin)
+        try:
+            origin_parts = (parsed.hostname, parsed.port)
+        except ValueError as error:
+            raise ValueError("allowed origins must be valid HTTP(S) origins") from error
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not origin_parts[0]
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("allowed origins must be valid HTTP(S) origins")
     return normalized
 
 
@@ -266,6 +284,10 @@ def create_app(
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        )
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
