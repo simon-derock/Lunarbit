@@ -304,7 +304,11 @@ def _price_goldens(
         by_order: dict[str, tuple[datetime, Decimal, str]] = {}
         conflict = False
         for record in records:
-            if record[0] != merchant_name or query_item not in record[1]:
+            # Goldens must represent one canonical item identity.  Substring
+            # matching would merge distinct products such as "rice" and
+            # "rice bowl", creating false conflicts or silently suppressing
+            # otherwise valid price histories.
+            if record[0] != merchant_name or record[1] != query_item:
                 continue
             candidate = (record[3], record[4], record[5])
             previous = by_order.get(record[2])

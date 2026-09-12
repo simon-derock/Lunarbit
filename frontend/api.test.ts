@@ -4,6 +4,7 @@ import {
   parseSseFrame,
   streamPrivateChat,
   type PublicSnapshotPayload,
+  type StreamAnswer,
 } from "./api";
 
 const payload: PublicSnapshotPayload = {
@@ -120,6 +121,46 @@ describe("SSE protocol parser", () => {
     expect(stages).toEqual(["retrieval"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
+    fetchMock.mockRestore();
+  });
+
+  it("delivers streamed citations and graph focus before the final answer", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            'event: citation\ndata: {"citation_id":"runtime:citation:1","chunk_node_id":"chunk:1","source_node_id":"source:1","authority_score":0.98,"supports_claim_ids":["claim:1"],"quality_flags":[]}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode('event: graph_focus\ndata: {"node_ids":["pub:order:alpha","pub:merchant:ember"]}\n\n'),
+        );
+        controller.enqueue(
+          encoder.encode(
+            'event: answer\ndata: {"session_id":"session:test","turn_index":2,"context_reused":true,"answer":{"status":"verified","direct_answer":"Four orders.","calculation":null,"fact_count":4,"citation_ids":["runtime:citation:1"],"citations":[],"verification_status":"verified","limitations":[],"abstention_reason":null,"review_required":false,"review_reason":null}}\n\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const citations: StreamAnswer["citations"] = [];
+    const focus: string[][] = [];
+
+    const result = await streamPrivateChat(
+      "How many orders did I place?",
+      vi.fn(),
+      (citation) => citations.push(citation),
+      (nodeIds) => focus.push(nodeIds),
+    );
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citation_id).toBe("runtime:citation:1");
+    expect(focus).toEqual([["pub:order:alpha", "pub:merchant:ember"]]);
+    expect(result.context_reused).toBe(true);
     fetchMock.mockRestore();
   });
 
