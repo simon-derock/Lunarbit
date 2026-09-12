@@ -124,7 +124,7 @@ The finish line is a deployable, privacy-safe financial-intelligence product, no
   evidence audits while compressed indexes provide scale-efficient candidate
   search across future Neo4j, Zilliz/Milvus, LanceDB, and CockroachDB
   projections.
-- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, canonical graph `v1`, economic corpus `economic-corpus-v1.0.0`, financial chunks `financial-intelligence-chunks-v1.0.0`, retrieval policy `hybrid-retrieval-v1.0.0`, answer evaluation `grounded-answer-evaluation-v1.0.0`, package `0.1.0`.
+- Schema/model/index versions in use: extraction `1.0.0`, chunk schema `1.0.0`, agentic contract `1.5.0`, post-processing `1.0.0`, canonical graph `v1`, economic corpus `economic-corpus-v1.0.0`, financial chunks `financial-intelligence-chunks-v1.0.0`, retrieval policy `hybrid-retrieval-v1.0.0`, answer evaluation `grounded-answer-evaluation-v1.1.0`, package `0.1.0`.
 - Latest metrics snapshot:
   - Relevant source emails: 456
   - Excluded unrelated emails: 1
@@ -239,7 +239,7 @@ Copy the XML below as initialization context when handing Lunarbit to another co
   </interfaces>
   <verification>
     <commands>UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff format --check src scripts tests; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src scripts tests; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict --no-incremental src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q; cd frontend &amp;&amp; npm test -- --run &amp;&amp; npm run build</commands>
-    <expected>Ruff clean, strict MyPy clean, 311 Python tests passing, 9 frontend tests passing, and a successful TypeScript/Vite production build.</expected>
+    <expected>Ruff clean, strict MyPy clean, 312 collected Python tests, 9 frontend tests passing, and a successful TypeScript/Vite production build.</expected>
     <review>Run git diff --check, inspect staged diff, and confirm no private paths or credentials before every commit.</review>
   </verification>
   <git>
