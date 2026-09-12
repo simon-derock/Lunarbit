@@ -73,7 +73,13 @@ export interface ChatStreamResult {
 
 export interface SessionHistory {
   session_id: string;
-  turns: { turn_index: number; question: string; status: string }[];
+  turns: {
+    turn_index: number;
+    question: string;
+    status: string;
+    review_required: boolean;
+    review_reason: string | null;
+  }[];
 }
 
 export function parseSseFrame(frame: string): { event: string; data: Record<string, unknown> } | null {

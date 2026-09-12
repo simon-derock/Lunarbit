@@ -126,6 +126,26 @@ def test_sqlite_store_can_be_reopened_after_explicit_close(tmp_path) -> None:
     assert reopened.history(session_id) == ()
 
 
+def test_sqlite_store_persists_hitl_review_state(tmp_path) -> None:
+    database = tmp_path / "sessions.sqlite3"
+    store = SQLiteConversationStore(str(database))
+    session_id = store.create()
+    store.append(
+        session_id,
+        question="How many orders from Hotel?",
+        slots=QuerySlots(merchant_name="hotel"),
+        status="abstained",
+        review_required=True,
+        review_reason="identity_ambiguity",
+    )
+    store.close()
+
+    reopened = SQLiteConversationStore(str(database))
+    turn = reopened.history(session_id)[0]
+    assert turn.review_required is True
+    assert turn.review_reason == "identity_ambiguity"
+
+
 class StubConversationBackend:
     def __init__(self) -> None:
         self.requests: list[RuntimeRequest] = []

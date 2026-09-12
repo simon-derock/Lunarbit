@@ -101,6 +101,8 @@ class PrivateSessionTurn(ContractModel):
     turn_index: int = Field(ge=1)
     question: str = Field(min_length=3, max_length=500)
     status: str
+    review_required: bool = False
+    review_reason: str | None = None
 
 
 class PrivateSessionHistory(ContractModel):

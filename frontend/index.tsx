@@ -602,7 +602,7 @@ export function Console() {
             )}
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
             <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · {graphFocusIds.length} focus nodes · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
-            {sessionHistory && sessionHistory.turns.length > 1 && <div className="ask-history">{sessionHistory.turns.slice(0, -1).map((turn) => <span key={turn.turn_index}>↳ {turn.question}</span>)}</div>}
+            {sessionHistory && sessionHistory.turns.length > 1 && <div className="ask-history">{sessionHistory.turns.slice(0, -1).map((turn) => <span key={turn.turn_index}>↳ {turn.question}{turn.review_required ? ` · review: ${turn.review_reason ?? "required"}` : ""}</span>)}</div>}
             {(streamCitations.length > 0 || chatResult.answer.citations.length > 0) && (
               <div className="ask-citations" aria-label="Evidence citations">
                 {(streamCitations.length ? streamCitations : chatResult.answer.citations).slice(0, 6).map((citation) => <span key={citation.citation_id}>{citation.citation_id} · {(citation.authority_score * 100).toFixed(0)}%</span>)}

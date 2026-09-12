@@ -24,6 +24,8 @@ class SessionTurn:
     question: str
     slots: QuerySlots
     status: str
+    review_required: bool = False
+    review_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,13 +217,23 @@ class ConversationStore:
         question: str,
         slots: QuerySlots,
         status: str,
+        review_required: bool = False,
+        review_reason: str | None = None,
     ) -> int:
         now = self.clock()
         with self._lock:
             self._purge_expired(now)
             state = self._require(session_id)
             turn_index = state.next_turn_index
-            state.turns.append(SessionTurn(question=question, slots=slots, status=status))
+            state.turns.append(
+                SessionTurn(
+                    question=question,
+                    slots=slots,
+                    status=status,
+                    review_required=review_required,
+                    review_reason=review_reason,
+                )
+            )
             state.turns = state.turns[-self.max_turns :]
             state.next_turn_index += 1
             state.updated_at = now
@@ -269,11 +281,19 @@ class SQLiteConversationStore:
             "question TEXT NOT NULL, slots TEXT NOT NULL, status TEXT NOT NULL, "
             "PRIMARY KEY(session_id, turn_index));"
         )
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(turns)").fetchall()}
+        if "review_required" not in columns:
+            self._db.execute(
+                "ALTER TABLE turns ADD COLUMN review_required INTEGER NOT NULL DEFAULT 0"
+            )
+        if "review_reason" not in columns:
+            self._db.execute("ALTER TABLE turns ADD COLUMN review_reason TEXT")
         self._db.commit()
 
     def _load(self, session_id: str) -> None:
         rows = self._db.execute(
-            "SELECT question, slots, status FROM turns WHERE session_id = ? ORDER BY turn_index",
+            "SELECT question, slots, status, review_required, review_reason "
+            "FROM turns WHERE session_id = ? ORDER BY turn_index",
             (session_id,),
         ).fetchall()
         if session_id not in self._memory._sessions:
@@ -292,9 +312,13 @@ class SQLiteConversationStore:
         state = self._memory._sessions[session_id]
         state.turns = [
             SessionTurn(
-                question=q, slots=QuerySlots.model_validate(json.loads(slots)), status=status
+                question=q,
+                slots=QuerySlots.model_validate(json.loads(slots)),
+                status=status,
+                review_required=bool(review_required),
+                review_reason=review_reason,
             )
-            for q, slots, status in rows
+            for q, slots, status, review_required, review_reason in rows
         ]
         state.next_turn_index = len(state.turns) + 1
 
@@ -312,14 +336,38 @@ class SQLiteConversationStore:
             self._load(session_id)
             return self._memory.prepare(session_id, question=question, slots=slots)
 
-    def append(self, session_id: str, *, question: str, slots: QuerySlots, status: str) -> int:
+    def append(
+        self,
+        session_id: str,
+        *,
+        question: str,
+        slots: QuerySlots,
+        status: str,
+        review_required: bool = False,
+        review_reason: str | None = None,
+    ) -> int:
         with self._lock:
             self._load(session_id)
-            index = self._memory.append(session_id, question=question, slots=slots, status=status)
+            index = self._memory.append(
+                session_id,
+                question=question,
+                slots=slots,
+                status=status,
+                review_required=review_required,
+                review_reason=review_reason,
+            )
             self._db.execute(
-                "INSERT INTO turns(session_id, turn_index, question, slots, status) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (session_id, index, question, slots.model_dump_json(), status),
+                "INSERT INTO turns(session_id, turn_index, question, slots, status, "
+                "review_required, review_reason) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    session_id,
+                    index,
+                    question,
+                    slots.model_dump_json(),
+                    status,
+                    int(review_required),
+                    review_reason,
+                ),
             )
             self._db.commit()
             return index

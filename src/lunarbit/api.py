@@ -647,6 +647,8 @@ def create_app(
                 question=question,
                 slots=prepared.slots,
                 status=answer.status,
+                review_required=answer.review_required,
+                review_reason=answer.review_reason,
             )
             record_trace(
                 http_request,
@@ -683,7 +685,13 @@ def create_app(
             return PrivateSessionHistory(
                 session_id=session_id,
                 turns=tuple(
-                    PrivateSessionTurn(turn_index=index, question=turn.question, status=turn.status)
+                    PrivateSessionTurn(
+                        turn_index=index,
+                        question=turn.question,
+                        status=turn.status,
+                        review_required=turn.review_required,
+                        review_reason=turn.review_reason,
+                    )
                     for index, turn in enumerate(turns, start=1)
                 ),
             )
@@ -746,7 +754,12 @@ def create_app(
                     )
                     return
                 turn_index = sessions.append(
-                    session_id, question=question, slots=prepared.slots, status=answer.status
+                    session_id,
+                    question=question,
+                    slots=prepared.slots,
+                    status=answer.status,
+                    review_required=answer.review_required,
+                    review_reason=answer.review_reason,
                 )
                 for citation in answer.citations:
                     yield (
