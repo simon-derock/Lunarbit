@@ -157,3 +157,35 @@ def test_variant_comparison_flags_quality_regression_on_same_goldens() -> None:
     assert comparison.status_accuracy_delta == 0
     assert comparison.citation_support_rate_delta == -1
     assert comparison.candidate_non_regression is False
+
+
+def test_variant_comparison_rejects_hitl_review_regression() -> None:
+    golden = _golden("case:review-ab", status=RuntimeStatus.ABSTAINED).model_copy(
+        update={
+            "expected_review_required": True,
+            "expected_review_reason": "identity_ambiguity",
+        }
+    )
+
+    def answer(*, review: bool) -> PrivateGroundedAnswer:
+        return PrivateGroundedAnswer(
+            status="abstained",
+            direct_answer=None,
+            calculation=None,
+            fact_count=0,
+            citation_ids=(),
+            verification_status="abstained",
+            limitations=(),
+            abstention_reason="no_graph_facts",
+            review_required=review,
+            review_reason="identity_ambiguity" if review else None,
+        )
+
+    comparison = compare_answer_variants(
+        (golden,),
+        lambda _: answer(review=True),
+        lambda _: answer(review=False),
+    )
+
+    assert comparison.review_accuracy_delta == -1
+    assert comparison.candidate_non_regression is False
