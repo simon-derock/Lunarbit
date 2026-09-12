@@ -587,8 +587,19 @@ export function Console() {
 
         {chatResult && (
           <section className="ask-answer pointer-events-auto" aria-live="polite">
-            <div className="tag">verified response · {chatResult.answer.verification_status}</div>
+            <div className="tag">
+              {chatResult.answer.review_required
+                ? "human review needed · clarification"
+                : `verified response · ${chatResult.answer.verification_status}`}
+            </div>
             <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
+            {chatResult.answer.review_required && (
+              <p className="ask-calculation">
+                {chatResult.answer.review_reason === "clarification_required"
+                  ? "Please narrow the restaurant, platform, item, or time scope before Lunarbit reads the graph."
+                  : "Lunarbit is waiting for a human clarification before continuing."}
+              </p>
+            )}
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
             <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · {graphFocusIds.length} focus nodes · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>
             {sessionHistory && sessionHistory.turns.length > 1 && <div className="ask-history">{sessionHistory.turns.slice(0, -1).map((turn) => <span key={turn.turn_index}>↳ {turn.question}</span>)}</div>}

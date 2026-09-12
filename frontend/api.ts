@@ -60,6 +60,8 @@ export interface StreamAnswer {
   verification_status: string;
   limitations: string[];
   abstention_reason: string | null;
+  review_required: boolean;
+  review_reason: string | null;
 }
 
 export interface ChatStreamResult {
