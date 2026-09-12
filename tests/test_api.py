@@ -501,6 +501,35 @@ def test_private_chat_maps_langgraph_failures_to_safe_http_status() -> None:
     assert response.json() == {"detail": "private workflow execution failed"}
 
 
+def test_private_chat_stream_does_not_leak_workflow_exception_text() -> None:
+    class LeakingFailureWorkflow(FailingPrivateWorkflow):
+        def invoke(self, question: str, *, slots: QuerySlots, thread_id: str) -> GroundedContext:
+            raise LangGraphExecutionError(
+                "provider response contains secret-cypher-and-source-details"
+            )
+
+    client = TestClient(
+        create_app(
+            private_workflow=LeakingFailureWorkflow(),
+            private_api_token="local-secret-token",
+        )
+    )
+
+    response = client.post(
+        "/v1/private/chat/stream",
+        headers={
+            "Authorization": "Bearer local-secret-token",
+            "Accept": "text/event-stream",
+        },
+        json={"question": "How many orders came from Ember Kitchen?"},
+    )
+
+    assert response.status_code == 200
+    assert '"code":"answer_unavailable"' in response.text
+    assert '"detail":"private answer unavailable"' in response.text
+    assert "secret-cypher-and-source-details" not in response.text
+
+
 def test_private_answer_uses_the_same_bearer_security_boundary() -> None:
     client = TestClient(
         create_app(

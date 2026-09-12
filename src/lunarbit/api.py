@@ -740,17 +740,26 @@ def create_app(
                             )
                         )
                 except (HTTPException, LangGraphExecutionError, LangGraphStateError) as error:
+                    # Headers are already committed when the generator runs. Never serialize
+                    # exception text into SSE: workflow/provider errors can contain Cypher,
+                    # source identifiers, or upstream response details.
+                    _LOGGER.error(
+                        "private chat stream failed; error_type=%s",
+                        type(error).__name__,
+                    )
                     yield (
-                        "event: error\ndata: "
-                        + json.dumps(
-                            {
-                                "code": "answer_unavailable",
-                                "detail": str(
-                                    error.detail if isinstance(error, HTTPException) else error
-                                ),
-                            }
-                        )
-                        + "\n\n"
+                        'event: error\ndata: {"code":"answer_unavailable",'
+                        '"detail":"private answer unavailable"}\n\n'
+                    )
+                    return
+                except Exception as error:  # pragma: no cover - defensive process boundary
+                    _LOGGER.error(
+                        "private chat stream crashed; error_type=%s",
+                        type(error).__name__,
+                    )
+                    yield (
+                        'event: error\ndata: {"code":"answer_unavailable",'
+                        '"detail":"private answer unavailable"}\n\n'
                     )
                     return
                 turn_index = sessions.append(
