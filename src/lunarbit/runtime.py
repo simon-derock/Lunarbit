@@ -470,6 +470,16 @@ def _execute_bounded(
     return tuple(rows), complete
 
 
+def _review_state(limitations: tuple[str, ...]) -> tuple[bool, str | None]:
+    """Translate deterministic ambiguity signals into an explicit HITL state."""
+    joined = " ".join(limitations).lower()
+    if "matched multiple reviewed restaurant identities" in joined:
+        return True, "identity_ambiguity"
+    if "source totals conflict" in joined or "multiple currencies" in joined:
+        return True, "financial_conflict"
+    return False, None
+
+
 def retrieve_grounded_context(
     request: RuntimeRequest,
     reader: GraphReader,
@@ -532,6 +542,7 @@ def retrieve_grounded_context(
     reason = verification.abstention_reason
     if status is RuntimeStatus.ABSTAINED and reason is None:
         reason = "no_graph_facts"
+    review_required, review_reason = _review_state(limitations)
     return GroundedContext(
         status=status,
         question=request.question,
@@ -543,4 +554,6 @@ def retrieve_grounded_context(
         citations=citations,
         verification=verification,
         abstention_reason=reason,
+        review_required=review_required,
+        review_reason=review_reason,
     )

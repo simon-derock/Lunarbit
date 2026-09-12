@@ -131,6 +131,8 @@ def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
 
     assert result.status is RuntimeStatus.ABSTAINED
     assert result.direct_answer is None
+    assert result.review_required is True
+    assert result.review_reason == "identity_ambiguity"
 
 
 def test_merchant_spend_uses_customer_totals_once_per_order() -> None:
