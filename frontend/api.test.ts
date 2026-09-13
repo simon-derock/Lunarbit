@@ -66,6 +66,7 @@ describe("public snapshot adapter", () => {
       const result = await fetchPublicSnapshot();
       expect(result.mode).toBe("neo4j_aggregate_projection");
       expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/public/snapshot");
     } finally {
       fetchMock.mockRestore();
       vi.unstubAllGlobals();

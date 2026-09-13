@@ -1,6 +1,12 @@
 import type { Finding, GraphEdge, GraphNode, LayerId, Metric, Snapshot } from "./graph";
 
-const API_BASE = import.meta.env.VITE_LUNARBIT_API_URL ?? "http://127.0.0.1:8000";
+// Same-origin proxy is the safe local/network default. A loopback URL would
+// resolve on the visitor's device and breaks phones or another laptop on LAN.
+const API_BASE = import.meta.env.VITE_LUNARBIT_API_URL ?? "";
+
+function publicApiUrl(path: string): string {
+  return API_BASE ? `${API_BASE}${path}` : `/api/public${path}`;
+}
 
 async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit, attempts = 3): Promise<Response> {
   let lastError: unknown;
@@ -139,13 +145,14 @@ export async function streamPrivateChat(
 }
 
 export async function fetchPublicSnapshot(signal?: AbortSignal): Promise<PublicSnapshotPayload> {
-  const response = await fetchWithRetry(`${API_BASE}/v1/public/snapshot`, { signal });
+  const response = await fetchWithRetry(publicApiUrl("/snapshot"), { signal });
   if (!response.ok) throw new Error(`snapshot request failed: ${response.status}`);
   return (await response.json()) as PublicSnapshotPayload;
 }
 
 export async function fetchQueryPlan(question: string): Promise<PublicQueryPlanPayload> {
-  const response = await fetchWithRetry(`${API_BASE}/v1/query/plan`, {
+  const url = API_BASE ? `${API_BASE}/v1/query/plan` : "/api/query/plan";
+  const response = await fetchWithRetry(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
