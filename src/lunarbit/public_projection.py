@@ -177,7 +177,7 @@ _NAVIGATION_NODE_CYPHER = (
     "AND NOT ($label = 'Merchant' AND node:Merchant "
     "AND EXISTS { MATCH (node)-[:CANONICAL_OF]->(:MerchantIdentity) }) "
     "AND NOT ($label = 'PersonMention' AND node:PersonMention "
-    "AND EXISTS { MATCH (node)-[:RESOLVED_TO]->(:PersonIdentity) }) "
+    "AND EXISTS { MATCH (node)-[]-(:PersonIdentity) }) "
     "RETURN node.node_id AS canonical_id, labels(node) AS labels, "
     "node.platform AS platform, node.order_type AS order_type, "
     "node.display_name_private AS display_name_private, "
