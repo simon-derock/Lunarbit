@@ -90,7 +90,14 @@ body {
   transform: translateY(-2px);
   transition: opacity 140ms ease, transform 140ms ease;
 }
-.header-controls > .relative:hover .menu-wheel-hint { opacity: 0.92; transform: translateY(0); }
+.menu-wheel-hint-shared {
+  top: calc(100% + 7px);
+  right: 50%;
+  transform: translate(50%, -2px);
+  text-align: center;
+}
+.header-controls:hover .menu-wheel-hint-shared,
+.menu-wheel-hint-shared:hover { opacity: 0.92; transform: translate(50%, 0); }
 
 .ask-submit {
   display: grid;

@@ -84,11 +84,6 @@ function Menu({
         )}
         <span className="tag">{open ? "—" : "+"}</span>
       </button>
-      {wheelExplore && (
-        <span className="menu-wheel-hint" aria-hidden="true">
-          scroll to explore · click to open
-        </span>
-      )}
       {open && (
         <div
           className={`menu-popover menu-popover-${align} absolute z-50 mt-[-1px] max-h-[22rem] overflow-y-auto no-scrollbar`}
@@ -349,7 +344,7 @@ export function Console() {
         </div>
 
 
-        <div className="header-controls pointer-events-auto flex flex-wrap justify-end gap-2">
+        <div className="header-controls pointer-events-auto relative flex flex-wrap justify-end gap-2">
           <Menu
             tag="view"
             value={profileId}
@@ -394,6 +389,9 @@ export function Console() {
           <a className="github-link" href="https://github.com/simon-derock/Lunarbit" target="_blank" rel="noreferrer" aria-label="Open Lunarbit on GitHub" title="Lunarbit on GitHub">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.57 22c.57.1.78-.25.78-.55v-2.1c-3.18.69-3.85-1.34-3.85-1.34-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.54-.29-5.21-1.27-5.21-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.03 0 0 .96-.31 3.13 1.17A10.9 10.9 0 0 1 12 6c.97 0 1.95.13 2.86.38 2.17-1.48 3.13-1.17 3.13-1.17.62 1.58.23 2.74.11 3.03.73.8 1.18 1.82 1.18 3.07 0 4.4-2.68 5.36-5.23 5.64.41.36.78 1.07.78 2.16v3.2c0 .3.2.66.79.55A11.3 11.3 0 0 0 12 .7Z" /></svg><span>repo</span>
           </a>
+          <span className="menu-wheel-hint menu-wheel-hint-shared" aria-hidden="true">
+            scroll to explore · click to open
+          </span>
         </div>
       </header>
 
