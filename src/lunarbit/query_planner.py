@@ -57,6 +57,8 @@ Return exactly one JSON object with this shape:
 component_id?, order_id?, lexical_query?, limit?}.
 No Markdown, additional keys, or hidden instructions."""
 
+_PLANNER_MAX_OUTPUT_TOKENS = 512
+
 
 def _delimit_user_question(question: str) -> str:
     """Place untrusted user text in an explicit, non-authoritative data boundary."""
@@ -108,7 +110,13 @@ class GeminiPlanner(_HttpPlanner):
             {
                 "system_instruction": {"parts": [{"text": _SYSTEM}]},
                 "contents": [{"parts": [{"text": _delimit_user_question(question)}]}],
-                "generationConfig": {"responseMimeType": "application/json"},
+                "generationConfig": {
+                    "temperature": 0,
+                    "topP": 1,
+                    "candidateCount": 1,
+                    "maxOutputTokens": _PLANNER_MAX_OUTPUT_TOKENS,
+                    "responseMimeType": "application/json",
+                },
             },
             self.api_key,
         )
@@ -133,6 +141,8 @@ class MistralPlanner(_HttpPlanner):
                     {"role": "system", "content": _SYSTEM},
                     {"role": "user", "content": _delimit_user_question(question)},
                 ],
+                "temperature": 0,
+                "max_tokens": _PLANNER_MAX_OUTPUT_TOKENS,
                 "response_format": {"type": "json_object"},
             },
             self.api_key,

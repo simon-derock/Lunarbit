@@ -116,6 +116,11 @@ rules. Gemini is the primary structured planner when configured, Mistral is the 
 deterministic planner remains the fail-closed path when providers are unavailable or return an
 invalid proposal.
 
+Provider calls use explicit untrusted-input delimiters, temperature-zero JSON generation, bounded
+output budgets, and schema validation at the boundary. A valid model response is still only a
+proposal: deterministic slot binding, governed read queries, evidence verification, and abstention
+decide what reaches the user.
+
 Every transition is checkpointable by session, with bounded history and explicit error classes.
 Prompt-injection attempts, instruction extraction, unsupported domains, missing slots, ambiguous
 merchant identities, conflicting financial scopes, and incomplete evidence become typed rejection,
