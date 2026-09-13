@@ -1,8 +1,8 @@
 # Lunarbit
 
-## Evidence-Verifiable Personal Commerce GraphRAG
+## Evidence-Verifiable Personal Financial Intelligence GraphRAG
 
-> **Reconstructing six years of food commerce into an auditable personal economic-intelligence graph.**
+> **Lunarbit is a finance-first GraphRAG system that reconstructs six years of personal food commerce into an auditable economic-intelligence graph—revealing how prices, fees, discounts, merchants, and spending behavior evolve over time.**
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/backend%20tests-332%20collected-2ea44f)](tests/)
@@ -10,7 +10,7 @@
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/private%20corpus-never%20committed-6f42c1)](#privacy-by-design)
 
-Lunarbit turns a private archive of Zomato and Swiggy food-delivery and grocery records—emails, order summaries, merchant invoices, fee invoices, delivery evidence, and history exports—into a provenance-first temporal Neo4j knowledge graph and finance-first intelligence engine.
+Lunarbit turns a private archive of Zomato and Swiggy food-delivery and grocery records—emails, order summaries, merchant invoices, fee invoices, delivery evidence, and history exports—into a provenance-first temporal Neo4j knowledge graph and economic-intelligence engine.
 
 It is a product-minded GraphRAG system for difficult questions about orders, prices, merchants, fees, discounts, taxes, payments, delivery evidence, and spending change. Every answer is designed to distinguish what a source asserted, what deterministic code normalized, what was calculated, what remains uncertain, and which evidence supports the claim.
 
