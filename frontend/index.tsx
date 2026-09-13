@@ -356,6 +356,7 @@ export function Console() {
             onChange={setProfileId}
             align="start"
             width="17rem"
+            wheelExplore
             options={GRAPH_PROFILES.map((p) => ({ id: p.id, name: p.name, hint: p.scope }))}
           />
           <Menu
