@@ -14,16 +14,22 @@ AUDITS: dict[str, str] = {
     "food_orders_missing_outlet": (
         "MATCH (order:Order) "
         "WHERE order.order_type <> 'instamart' "
-        "AND coalesce(order.merchant_resolution_status, '') <> 'merchant_unresolved_no_evidence' "
+        "AND coalesce(order.identity_status, '') <> 'quarantined_missing_merchant_evidence' "
         "AND NOT (order)-[:ORDERED_FROM]->(:Outlet) "
         "RETURN count(order) AS count"
     ),
     "food_orders_quarantined_without_outlet": (
         "MATCH (order:Order) "
         "WHERE order.order_type <> 'instamart' "
-        "AND order.merchant_resolution_status = 'merchant_unresolved_no_evidence' "
-        "AND NOT (order)-[:ORDERED_FROM]->(:Outlet) "
+        "AND order.identity_status = 'quarantined_missing_merchant_evidence' "
+        "AND NOT (order)-[:ORDERED_FROM]->(:MerchantIdentity) "
         "RETURN count(order) AS count"
+    ),
+    "food_orders_missing_canonical_hotel": (
+        "MATCH (order:Order) WHERE order.order_type <> 'instamart' "
+        "AND NOT (order)-[:ORDERED_FROM]->(:MerchantIdentity) "
+        "AND NOT (order)-[:ORDERED_FROM]->(:Outlet)-[:OUTLET_OF]->(:Merchant)-[:CANONICAL_OF]->"
+        "(:MerchantIdentity) RETURN count(order) AS count"
     ),
     "orders_without_platform": (
         "MATCH (order:Order) WHERE NOT (order)-[:PLACED_ON]->(:Platform) "
@@ -47,10 +53,9 @@ AUDITS: dict[str, str] = {
         "RETURN count(order) AS count"
     ),
     "orders_with_duplicate_canonical_outlet_paths": (
-        "MATCH (order:Order)-[:ORDERED_FROM]->(outlet:Outlet)-[:OUTLET_OF]->"
-        "(merchant:Merchant)-[:CANONICAL_OF]->(identity:MerchantIdentity) "
-        "WITH order, identity, count(outlet) AS paths WHERE paths > 1 "
-        "RETURN count(*) AS count"
+        "MATCH (order:Order)-[:ORDERED_FROM]->(identity:MerchantIdentity) "
+        "WITH order, count(DISTINCT identity) AS identities WHERE identities > 1 "
+        "RETURN count(order) AS count"
     ),
     "orders_with_multiple_canonical_merchants": (
         "MATCH (order:Order)-[:ORDERED_FROM]->(outlet:Outlet)-[:OUTLET_OF]->"

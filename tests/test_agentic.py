@@ -585,6 +585,8 @@ def test_agentic_prompt_enforces_closed_entity_vocabulary() -> None:
         agentic_module._SYSTEM_PROMPT
     )
     assert "unsupported relations are forbidden" in agentic_module._SYSTEM_PROMPT
+    assert "bounded evidence-first ReAct discipline" in agentic_module._SYSTEM_PROMPT
+    assert "Do not reveal chain-of-thought" in agentic_module._SYSTEM_PROMPT
 
 
 def test_agentic_prompt_supplies_code_owned_identity_and_coverage_ledgers() -> None:

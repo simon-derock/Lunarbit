@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 
+import lunarbit.query_planner as query_planner
 from lunarbit.langgraph_workflow import (
     GraphRAGWorkflow,
     LangGraphCheckpointError,
@@ -30,6 +31,12 @@ class FakeReader:
                 },
             )
         return ()
+
+
+def test_planner_prompt_uses_bounded_react_without_exposing_reasoning() -> None:
+    assert "bounded ReAct loop" in query_planner._SYSTEM
+    assert "Never write Cypher" in query_planner._SYSTEM
+    assert "Do not disclose chain-of-thought" in query_planner._SYSTEM
 
 
 def test_workflow_runs_governed_query_and_checkpoints_state() -> None:

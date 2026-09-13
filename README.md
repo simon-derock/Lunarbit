@@ -5,7 +5,7 @@
 > **Reconstructing six years of food commerce into an auditable personal economic-intelligence graph.**
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/backend%20tests-231%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/backend%20tests-329%20collected-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/private%20corpus-never%20committed-6f42c1)](#privacy-by-design)
@@ -97,6 +97,40 @@ The final corpus is multi-resolution rather than one flat chunk stream:
 | Verification | Citation support, coverage, provenance, conflict, and abstention gates |
 
 The serving reference is Cohere Embed v4 at 1,536 dimensions. The retained 1,024-dimensional Mistral embedding is an explicit ablation baseline. Index parameters, recall, grounding, latency, and storage are benchmarked rather than assumed.
+
+## Governed agent control plane
+
+Lunarbit uses an explicit, checkpointable LangGraph workflow rather than an unconstrained
+question-to-query loop:
+
+```text
+guardrail → reason/classify → plan operations → retrieve exact + lexical + dense evidence
+          → observe bounded graph results → verify citations and financial scope → answer/abstain
+```
+
+The planner follows a bounded ReAct discipline internally: it reasons about intent, acts only with
+allowlisted operation families, observes structured retrieval results, and verifies the final state
+against typed contracts. Hidden reasoning is never streamed or logged. The model cannot write
+Cypher, select arbitrary tools, alter graph truth, perform money arithmetic, or override privacy
+rules. Gemini is the primary structured planner when configured, Mistral is the fallback, and the
+deterministic planner remains the fail-closed path when providers are unavailable or return an
+invalid proposal.
+
+Every transition is checkpointable by session, with bounded history and explicit error classes.
+Prompt-injection attempts, instruction extraction, unsupported domains, missing slots, ambiguous
+merchant identities, conflicting financial scopes, and incomplete evidence become typed rejection,
+clarification, review, or abstention states—not plausible-looking answers.
+
+## Canonical hotel identity
+
+Provider listings are not duplicated restaurants. A deterministic identity migration groups reviewed
+merchant listings into one `MerchantIdentity` per canonical hotel name. Swiggy and Zomato listing
+records remain as provenance-bearing platform metadata, but every outlet/order/item path resolves to
+the same canonical hotel identity. The public neighborhood projection collapses those implementation
+nodes and exposes one hotel node with its connected orders, dishes, platforms, charges, and reviewed
+evidence paths. The migration is idempotent and the graph-integrity audit checks one identity per
+listing, one canonical merchant per order, and complete order/item connectivity; a source record with
+no merchant evidence is explicitly quarantined rather than assigned to a guessed hotel.
 
 ## Verified private corpus snapshot
 
