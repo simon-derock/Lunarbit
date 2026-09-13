@@ -53,6 +53,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
   const [hovered, setHovered] = useState<string | null>(null);
   const [ready, setReady] = useState(0);
   const introRef = useRef(0); // 0 → 1 reveal envelope
+  const labelGridRef = useRef<Set<string>>(new Set());
 
   const data = useMemo(() => {
     const ids = new Set(nodes.map((n) => n.id));
@@ -159,7 +160,13 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // Keep the complete formation comfortably inside the viewport. The live
     // projection is dense enough that tight framing reads as over-zoomed,
     // especially on narrow phone screens.
-    fg.zoomToFit(compact ? 340 : 150, compact ? 0 : 220);
+    fg.zoomToFit(compact ? 340 : 60, compact ? 0 : 220);
+    if (!compact) {
+      const fittedZoom = fg.zoom();
+      if (typeof fittedZoom === "number" && Number.isFinite(fittedZoom)) {
+        fg.zoom(fittedZoom * 1.15, 0);
+      }
+    }
     // Mobile browsers have a short usable height once the header and dock
     // are accounted for; apply a deterministic second scale to avoid a
     // formation filling the entire phone viewport.
@@ -601,6 +608,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // Keep every node addressable in every visual system, while using a
     // restrained screen-space hierarchy so dense projections stay legible.
     const show = true;
+    const desktopDense = size.w >= 900 && dense;
     if (show && (scale > 0.2 || active)) {
       const labelSize = active
         ? Math.max(10, Math.min(14, 8.4 / Math.max(scale, 0.6)))
@@ -611,6 +619,31 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
       ctx.font = `${active ? 500 : 400} ${labelSize}px "IBM Plex Mono", ui-monospace, monospace`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
+      // Dense desktop projections need a readable hierarchy. Keep selected,
+      // hovered, and high-signal labels, then reserve screen-space cells so
+      // neighboring secondary labels cannot paint over one another.
+      const highSignal = active || n.id === hovered || n.source_count >= 2 || n.weight >= 6;
+      const labelX = n.x + r * 2.9;
+      const labelWidth = ctx.measureText(n.label).width;
+      if (desktopDense && !highSignal) {
+        const cellW = 96 / Math.max(scale, 0.45);
+        const cellH = 22 / Math.max(scale, 0.45);
+        const left = Math.floor(labelX / cellW);
+        const right = Math.floor((labelX + labelWidth) / cellW);
+        const row = Math.floor(n.y / cellH);
+        let occupied = false;
+        for (let col = left; col <= right; col += 1) {
+          if (labelGridRef.current.has(`${col}:${row}`)) {
+            occupied = true;
+            break;
+          }
+        }
+        if (occupied) {
+          ctx.globalAlpha = 1;
+          return;
+        }
+        for (let col = left; col <= right; col += 1) labelGridRef.current.add(`${col}:${row}`);
+      }
       // A hairline paper keyline keeps labels readable over bright graph
       // marks without adding cards or dashboard chrome to the canvas.
       ctx.strokeStyle = fade(palette.paper, isDark ? 0.72 : 0.9);
@@ -894,6 +927,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             }}
             onEngineTick={onTick}
             onEngineStop={() => fit()}
+            onRenderFramePre={() => labelGridRef.current.clear()}
 
           />
         )}
