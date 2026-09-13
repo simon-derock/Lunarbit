@@ -5,7 +5,7 @@
 > **Reconstructing six years of food commerce into an auditable personal economic-intelligence graph.**
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/backend%20tests-329%20collected-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/backend%20tests-330%20collected-2ea44f)](tests/)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/private%20corpus-never%20committed-6f42c1)](#privacy-by-design)
