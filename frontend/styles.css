@@ -92,12 +92,29 @@ body {
 }
 .menu-wheel-hint-shared {
   top: calc(100% + 7px);
-  right: 50%;
-  transform: translate(50%, -2px);
+  right: 0;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, var(--foreground));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--background) 96%, var(--foreground));
+  letter-spacing: 0.1em;
+  transform: translateY(-2px);
   text-align: center;
 }
+.menu-wheel-hint-shared::before {
+  position: absolute;
+  top: -4px;
+  right: 22px;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 85%, var(--foreground));
+  border-left: 1px solid color-mix(in oklab, var(--border) 85%, var(--foreground));
+  background: var(--background);
+  content: "";
+  transform: rotate(45deg);
+}
 .header-controls:hover .menu-wheel-hint-shared,
-.menu-wheel-hint-shared:hover { opacity: 0.92; transform: translate(50%, 0); }
+.menu-wheel-hint-shared:hover { opacity: 0.92; transform: translateY(0); }
 
 .ask-submit {
   display: grid;
