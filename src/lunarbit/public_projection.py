@@ -217,7 +217,7 @@ _MERCHANT_NEIGHBORHOOD_NODE_CYPHER = (
     "OPTIONAL MATCH (order)-[:HAS_COMPONENT]->(money:LunarbitNode:MoneyComponent) "
     "OPTIONAL MATCH (order)-[:PLACED_ON]->(platform:LunarbitNode:Platform) "
     "OPTIONAL MATCH (order)-[:HAS_DELIVERY_MENTION]->"
-    "(mention:LunarbitNode:PersonMention)-[:RESOLVED_TO]->"
+    "(mention:LunarbitNode:PersonMention)-[resolution]->"
     "(person:LunarbitNode:PersonIdentity) "
     "WITH collect(DISTINCT identity) + collect(DISTINCT listing) + "
     "collect(DISTINCT outlet) + collect(DISTINCT order) + "
