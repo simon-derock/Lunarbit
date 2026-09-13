@@ -34,6 +34,7 @@ function Menu({
   align = "start",
   width = "16rem",
   keepOpenOnSelect = false,
+  wheelExplore = false,
 }: {
   tag: string;
   value: string;
@@ -42,6 +43,7 @@ function Menu({
   align?: "start" | "end";
   width?: string;
   keepOpenOnSelect?: boolean;
+  wheelExplore?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -60,6 +62,15 @@ function Menu({
     <div ref={box} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
+        onWheel={(event) => {
+          if (!wheelExplore || options.length < 2) return;
+          event.preventDefault();
+          const currentIndex = Math.max(0, options.findIndex((option) => option.id === value));
+          const direction = event.deltaY > 0 ? 1 : -1;
+          const nextIndex = (currentIndex + direction + options.length) % options.length;
+          onChange(options[nextIndex]!.id);
+        }}
+        data-wheel-explore={wheelExplore ? "true" : undefined}
         className="plate flex h-9 min-w-[9.5rem] items-center gap-3 px-3 text-left transition-colors hover:border-foreground/40"
       >
         <span className="tag">{tag}</span>
@@ -73,6 +84,11 @@ function Menu({
         )}
         <span className="tag">{open ? "—" : "+"}</span>
       </button>
+      {wheelExplore && (
+        <span className="menu-wheel-hint" aria-hidden="true">
+          scroll to explore · click to open
+        </span>
+      )}
       {open && (
         <div
           className={`menu-popover menu-popover-${align} absolute z-50 mt-[-1px] max-h-[22rem] overflow-y-auto no-scrollbar`}
@@ -355,6 +371,7 @@ export function Console() {
             align="end"
             width="17rem"
             keepOpenOnSelect
+            wheelExplore
             options={VIZ_PROFILES.map((v) => ({ id: v.id, name: v.name, hint: v.hint }))}
           />
 
@@ -365,6 +382,7 @@ export function Console() {
             align="end"
             width="17rem"
             keepOpenOnSelect
+            wheelExplore
             options={THEMES.map((t) => ({
               id: t.id,
               name: t.name,

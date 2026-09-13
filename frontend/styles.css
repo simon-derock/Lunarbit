@@ -71,6 +71,26 @@ body {
 .menu-popover-start { left: 0; }
 .menu-popover-end { right: 0; }
 .menu-popover::-webkit-scrollbar { display: none; }
+.menu-wheel-hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  width: max-content;
+  max-width: 15rem;
+  padding: 3px 5px;
+  background: color-mix(in oklab, var(--background) 94%, var(--foreground));
+  color: color-mix(in oklab, var(--muted-foreground) 86%, var(--foreground));
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  opacity: 0;
+  pointer-events: none;
+  text-transform: lowercase;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.header-controls > .relative:hover .menu-wheel-hint { opacity: 0.82; transform: translateY(0); }
 
 .ask-submit {
   display: grid;
@@ -137,6 +157,7 @@ body {
   .menu-popover-start { left: 10px !important; right: auto !important; width: min(12rem, calc(100vw - 44px)) !important; max-width: calc(100vw - 44px); }
   .menu-popover-end { right: 10px !important; left: auto !important; }
   .header-controls { gap: 4px !important; align-items: center; }
+  .menu-wheel-hint { display: none; }
   .menu-popover > button { display: flex !important; width: 100%; min-height: 30px; height: auto !important; padding: 4px 6px; }
   header .tag { letter-spacing: 0.12em; }
   .github-link { width: 32px !important; max-width: 32px !important; flex: 0 0 32px !important; height: 32px; justify-content: center; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; transform: translateY(-1px); }
