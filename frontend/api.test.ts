@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  fetchPublicMerchantNeighborhood,
   fetchPublicSnapshot,
   mapPublicSnapshot,
   parseSseFrame,
@@ -71,6 +72,35 @@ describe("public snapshot adapter", () => {
       fetchMock.mockRestore();
       vi.unstubAllGlobals();
     }
+  });
+
+  it("fetches a merchant neighborhood through the public alias route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...payload, mode: "neo4j_merchant_neighborhood" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    try {
+      const result = await fetchPublicMerchantNeighborhood("pub:node:abcdefghijab");
+      expect(result.mode).toBe("neo4j_merchant_neighborhood");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/public/merchant/pub%3Anode%3Aabcdefghijab/neighborhood",
+        expect.anything(),
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("rejects private identifiers before making a neighborhood request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(fetchPublicMerchantNeighborhood("merchant-internal-1")).rejects.toThrow(
+      "invalid public merchant identifier",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockRestore();
   });
 });
 

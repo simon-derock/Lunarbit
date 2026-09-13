@@ -16,7 +16,11 @@ import uvicorn
 from dotenv import load_dotenv
 
 from lunarbit.api import create_app, parse_public_origins
-from lunarbit.public_projection import NavigationSnapshotSource, Neo4jAggregateReader
+from lunarbit.public_projection import (
+    MerchantNeighborhoodSource,
+    NavigationSnapshotSource,
+    Neo4jAggregateReader,
+)
 
 
 def _args() -> argparse.Namespace:
@@ -41,6 +45,7 @@ def main() -> int:
 
     try:
         source = None
+        merchant_neighborhood = None
         if uri:
             reader = Neo4jAggregateReader.connect(
                 uri,
@@ -49,8 +54,10 @@ def main() -> int:
                 password=os.environ.get("NEO4J_PASSWORD") or None,
             )
             source = NavigationSnapshotSource(reader)
+            merchant_neighborhood = MerchantNeighborhoodSource(reader)
         app = create_app(
             public_snapshot_source=source,
+            public_merchant_neighborhood_source=merchant_neighborhood,
             allowed_origins=allowed_origins,
             include_private_routes=False,
         )

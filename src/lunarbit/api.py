@@ -31,6 +31,7 @@ from lunarbit.api_contracts import (
     PrivateWorkflowBackend,
     PublicDemoAnswer,
     PublicEvidenceCard,
+    PublicMerchantNeighborhoodSource,
     PublicQueryPlan,
     PublicShowcaseAnswer,
     PublicSnapshotSource,
@@ -65,7 +66,7 @@ from lunarbit.public import (
     assert_public_payload,
     build_demo_snapshot,
 )
-from lunarbit.public_projection import PublicProjectionUnavailable
+from lunarbit.public_projection import MerchantNeighborhoodUnavailable, PublicProjectionUnavailable
 from lunarbit.runtime import QuerySlots, RuntimeRequest
 
 __all__ = [
@@ -224,6 +225,7 @@ def create_app(
     *,
     snapshot: PublicSnapshot | None = None,
     public_snapshot_source: PublicSnapshotSource | None = None,
+    public_merchant_neighborhood_source: PublicMerchantNeighborhoodSource | None = None,
     allowed_origins: Sequence[str] = DEFAULT_PUBLIC_ORIGINS,
     private_backend: PrivateRetrievalBackend | None = None,
     private_answer_backend: PrivateAnswerBackend | None = None,
@@ -473,6 +475,30 @@ def create_app(
             ) from error
         assert_public_payload(projected.model_dump(mode="json"))
         projection_cache = (monotonic(), projected)
+        return projected
+
+    @app.get(
+        "/v1/public/merchant/{public_id}/neighborhood",
+        response_model=PublicSnapshot,
+    )
+    def public_merchant_neighborhood(
+        public_id: str,
+        request: Request,
+    ) -> PublicSnapshot:
+        """Return all reviewed public paths for one canonical restaurant identity."""
+        enforce_rate_limit(request, public_limiter)
+        if public_merchant_neighborhood_source is None:
+            raise HTTPException(status_code=503, detail="merchant neighborhood is not configured")
+        try:
+            projected = public_merchant_neighborhood_source.snapshot(public_id)
+        except MerchantNeighborhoodUnavailable as error:
+            raise HTTPException(status_code=404, detail="public merchant was not found") from error
+        except (DriverError, Neo4jError, ServiceUnavailable, SessionExpired) as error:
+            raise HTTPException(
+                status_code=503,
+                detail="merchant neighborhood is temporarily unavailable",
+            ) from error
+        assert_public_payload(projected.model_dump(mode="json"))
         return projected
 
     @app.post("/v1/query/plan", response_model=PublicQueryPlan)

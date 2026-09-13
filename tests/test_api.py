@@ -126,6 +126,63 @@ def test_public_snapshot_endpoint_refreshes_the_configured_safe_projection() -> 
     assert response.json()["metrics"] == [{"label": "Graph nodes", "value": "18", "detail": None}]
 
 
+def test_public_merchant_neighborhood_endpoint_serves_canonical_hotel_projection() -> None:
+    from lunarbit.public_projection import MerchantNeighborhoodSource, _public_alias
+
+    class Reader:
+        def merchant_identity_ids(self) -> tuple[str, ...]:
+            return ("identity:kms",)
+
+        def merchant_neighborhood_nodes(self, *, canonical_id: str, limit: int):
+            assert canonical_id == "identity:kms"
+            return (
+                {
+                    "canonical_id": "identity:kms",
+                    "labels": ["LunarbitNode", "MerchantIdentity"],
+                    "canonical_name_private": "KMS Hakkim",
+                },
+                {
+                    "canonical_id": "listing:swiggy",
+                    "labels": ["LunarbitNode", "Merchant"],
+                    "display_name_private": "KMS Hakkim Swiggy",
+                },
+                {"canonical_id": "outlet:swiggy", "labels": ["LunarbitNode", "Outlet"]},
+                {"canonical_id": "order:one", "labels": ["LunarbitNode", "Order"]},
+                {
+                    "canonical_id": "item:one",
+                    "labels": ["LunarbitNode", "ItemObservation"],
+                    "raw_name_private": "Chicken Biryani",
+                },
+            )
+
+        def merchant_neighborhood_relationships(self, *, canonical_ids, limit: int):
+            return (
+                {
+                    "source_id": "order:one",
+                    "target_id": "outlet:swiggy",
+                    "relationship": "ORDERED_FROM",
+                },
+                {
+                    "source_id": "order:one",
+                    "target_id": "item:one",
+                    "relationship": "HAS_ITEM_OBSERVATION",
+                },
+            )
+
+    response = TestClient(
+        create_app(
+            public_merchant_neighborhood_source=MerchantNeighborhoodSource(Reader()),
+        )
+    ).get(f"/v1/public/merchant/{_public_alias('identity:kms')}/neighborhood")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "neo4j_merchant_neighborhood"
+    assert sum(node["label"] == "Merchant" for node in payload["nodes"]) == 1
+    assert payload["metrics"][2]["value"] == "1"
+    assert_public_payload(payload)
+
+
 def test_live_public_snapshot_does_not_fallback_to_synthetic_data() -> None:
     from lunarbit.public_projection import PublicProjectionUnavailable
 

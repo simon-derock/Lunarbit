@@ -87,6 +87,26 @@ class NavigationReader(AggregateReader, Protocol):
     ) -> tuple[Mapping[str, object], ...]: ...
 
 
+class MerchantNeighborhoodReader(Protocol):
+    """Read one reviewed merchant's privacy-safe, canonical neighborhood."""
+
+    def merchant_identity_ids(self) -> tuple[str, ...]: ...
+
+    def merchant_neighborhood_nodes(
+        self,
+        *,
+        canonical_id: str,
+        limit: int,
+    ) -> tuple[Mapping[str, object], ...]: ...
+
+    def merchant_neighborhood_relationships(
+        self,
+        *,
+        canonical_ids: tuple[str, ...],
+        limit: int,
+    ) -> tuple[Mapping[str, object], ...]: ...
+
+
 def _class_case(variable: str) -> str:
     """Return a fixed Cypher CASE mapping from canonical labels to safe public classes."""
     return (
@@ -177,6 +197,51 @@ _NAVIGATION_RELATIONSHIP_CYPHER = (
     "RETURN source.node_id AS source_id, target.node_id AS target_id, "
     "type(relationship) AS relationship ORDER BY source.node_id, target.node_id "
     "LIMIT $limit"
+)
+
+_MERCHANT_IDENTITY_CYPHER = (
+    "MATCH (identity:LunarbitNode:MerchantIdentity) "
+    "RETURN identity.node_id AS canonical_id ORDER BY identity.node_id"
+)
+
+# Provider listings and outlets are deliberately included only as traversal
+# scaffolding.  The public builder collapses both classes onto the one
+# MerchantIdentity node, so Swiggy/Zomato cannot create duplicate hotel nodes.
+_MERCHANT_NEIGHBORHOOD_NODE_CYPHER = (
+    "MATCH (identity:LunarbitNode:MerchantIdentity {node_id: $canonical_id}) "
+    "OPTIONAL MATCH (listing:LunarbitNode:Merchant)-[:CANONICAL_OF]->(identity) "
+    "OPTIONAL MATCH (outlet:LunarbitNode:Outlet)-[:OUTLET_OF]->(listing) "
+    "OPTIONAL MATCH (order:LunarbitNode:Order)-[:ORDERED_FROM]->(outlet) "
+    "OPTIONAL MATCH (order)-[:HAS_ITEM_OBSERVATION]->(observation:LunarbitNode:ItemObservation) "
+    "OPTIONAL MATCH (observation)-[:LISTING_OF]->(item:LunarbitNode:MerchantItem) "
+    "OPTIONAL MATCH (order)-[:HAS_COMPONENT]->(money:LunarbitNode:MoneyComponent) "
+    "OPTIONAL MATCH (order)-[:PLACED_ON]->(platform:LunarbitNode:Platform) "
+    "OPTIONAL MATCH (order)-[:HAS_DELIVERY_MENTION]->"
+    "(mention:LunarbitNode:PersonMention)-[:RESOLVED_TO]->"
+    "(person:LunarbitNode:PersonIdentity) "
+    "WITH collect(DISTINCT identity) + collect(DISTINCT listing) + "
+    "collect(DISTINCT outlet) + collect(DISTINCT order) + "
+    "collect(DISTINCT observation) + collect(DISTINCT item) + "
+    "collect(DISTINCT money) + collect(DISTINCT platform) + "
+    "collect(DISTINCT person) AS candidates "
+    "UNWIND candidates AS node "
+    "WITH node WHERE node IS NOT NULL "
+    "RETURN node.node_id AS canonical_id, labels(node) AS labels, "
+    "node.platform AS platform, node.order_type AS order_type, "
+    "node.display_name_private AS display_name_private, "
+    "node.canonical_name_private AS canonical_name_private, "
+    "node.raw_name_private AS raw_name_private, node.observed_amount AS observed_amount, "
+    "node.amount AS amount, node.currency AS currency, node.component_type AS component_type, "
+    "node.public_id AS public_id, node.public_label AS public_label "
+    "ORDER BY canonical_id LIMIT $limit"
+)
+
+_MERCHANT_NEIGHBORHOOD_RELATIONSHIP_CYPHER = (
+    "MATCH (source:LunarbitNode)-[relationship]->(target:LunarbitNode) "
+    "WHERE source.node_id IN $canonical_ids AND target.node_id IN $canonical_ids "
+    "RETURN source.node_id AS source_id, target.node_id AS target_id, "
+    "type(relationship) AS relationship ORDER BY source.node_id, target.node_id, "
+    "type(relationship) LIMIT $limit"
 )
 
 
@@ -280,6 +345,57 @@ class Neo4jAggregateReader:
             return tuple(
                 session.run(
                     _NAVIGATION_RELATIONSHIP_CYPHER,
+                    {"canonical_ids": canonical_ids, "limit": limit},
+                )
+            )
+
+    def merchant_identity_ids(self) -> tuple[str, ...]:
+        with self._driver.session(
+            database=self._database,
+            default_access_mode=READ_ACCESS,
+        ) as session:
+            return tuple(
+                str(row["canonical_id"])
+                for row in session.run(_MERCHANT_IDENTITY_CYPHER)
+                if isinstance(row["canonical_id"], str)
+            )
+
+    def merchant_neighborhood_nodes(
+        self,
+        *,
+        canonical_id: str,
+        limit: int,
+    ) -> tuple[Mapping[str, object], ...]:
+        if not 1 <= limit <= 10_000:
+            raise ValueError("merchant neighborhood node limit must be between 1 and 10000")
+        with self._driver.session(
+            database=self._database,
+            default_access_mode=READ_ACCESS,
+        ) as session:
+            return tuple(
+                session.run(
+                    _MERCHANT_NEIGHBORHOOD_NODE_CYPHER,
+                    {"canonical_id": canonical_id, "limit": limit},
+                )
+            )
+
+    def merchant_neighborhood_relationships(
+        self,
+        *,
+        canonical_ids: tuple[str, ...],
+        limit: int,
+    ) -> tuple[Mapping[str, object], ...]:
+        if not canonical_ids:
+            return ()
+        if not 1 <= limit <= 20_000:
+            raise ValueError("merchant neighborhood relationship limit must be between 1 and 20000")
+        with self._driver.session(
+            database=self._database,
+            default_access_mode=READ_ACCESS,
+        ) as session:
+            return tuple(
+                session.run(
+                    _MERCHANT_NEIGHBORHOOD_RELATIONSHIP_CYPHER,
                     {"canonical_ids": canonical_ids, "limit": limit},
                 )
             )
@@ -541,6 +657,195 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
         subtitle=subtitle[:120],
         properties=properties,
     )
+
+
+def _merchant_neighborhood_node(row: Mapping[str, object]) -> PublicNode | None:
+    """Build one public node, excluding provider listings/outlets.
+
+    Merchant listings and outlets are traversal implementation details.  They
+    are intentionally not emitted: the canonical ``MerchantIdentity`` alias
+    is the sole public hotel node and every order's ``ORDERED_FROM`` edge is
+    collapsed onto it.
+    """
+    labels = row.get("labels")
+    label_values = {str(value) for value in labels} if isinstance(labels, (list, tuple)) else set()
+    if label_values & {"Merchant", "Outlet"} and "MerchantIdentity" not in label_values:
+        return None
+    return _navigation_node(row)
+
+
+def _edge_id(source: str, target: str, relationship: str) -> str:
+    digest = sha256(f"merchant-neighborhood:{source}:{target}:{relationship}".encode())
+    return "pub:edge:" + digest.hexdigest()[:16].translate(
+        str.maketrans("0123456789", "abcdefghij")
+    )
+
+
+def build_merchant_neighborhood_snapshot(
+    *,
+    canonical_id: str,
+    nodes: tuple[Mapping[str, object], ...],
+    relationships: tuple[Mapping[str, object], ...],
+) -> PublicSnapshot:
+    """Build a closed public graph centered on exactly one canonical merchant."""
+    if not canonical_id or not nodes:
+        raise PublicProjectionUnavailable("merchant has no navigable public neighborhood")
+    identity_rows = tuple(
+        row
+        for row in nodes
+        if "MerchantIdentity" in {str(value) for value in row.get("labels", ())}
+    )
+    if len(identity_rows) != 1:
+        raise PublicProjectionUnavailable(
+            "merchant neighborhood must contain one canonical identity"
+        )
+
+    aliases: dict[str, str] = {}
+    public_nodes: list[PublicNode] = []
+    for row in nodes:
+        node_id = row.get("canonical_id")
+        if not isinstance(node_id, str) or not node_id:
+            continue
+        public_node = _merchant_neighborhood_node(row)
+        # All provider listings/outlets resolve to the single identity alias.
+        labels = {str(value) for value in row.get("labels", ())}
+        if labels & {"Merchant", "Outlet"}:
+            aliases[node_id] = _public_alias(canonical_id)
+            continue
+        if public_node is None:
+            continue
+        aliases[node_id] = public_node.id
+        public_nodes.append(public_node)
+
+    identity_alias = _public_alias(canonical_id)
+    if sum(node.id == identity_alias for node in public_nodes) != 1:
+        raise PublicProjectionUnavailable("merchant neighborhood omitted its canonical identity")
+
+    edges: list[PublicEdge] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+    for row in relationships:
+        source_id = row.get("source_id")
+        target_id = row.get("target_id")
+        relationship = row.get("relationship")
+        if not isinstance(source_id, str) or not isinstance(target_id, str):
+            continue
+        if not isinstance(relationship, str) or not _RELATIONSHIP.fullmatch(relationship):
+            continue
+        source = aliases.get(source_id)
+        target = aliases.get(target_id)
+        if source is None or target is None or source == target:
+            continue
+        edge_key = (source, target, relationship)
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
+        edges.append(
+            PublicEdge(
+                id=_edge_id(source, target, relationship),
+                source=source,
+                target=target,
+                relationship=relationship,
+            )
+        )
+    if not edges:
+        raise PublicProjectionUnavailable("merchant neighborhood has no public relationships")
+    node_ids = {node.id for node in public_nodes}
+    public_nodes = [node for node in public_nodes if node.id in node_ids]
+    return PublicSnapshot(
+        mode="neo4j_merchant_neighborhood",
+        disclosure=(
+            "Selected canonical restaurant neighborhood. Provider listings and outlets are "
+            "collapsed into one hotel identity; raw invoices, messages, private identifiers, "
+            "and source text are withheld."
+        ),
+        metrics=(
+            PublicMetric(
+                label="Visible nodes",
+                value=str(len(public_nodes)),
+                detail="selected hotel neighborhood",
+            ),
+            PublicMetric(
+                label="Visible relationships", value=str(len(edges)), detail="canonicalized paths"
+            ),
+            PublicMetric(
+                label="Orders connected",
+                value=str(sum(node.label is PublicNodeLabel.ORDER for node in public_nodes)),
+                detail="all reviewed orders in selected neighborhood",
+            ),
+            PublicMetric(
+                label="Food observations",
+                value=str(sum(node.label is PublicNodeLabel.ITEM for node in public_nodes)),
+                detail="all reviewed item observations returned",
+            ),
+        ),
+        sample_questions=(
+            "How many orders came from this restaurant?",
+            "Which dishes were ordered from this restaurant?",
+            "How did dish prices change over time?",
+            "How much was spent at this restaurant?",
+            "Which platform listings resolve to this one restaurant?",
+            "Which fees and discounts changed the effective order cost?",
+            "Which delivery participants recur across this restaurant's orders?",
+            "Which orders contain this dish?",
+            "What evidence supports this restaurant's financial history?",
+            "Which orders remain unresolved or require review?",
+        ),
+        nodes=tuple(public_nodes),
+        edges=tuple(edges),
+    )
+
+
+class MerchantNeighborhoodUnavailable(PublicProjectionUnavailable):
+    """The requested public merchant alias is not present in the projection."""
+
+
+class MerchantNeighborhoodSource:
+    """Resolve an opaque public merchant alias and serve its complete neighborhood."""
+
+    def __init__(
+        self,
+        reader: MerchantNeighborhoodReader,
+        *,
+        node_limit: int = 10_000,
+        relationship_limit: int = 20_000,
+    ) -> None:
+        if not 1 <= node_limit <= 10_000:
+            raise ValueError("merchant neighborhood node limit must be between 1 and 10000")
+        if not 1 <= relationship_limit <= 20_000:
+            raise ValueError("merchant neighborhood relationship limit must be between 1 and 20000")
+        self._reader = reader
+        self._node_limit = node_limit
+        self._relationship_limit = relationship_limit
+
+    def snapshot(self, public_id: str) -> PublicSnapshot:
+        if not re.fullmatch(r"pub:node:[a-j]{12}", public_id):
+            raise MerchantNeighborhoodUnavailable("invalid public merchant identifier")
+        canonical_id = next(
+            (
+                value
+                for value in self._reader.merchant_identity_ids()
+                if _public_alias(value) == public_id
+            ),
+            None,
+        )
+        if canonical_id is None:
+            raise MerchantNeighborhoodUnavailable("public merchant identifier was not found")
+        nodes = self._reader.merchant_neighborhood_nodes(
+            canonical_id=canonical_id,
+            limit=self._node_limit,
+        )
+        canonical_ids = tuple(
+            str(row["canonical_id"]) for row in nodes if isinstance(row.get("canonical_id"), str)
+        )
+        relationships = self._reader.merchant_neighborhood_relationships(
+            canonical_ids=canonical_ids,
+            limit=self._relationship_limit,
+        )
+        return build_merchant_neighborhood_snapshot(
+            canonical_id=canonical_id,
+            nodes=nodes,
+            relationships=relationships,
+        )
 
 
 class NavigationSnapshotSource:

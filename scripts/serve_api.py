@@ -19,7 +19,11 @@ from lunarbit.conversation import SQLiteConversationStore
 from lunarbit.deployment_config import validate_deployment_environment
 from lunarbit.hybrid import HybridRetriever, Neo4jHybridGraph
 from lunarbit.langgraph_workflow import GraphRAGWorkflow
-from lunarbit.public_projection import NavigationSnapshotSource, Neo4jAggregateReader
+from lunarbit.public_projection import (
+    MerchantNeighborhoodSource,
+    NavigationSnapshotSource,
+    Neo4jAggregateReader,
+)
 from lunarbit.query_planner import planner_from_environment
 from lunarbit.runtime import Neo4jGraphReader
 from lunarbit.service import GovernedAnswerBackend, HybridRetrievalBackend
@@ -131,6 +135,7 @@ def main() -> int:
                 per_class=24,
                 relationship_limit=600,
             ),
+            public_merchant_neighborhood_source=MerchantNeighborhoodSource(public_reader),
             private_backend=retrieval_backend,
             private_answer_backend=answer_backend,
             private_workflow=workflow,

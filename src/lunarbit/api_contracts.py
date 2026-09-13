@@ -130,6 +130,12 @@ class PublicSnapshotSource(Protocol):
     def snapshot(self) -> PublicSnapshot: ...
 
 
+class PublicMerchantNeighborhoodSource(Protocol):
+    """Produce one canonical merchant's browser-safe graph neighborhood."""
+
+    def snapshot(self, public_id: str) -> PublicSnapshot: ...
+
+
 class PublicQueryPlan(ContractModel):
     intent: str
     disposition: str = "supported"

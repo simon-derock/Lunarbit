@@ -7,9 +7,151 @@ from lunarbit.public_projection import (
     _RELATIONSHIP_COUNTS_CYPHER,
     AggregateRelationship,
     AggregateSnapshotSource,
+    MerchantNeighborhoodSource,
     NavigationSnapshotSource,
     build_aggregate_snapshot,
+    build_merchant_neighborhood_snapshot,
 )
+
+
+def _merchant_rows() -> tuple[dict[str, object], ...]:
+    return (
+        {
+            "canonical_id": "identity:kms",
+            "labels": ["LunarbitNode", "MerchantIdentity"],
+            "canonical_name_private": "KMS Hakkim",
+        },
+        {
+            "canonical_id": "listing:swiggy-kms",
+            "labels": ["LunarbitNode", "Merchant"],
+            "display_name_private": "KMS Hakkim - Swiggy",
+            "platform": "swiggy",
+        },
+        {
+            "canonical_id": "listing:zomato-kms",
+            "labels": ["LunarbitNode", "Merchant"],
+            "display_name_private": "KMS Hakkim - Zomato",
+            "platform": "zomato",
+        },
+        {"canonical_id": "outlet:swiggy-kms", "labels": ["LunarbitNode", "Outlet"]},
+        {"canonical_id": "outlet:zomato-kms", "labels": ["LunarbitNode", "Outlet"]},
+        {
+            "canonical_id": "order:one",
+            "labels": ["LunarbitNode", "Order"],
+            "platform": "swiggy",
+        },
+        {
+            "canonical_id": "order:two",
+            "labels": ["LunarbitNode", "Order"],
+            "platform": "zomato",
+        },
+        {
+            "canonical_id": "item:biriyani-one",
+            "labels": ["LunarbitNode", "ItemObservation"],
+            "raw_name_private": "Chicken Biryani",
+        },
+        {
+            "canonical_id": "item:biriyani-two",
+            "labels": ["LunarbitNode", "ItemObservation"],
+            "raw_name_private": "Chicken Biryani",
+        },
+        {
+            "canonical_id": "platform:swiggy",
+            "labels": ["LunarbitNode", "Platform"],
+            "display_name_private": "Swiggy",
+            "platform": "swiggy",
+        },
+    )
+
+
+def test_merchant_neighborhood_collapses_provider_listings_to_one_hotel() -> None:
+    rows = _merchant_rows()
+    relationships = (
+        {
+            "source_id": "order:one",
+            "target_id": "outlet:swiggy-kms",
+            "relationship": "ORDERED_FROM",
+        },
+        {
+            "source_id": "order:two",
+            "target_id": "outlet:zomato-kms",
+            "relationship": "ORDERED_FROM",
+        },
+        {
+            "source_id": "order:one",
+            "target_id": "item:biriyani-one",
+            "relationship": "HAS_ITEM_OBSERVATION",
+        },
+        {
+            "source_id": "order:two",
+            "target_id": "item:biriyani-two",
+            "relationship": "HAS_ITEM_OBSERVATION",
+        },
+        {"source_id": "order:one", "target_id": "platform:swiggy", "relationship": "PLACED_ON"},
+    )
+
+    snapshot = build_merchant_neighborhood_snapshot(
+        canonical_id="identity:kms", nodes=rows, relationships=relationships
+    )
+
+    merchants = [node for node in snapshot.nodes if node.label is PublicNodeLabel.MERCHANT]
+    assert len(merchants) == 1
+    assert merchants[0].title == "KMS Hakkim"
+    assert sum(edge.relationship == "ORDERED_FROM" for edge in snapshot.edges) == 2
+    assert all("Swiggy" not in node.title and "Zomato" not in node.title for node in merchants)
+    assert_public_payload(snapshot.model_dump(mode="json"))
+
+
+def test_merchant_neighborhood_source_resolves_opaque_alias_and_preserves_platform_paths() -> None:
+    class Reader:
+        def merchant_identity_ids(self) -> tuple[str, ...]:
+            return ("identity:kms",)
+
+        def merchant_neighborhood_nodes(self, *, canonical_id: str, limit: int):
+            assert canonical_id == "identity:kms"
+            assert limit == 10_000
+            return _merchant_rows()
+
+        def merchant_neighborhood_relationships(self, *, canonical_ids, limit: int):
+            assert "identity:kms" in canonical_ids
+            assert limit == 20_000
+            return (
+                {
+                    "source_id": "order:one",
+                    "target_id": "outlet:swiggy-kms",
+                    "relationship": "ORDERED_FROM",
+                },
+                {
+                    "source_id": "order:two",
+                    "target_id": "outlet:zomato-kms",
+                    "relationship": "ORDERED_FROM",
+                },
+            )
+
+    from lunarbit.public_projection import _public_alias
+
+    snapshot = MerchantNeighborhoodSource(Reader()).snapshot(_public_alias("identity:kms"))
+    assert snapshot.mode == "neo4j_merchant_neighborhood"
+    assert len([node for node in snapshot.nodes if node.label is PublicNodeLabel.MERCHANT]) == 1
+    assert len(snapshot.edges) == 2
+
+
+def test_merchant_neighborhood_rejects_unknown_or_malformed_alias() -> None:
+    class Reader:
+        def merchant_identity_ids(self) -> tuple[str, ...]:
+            return ("identity:kms",)
+
+        def merchant_neighborhood_nodes(self, *, canonical_id: str, limit: int):
+            raise AssertionError("should not query an unknown alias")
+
+        def merchant_neighborhood_relationships(self, *, canonical_ids, limit: int):
+            raise AssertionError("should not query an unknown alias")
+
+    source = MerchantNeighborhoodSource(Reader())
+    import pytest
+
+    with pytest.raises(Exception, match="public merchant"):
+        source.snapshot("pub:node:not-an-alias")
 
 
 def test_aggregate_projection_publishes_topology_without_private_node_values() -> None:

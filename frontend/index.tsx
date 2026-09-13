@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { GraphSurface } from "./GraphSurface";
-import { fetchPublicSnapshot, fetchSessionHistory, mapPublicSnapshot, streamPrivateChat, type ChatStreamResult, type SessionHistory } from "./api";
+import { fetchPublicMerchantNeighborhood, fetchPublicSnapshot, fetchSessionHistory, mapPublicSnapshot, streamPrivateChat, type ChatStreamResult, type SessionHistory } from "./api";
 import {
   GRAPH_PROFILES,
   SORTS,
@@ -174,6 +174,9 @@ export function Console() {
   const [panel, setPanel] = useState<"filters" | "findings" | null>("findings");
   const [ask, setAsk] = useState("");
   const [liveSnapshot, setLiveSnapshot] = useState<Snapshot | null>(null);
+  const [merchantSnapshot, setMerchantSnapshot] = useState<Snapshot | null>(null);
+  const [merchantLoading, setMerchantLoading] = useState(false);
+  const [merchantError, setMerchantError] = useState<string | null>(null);
   const [apiState, setApiState] = useState<"loading" | "cached" | "live" | "error">("loading");
   const [queryState, setQueryState] = useState<string | null>(null);
   const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
@@ -182,6 +185,7 @@ export function Console() {
   const [sessionHistory, setSessionHistory] = useState<SessionHistory | null>(null);
   const [graphFocusIds, setGraphFocusIds] = useState<string[]>([]);
   const chatAbort = useRef<AbortController | null>(null);
+  const merchantAbort = useRef<AbortController | null>(null);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(() => {
     try { return window.sessionStorage.getItem("lunarbit.session") ?? undefined; } catch { return undefined; }
   });
@@ -212,6 +216,40 @@ export function Console() {
   };
 
   useEffect(() => () => chatAbort.current?.abort(), []);
+
+  useEffect(() => () => merchantAbort.current?.abort(), []);
+
+  const handleNodeSelect = (node: GraphNode | null) => {
+    setSelected(node);
+    setSelectedEdge(null);
+    if (!node || node.type !== "Merchant") return;
+    if (merchantSnapshot && node.id === merchantSnapshot.graph_nodes.find((candidate) => candidate.type === "Merchant")?.id) return;
+    merchantAbort.current?.abort();
+    const controller = new AbortController();
+    merchantAbort.current = controller;
+    setMerchantLoading(true);
+    setMerchantError(null);
+    fetchPublicMerchantNeighborhood(node.id, controller.signal)
+      .then((payload) => setMerchantSnapshot(mapPublicSnapshot(payload)))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setMerchantError(error instanceof Error ? error.message : "merchant neighborhood unavailable");
+      })
+      .finally(() => {
+        if (merchantAbort.current === controller) merchantAbort.current = null;
+        setMerchantLoading(false);
+      });
+  };
+
+  const clearMerchantNeighborhood = () => {
+    merchantAbort.current?.abort();
+    merchantAbort.current = null;
+    setMerchantSnapshot(null);
+    setMerchantError(null);
+    setMerchantLoading(false);
+    setSelected(null);
+    setSelectedEdge(null);
+  };
 
   const theme = THEMES.find((t) => t.id === themeId)!;
   const profile = GRAPH_PROFILES.find((p) => p.id === profileId)!;
@@ -259,7 +297,7 @@ export function Console() {
     };
   }, []);
 
-  const snapshot = liveSnapshot ?? EMPTY_SNAPSHOT;
+  const snapshot = merchantSnapshot ?? liveSnapshot ?? EMPTY_SNAPSHOT;
 
   const activeLayers = profile.layers.filter((l) => !mutedLayers.includes(l));
   const activeRels = profile.relationships.filter((r) => !mutedRels.includes(r));
@@ -304,7 +342,7 @@ export function Console() {
         palette={theme.palette}
         viz={viz}
         selectedId={selected?.id ?? null}
-        onSelect={setSelected}
+        onSelect={handleNodeSelect}
         onLinkSelect={setSelectedEdge}
       />
 
@@ -315,6 +353,17 @@ export function Console() {
           <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
             No synthetic nodes are rendered. The console is waiting for the verified public projection.
           </p>
+        </div>
+      )}
+
+      {(merchantSnapshot || merchantLoading || merchantError) && (
+        <div className="merchant-neighborhood-status pointer-events-auto absolute left-1/2 top-[5.5rem] z-20 -translate-x-1/2">
+          <div className="plate flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-3 px-3 py-2">
+            <span className="tag">{merchantLoading ? "loading merchant neighborhood" : merchantError ? "neighborhood unavailable" : "merchant neighborhood"}</span>
+            {merchantSnapshot && !merchantLoading && <span className="text-[10px] text-muted-foreground">{nodes.length} nodes · {edges.length} relationships</span>}
+            {merchantError && <span className="max-w-[16rem] truncate text-[10px] text-muted-foreground">{merchantError}</span>}
+            {merchantSnapshot && <button className="tag shrink-0 hover:text-foreground" onClick={clearMerchantNeighborhood}>overview</button>}
+          </div>
         </div>
       )}
 

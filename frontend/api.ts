@@ -150,6 +150,29 @@ export async function fetchPublicSnapshot(signal?: AbortSignal): Promise<PublicS
   return (await response.json()) as PublicSnapshotPayload;
 }
 
+/**
+ * Fetch the reviewed public neighborhood for one canonical merchant alias.
+ *
+ * The alias is the opaque `pub:*` identifier already present in the snapshot;
+ * no private Neo4j identifier is ever sent to the browser or exposed in the
+ * URL. The endpoint returns the same graph DTO as the overview projection so
+ * the renderer can switch frames without a second data model.
+ */
+export async function fetchPublicMerchantNeighborhood(
+  merchantId: string,
+  signal?: AbortSignal,
+): Promise<PublicSnapshotPayload> {
+  if (!/^pub:node:[a-j]{12}$/.test(merchantId)) {
+    throw new Error("invalid public merchant identifier");
+  }
+  const response = await fetchWithRetry(
+    publicApiUrl(`/merchant/${encodeURIComponent(merchantId)}/neighborhood`),
+    { signal },
+  );
+  if (!response.ok) throw new Error(`merchant neighborhood request failed: ${response.status}`);
+  return (await response.json()) as PublicSnapshotPayload;
+}
+
 export async function fetchQueryPlan(question: string): Promise<PublicQueryPlanPayload> {
   const url = API_BASE ? `${API_BASE}/v1/query/plan` : "/api/query/plan";
   const response = await fetchWithRetry(url, {
