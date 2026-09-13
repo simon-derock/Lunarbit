@@ -212,18 +212,24 @@ _MERCHANT_NEIGHBORHOOD_NODE_CYPHER = (
     "OPTIONAL MATCH (listing:LunarbitNode:Merchant)-[:CANONICAL_OF]->(identity) "
     "OPTIONAL MATCH (outlet:LunarbitNode:Outlet)-[:OUTLET_OF]->(listing) "
     "OPTIONAL MATCH (order:LunarbitNode:Order)-[:ORDERED_FROM]->(outlet) "
-    "OPTIONAL MATCH (order)-[:HAS_ITEM_OBSERVATION]->(observation:LunarbitNode:ItemObservation) "
+    "OPTIONAL MATCH (direct_order:LunarbitNode:Order)-[:ORDERED_FROM]->(identity) "
+    "WITH identity, collect(DISTINCT listing) AS listings, collect(DISTINCT outlet) AS outlets, "
+    "collect(DISTINCT order) + collect(DISTINCT direct_order) AS orders "
+    "UNWIND orders AS selected_order "
+    "OPTIONAL MATCH (selected_order)-[:HAS_ITEM_OBSERVATION]->"
+    "(observation:LunarbitNode:ItemObservation) "
     "OPTIONAL MATCH (observation)-[:LISTING_OF]->(item:LunarbitNode:MerchantItem) "
-    "OPTIONAL MATCH (order)-[:HAS_COMPONENT]->(money:LunarbitNode:MoneyComponent) "
-    "OPTIONAL MATCH (order)-[:PLACED_ON]->(platform:LunarbitNode:Platform) "
-    "OPTIONAL MATCH (order)-[:HAS_DELIVERY_MENTION]->"
+    "OPTIONAL MATCH (selected_order)-[:HAS_COMPONENT]->(money:LunarbitNode:MoneyComponent) "
+    "OPTIONAL MATCH (selected_order)-[:PLACED_ON]->(platform:LunarbitNode:Platform) "
+    "OPTIONAL MATCH (selected_order)-[:HAS_DELIVERY_MENTION]->"
     "(mention:LunarbitNode:PersonMention)-[resolution]->"
     "(person:LunarbitNode:PersonIdentity) "
-    "WITH collect(DISTINCT identity) + collect(DISTINCT listing) + "
-    "collect(DISTINCT outlet) + collect(DISTINCT order) + "
-    "collect(DISTINCT observation) + collect(DISTINCT item) + "
-    "collect(DISTINCT money) + collect(DISTINCT platform) + "
-    "collect(DISTINCT person) AS candidates "
+    "WITH identity, listings, outlets, collect(DISTINCT selected_order) AS selected_orders, "
+    "collect(DISTINCT observation) AS observations, collect(DISTINCT item) AS items, "
+    "collect(DISTINCT money) AS money_components, collect(DISTINCT platform) AS platforms, "
+    "collect(DISTINCT person) AS people "
+    "WITH [identity] + listings + outlets + selected_orders + observations + items + "
+    "money_components + platforms + people AS candidates "
     "UNWIND candidates AS node "
     "WITH node WHERE node IS NOT NULL "
     "RETURN node.node_id AS canonical_id, labels(node) AS labels, "
@@ -681,6 +687,11 @@ def _edge_id(source: str, target: str, relationship: str) -> str:
     )
 
 
+def _row_labels(row: Mapping[str, object]) -> tuple[object, ...]:
+    raw_labels = row.get("labels")
+    return tuple(raw_labels) if isinstance(raw_labels, (list, tuple)) else ()
+
+
 def build_merchant_neighborhood_snapshot(
     *,
     canonical_id: str,
@@ -691,9 +702,7 @@ def build_merchant_neighborhood_snapshot(
     if not canonical_id or not nodes:
         raise PublicProjectionUnavailable("merchant has no navigable public neighborhood")
     identity_rows = tuple(
-        row
-        for row in nodes
-        if "MerchantIdentity" in {str(value) for value in row.get("labels", ())}
+        row for row in nodes if "MerchantIdentity" in {str(value) for value in _row_labels(row)}
     )
     if len(identity_rows) != 1:
         raise PublicProjectionUnavailable(
@@ -708,7 +717,7 @@ def build_merchant_neighborhood_snapshot(
             continue
         public_node = _merchant_neighborhood_node(row)
         # All provider listings/outlets resolve to the single identity alias.
-        labels = {str(value) for value in row.get("labels", ())}
+        labels = {str(value) for value in _row_labels(row)}
         if labels & {"Merchant", "Outlet"}:
             aliases[node_id] = _public_alias(canonical_id)
             continue

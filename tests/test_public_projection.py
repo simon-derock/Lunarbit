@@ -3,6 +3,7 @@ from __future__ import annotations
 from lunarbit.public import PublicNodeLabel, assert_public_payload
 from lunarbit.public_projection import (
     _GRAPH_TOTALS_CYPHER,
+    _MERCHANT_NEIGHBORHOOD_NODE_CYPHER,
     _NODE_COUNTS_CYPHER,
     _RELATIONSHIP_COUNTS_CYPHER,
     AggregateRelationship,
@@ -12,6 +13,16 @@ from lunarbit.public_projection import (
     build_aggregate_snapshot,
     build_merchant_neighborhood_snapshot,
 )
+
+
+def test_merchant_neighborhood_query_includes_direct_canonical_order_paths() -> None:
+    """Canonical identity edges must remain visible after provider-path collapse."""
+
+    assert "direct_order:LunarbitNode:Order" in _MERCHANT_NEIGHBORHOOD_NODE_CYPHER
+    assert "collect(DISTINCT order) + collect(DISTINCT direct_order)" in (
+        _MERCHANT_NEIGHBORHOOD_NODE_CYPHER
+    )
+    assert "UNWIND orders AS selected_order" in _MERCHANT_NEIGHBORHOOD_NODE_CYPHER
 
 
 def _merchant_rows() -> tuple[dict[str, object], ...]:
