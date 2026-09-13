@@ -21,6 +21,19 @@ _REQUIRED_PUBLIC_PATHS = frozenset(
     }
 )
 
+_REQUIRED_SECURITY_HEADERS = {
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "cross-origin-resource-policy": "same-origin",
+    "referrer-policy": "no-referrer",
+    "content-security-policy": (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    ),
+    "x-permitted-cross-domain-policies": "none",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+}
+
 
 class PublicReleaseAuditError(ValueError):
     """A deployed public API does not meet Lunarbit's release boundary."""
@@ -39,6 +52,7 @@ def assert_public_release(
     ready: object,
     snapshot: object,
     snapshot_cors_origin: str | None,
+    snapshot_headers: Mapping[str, str],
     showcase: object,
     private_route_status: int,
     expected_origin: str,
@@ -61,6 +75,18 @@ def assert_public_release(
         raise PublicReleaseAuditError("public readiness contract is not ready")
     if snapshot_cors_origin != expected_origin:
         raise PublicReleaseAuditError("public snapshot CORS origin is not explicitly allowed")
+    headers = {key.casefold(): value for key, value in snapshot_headers.items()}
+    missing_headers = sorted(
+        name
+        for name, expected in _REQUIRED_SECURITY_HEADERS.items()
+        if headers.get(name) != expected
+    )
+    if missing_headers:
+        raise PublicReleaseAuditError(
+            "public snapshot is missing required security headers: " + ", ".join(missing_headers)
+        )
+    if not headers.get("x-request-id", "").startswith("trace:"):
+        raise PublicReleaseAuditError("public snapshot is missing a trace request ID")
     if private_route_status != 404:
         raise PublicReleaseAuditError("public release must not mount private retrieval routes")
 

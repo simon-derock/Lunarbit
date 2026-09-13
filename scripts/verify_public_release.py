@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 
 from lunarbit.public_release import PublicReleaseAuditError, assert_public_release
 
+Response = tuple[int, Mapping[str, object] | None, str | None, Mapping[str, str]]
+
 
 def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -28,7 +30,7 @@ def _request(
     payload: Mapping[str, object] | None = None,
     origin: str | None = None,
     timeout: float,
-) -> tuple[int, Mapping[str, object] | None, str | None]:
+) -> Response:
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
     headers = {"Accept": "application/json"}
     if body is not None:
@@ -46,15 +48,21 @@ def _request(
                 response.status,
                 decoded,
                 response.headers.get("Access-Control-Allow-Origin"),
+                dict(response.headers.items()),
             )
     except HTTPError as error:
-        return error.code, None, error.headers.get("Access-Control-Allow-Origin")
+        return (
+            error.code,
+            None,
+            error.headers.get("Access-Control-Allow-Origin"),
+            dict(error.headers.items()),
+        )
 
 
 def _required_json(
-    response: tuple[int, Mapping[str, object] | None, str | None],
+    response: Response,
 ) -> Mapping[str, object]:
-    status, payload, _ = response
+    status, payload, _, _ = response
     if status != 200 or payload is None:
         raise PublicReleaseAuditError("public API did not return a required 200 JSON response")
     return payload
@@ -71,7 +79,7 @@ def main() -> int:
     openapi = _required_json(_request(f"{api_url}/openapi.json", timeout=args.timeout))
     health = _required_json(_request(f"{api_url}/health", timeout=args.timeout))
     ready = _required_json(_request(f"{api_url}/ready", timeout=args.timeout))
-    snapshot_status, snapshot, snapshot_cors_origin = _request(
+    snapshot_status, snapshot, snapshot_cors_origin, snapshot_headers = _request(
         f"{api_url}/v1/public/snapshot",
         origin=args.origin,
         timeout=args.timeout,
@@ -86,7 +94,7 @@ def main() -> int:
             timeout=args.timeout,
         )
     )
-    private_status, _, _ = _request(
+    private_status, _, _, _ = _request(
         f"{api_url}/v1/private/retrieval",
         method="POST",
         payload={"question": "historic meal price"},
@@ -98,6 +106,7 @@ def main() -> int:
         ready=ready,
         snapshot=snapshot,
         snapshot_cors_origin=snapshot_cors_origin,
+        snapshot_headers=snapshot_headers,
         showcase=showcase,
         private_route_status=private_status,
         expected_origin=args.origin,
