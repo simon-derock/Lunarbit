@@ -32,8 +32,11 @@ function readViewport(): ViewportState {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const segmented = window.matchMedia("(horizontal-viewport-segments: 2), (vertical-viewport-segments: 2)").matches;
   const shortestSide = Math.min(width, height);
-  const profile: ViewportProfile =
-    shortestSide < 600 ? "phone" : shortestSide < 900 || coarsePointer ? "tablet" : "desktop";
+  const profile: ViewportProfile = shortestSide < 600
+    ? "phone"
+    : width < 900 || (coarsePointer && width < 1200)
+      ? "tablet"
+      : "desktop";
 
   return {
     profile,
