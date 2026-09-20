@@ -124,6 +124,39 @@ def _check_mobile_layout(page: Any, config: BrowserConfig) -> None:
     page.keyboard.press("Escape")
 
 
+def _check_viewport_matrix(page: Any, config: BrowserConfig) -> None:
+    """Check representative logical viewports without depending on model names."""
+    matrix = {
+        "iphone-se": (320, 568),
+        "iphone-plus": (430, 932),
+        "pixel": (412, 915),
+        "ipad-mini": (744, 1133),
+        "macbook": (1440, 900),
+        "laptop": (1280, 720),
+    }
+    for name, (width, height) in matrix.items():
+        page.set_viewport_size({"width": width, "height": height})
+        page.reload(wait_until="domcontentloaded")
+        page.locator("main.app-shell").wait_for(state="visible", timeout=15_000)
+        page.wait_for_function(
+            """() => Boolean(document.querySelector('canvas')) ||
+            document.body.innerText.toLowerCase().includes('live graph unavailable')""",
+            timeout=15_000,
+        )
+        dimensions = page.evaluate(
+            """() => ({
+              width: document.documentElement.clientWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+              canvas: document.querySelectorAll('canvas').length,
+            })"""
+        )
+        _assert(
+            dimensions["scrollWidth"] <= dimensions["width"] + 1,
+            f"{name} viewport overflows horizontally: {dimensions}",
+        )
+        _assert(dimensions["canvas"] > 0, f"{name} viewport did not mount the graph canvas")
+
+
 def _check_streamed_chat(page: Any, question: str) -> None:
     ask = page.get_by_label("Ask Lunarbit")
     ask.fill(question)
@@ -155,6 +188,7 @@ def run(config: BrowserConfig) -> int:
             try:
                 _check_shell(page, config)
                 _check_mobile_layout(page, config)
+                _check_viewport_matrix(page, config)
                 if config.chat_question:
                     _check_streamed_chat(page, config.chat_question)
             finally:
