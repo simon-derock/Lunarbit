@@ -206,7 +206,7 @@ export function Console() {
   const defaultViz = VIZ_PROFILES.find((profile) => profile.id === "cortex") ?? VIZ_PROFILES[0]!;
   const [profileId, setProfileId] = useState(GRAPH_PROFILES[0]!.id);
   const [vizId, setVizId] = useState(defaultViz.id);
-  const [themeId, setThemeId] = useState(defaultViz.preferredTheme);
+  const [themeId, setThemeId] = useState("verdant");
   const [sort, setSort] = useState<SortId>("weight");
   const [minConfidence, setMinConfidence] = useState(0.6);
   const [mutedLayers, setMutedLayers] = useState<LayerId[]>([]);
