@@ -230,6 +230,8 @@ html {
   }
   .menu-popover-start, .menu-popover-end { left: auto; right: auto; }
   .header-controls { gap: 4px !important; align-items: center; }
+  .header-controls > .relative > button,
+  .header-controls > .github-link { height: 44px !important; min-height: 44px !important; }
   .menu-wheel-hint { display: none; }
   .menu-popover > button { display: flex !important; width: 100%; min-height: 44px; height: auto !important; padding: 7px 8px; }
   header .tag { letter-spacing: 0.12em; }

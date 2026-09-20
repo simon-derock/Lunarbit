@@ -1,8 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ForceGraph2D from "react-force-graph-2d";
 import { formationTargets } from "./graph";
 import type { GraphEdge, GraphNode, Palette, VizProfile } from "./graph";
-
-const ForceGraph2D = lazy(() => import("react-force-graph-2d"));
 
 type Pt = { x: number; y: number };
 type LinkDatum = GraphEdge & { source: GraphNode & Pt; target: GraphNode & Pt };
@@ -143,12 +142,19 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
   /* ---------- framing: one instant fit, never fighting the user ---------- */
   const tickCount = useRef(0);
   const userRef = useRef(false);
+  const fittingRef = useRef(false);
+  const programmaticUntilRef = useRef(0);
+  const initialFitUntilRef = useRef(0);
   const prog = useRef(0);
   // fit instantly (the opacity envelope carries the motion) and clear the
   // right-hand findings plate in the same frame — no second animation
   const fit = useCallback(() => {
     const fg = fgRef.current;
-    if (!fg || userRef.current) return;
+    if (!fg) return;
+    if (userRef.current && performance.now() >= initialFitUntilRef.current) return;
+    if (performance.now() < initialFitUntilRef.current) userRef.current = false;
+    fittingRef.current = true;
+    programmaticUntilRef.current = performance.now() + 700;
     prog.current += 2;
     // Keep a generous visual margin so style changes never crop or over-zoom
     // the complete graph beneath the surrounding inspector plates.
@@ -163,16 +169,34 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
       ? Math.max(56, Math.min(104, Math.round(size.w * 0.16)))
       : 60;
     fg.zoomToFit(padding, compact ? 0 : 220);
-    const fittedZoom = fg.zoom();
-    if (typeof fittedZoom === "number" && Number.isFinite(fittedZoom)) {
-      // Leave a little breathing room for safe-area controls without using a
-      // device-specific zoom constant.
-      fg.zoom(fittedZoom * (compact ? 0.9 : 1.15), 0);
-    }
-  }, [size.w]);
+    window.requestAnimationFrame(() => {
+      if (userRef.current && performance.now() >= initialFitUntilRef.current) {
+        fittingRef.current = false;
+        return;
+      }
+      const fittedZoom = fg.zoom();
+      if (typeof fittedZoom === "number" && Number.isFinite(fittedZoom)) {
+        // Leave a little breathing room for safe-area controls without using a
+        // device-specific zoom constant. The getter is sampled after
+        // zoomToFit commits its camera transform.
+        const phoneScale = Math.max(0.34, Math.min(0.4, size.w / 1100));
+        fg.zoom(fittedZoom * (compact ? phoneScale : 1.15), 0);
+      }
+      fittingRef.current = false;
+    });
+  }, [size.h, size.w]);
+  // Formation forces can continue moving nodes after the first engine stop.
+  // Refit a few times during the initial reveal, but never after the user has
+  // taken ownership of the camera or a node.
+  useEffect(() => {
+    if (!size.w || !size.h) return;
+    const timers = [500, 1400, 2600, 5200, 7600].map((delay) => window.setTimeout(fit, delay));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [data, fit, size.h, size.w, viz]);
   useEffect(() => {
     tickCount.current = 0;
     userRef.current = false;
+    initialFitUntilRef.current = performance.now() + 3200;
     prog.current = 0;
   }, [data, viz]);
   const onTick = useCallback(() => {
@@ -180,6 +204,11 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     tickCount.current += 1;
   }, [fit]);
   const markUser = useCallback(() => {
+    if (
+      fittingRef.current ||
+      performance.now() < programmaticUntilRef.current ||
+      performance.now() < initialFitUntilRef.current
+    ) return;
     if (prog.current > 0) prog.current -= 1;
     else userRef.current = true;
   }, []);
@@ -836,8 +865,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
 
   return (
     <div ref={ref} className="absolute inset-0">
-      <Suspense fallback={null}>
-        {size.w > 0 && (
+      {size.w > 0 && (
           <ForceGraph2D
             ref={fgRef}
             width={size.w}
@@ -863,7 +891,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             warmupTicks={0}
             // A short bounded settle keeps style changes responsive; the
             // formation spring continues to hold structured layouts after it.
-            cooldownTicks={viz.formStrength > 0 ? 42 : 36}
+            cooldownTicks={size.w > 0 && size.w < 600 ? 12 : viz.formStrength > 0 ? 42 : 36}
             d3AlphaDecay={0.11}
             d3VelocityDecay={0.62}
             enableNodeDrag
@@ -871,7 +899,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             enablePanInteraction
             linkCanvasObject={drawLink as never}
             linkCanvasObjectMode={(() => "replace") as never}
-            linkDirectionalParticles={viz.particles && data.links.length < 180 ? 2 : 0}
+            linkDirectionalParticles={size.w >= 600 && viz.particles && data.links.length < 180 ? 2 : 0}
             linkDirectionalParticleWidth={1.1}
             linkDirectionalParticleColor={(() => palette.edgeHot) as never}
             nodeRelSize={6}
@@ -932,8 +960,7 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             onRenderFramePre={() => labelGridRef.current.clear()}
 
           />
-        )}
-      </Suspense>
+      )}
     </div>
   );
 }
