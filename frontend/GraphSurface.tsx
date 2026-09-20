@@ -92,12 +92,11 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
 
   /* ---------- formation: pull nodes onto a silhouette ---------- */
   const targets = useMemo(() => {
-    const base = formationTargets(viz.formation, nodes);
-    const mobileScale = size.w > 0 && size.w < 600 ? 0.58 : 1;
-    if (mobileScale === 1) return base;
-    return new Map(
-      [...base].map(([id, point]) => [id, { x: point.x * mobileScale, y: point.y * mobileScale }]),
-    );
+    // Keep formation coordinates device-independent. The camera fit below is
+    // measured from the actual canvas, so the same topology can adapt to a
+    // narrow phone, tablet split view, or resizable laptop without a second
+    // hard-coded geometry scale fighting the force simulation.
+    return formationTargets(viz.formation, nodes);
   }, [viz.formation, nodes, size.w]);
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
@@ -160,17 +159,16 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // Keep the complete formation comfortably inside the viewport. The live
     // projection is dense enough that tight framing reads as over-zoomed,
     // especially on narrow phone screens.
-    fg.zoomToFit(compact ? 340 : 60, compact ? 0 : 220);
-    if (!compact) {
-      const fittedZoom = fg.zoom();
-      if (typeof fittedZoom === "number" && Number.isFinite(fittedZoom)) {
-        fg.zoom(fittedZoom * 1.15, 0);
-      }
+    const padding = compact
+      ? Math.max(56, Math.min(104, Math.round(size.w * 0.16)))
+      : 60;
+    fg.zoomToFit(padding, compact ? 0 : 220);
+    const fittedZoom = fg.zoom();
+    if (typeof fittedZoom === "number" && Number.isFinite(fittedZoom)) {
+      // Leave a little breathing room for safe-area controls without using a
+      // device-specific zoom constant.
+      fg.zoom(fittedZoom * (compact ? 0.9 : 1.15), 0);
     }
-    // Mobile browsers have a short usable height once the header and dock
-    // are accounted for; apply a deterministic second scale to avoid a
-    // formation filling the entire phone viewport.
-    if (compact) fg.zoom(0.24, 0);
   }, [size.w]);
   useEffect(() => {
     tickCount.current = 0;
