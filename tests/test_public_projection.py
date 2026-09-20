@@ -109,6 +109,12 @@ def test_merchant_neighborhood_collapses_provider_listings_to_one_hotel() -> Non
     assert len(merchants) == 1
     assert merchants[0].title == "KMS Hakkim"
     assert sum(edge.relationship == "ORDERED_FROM" for edge in snapshot.edges) == 2
+    assert sum(edge.relationship == "SERVED_BY" for edge in snapshot.edges) == 2
+    assert all(
+        edge.target == merchants[0].id
+        for edge in snapshot.edges
+        if edge.relationship == "SERVED_BY"
+    )
     assert all("Swiggy" not in node.title and "Zomato" not in node.title for node in merchants)
     assert_public_payload(snapshot.model_dump(mode="json"))
 
@@ -144,7 +150,8 @@ def test_merchant_neighborhood_source_resolves_opaque_alias_and_preserves_platfo
     snapshot = MerchantNeighborhoodSource(Reader()).snapshot(_public_alias("identity:kms"))
     assert snapshot.mode == "neo4j_merchant_neighborhood"
     assert len([node for node in snapshot.nodes if node.label is PublicNodeLabel.MERCHANT]) == 1
-    assert len(snapshot.edges) == 2
+    assert len(snapshot.edges) == 4
+    assert sum(edge.relationship == "SERVED_BY" for edge in snapshot.edges) == 2
 
 
 def test_merchant_neighborhood_rejects_unknown_or_malformed_alias() -> None:

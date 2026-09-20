@@ -756,6 +756,27 @@ def build_merchant_neighborhood_snapshot(
                 relationship=relationship,
             )
         )
+
+    # Add an explicit, deterministic restaurant-to-food projection edge.  The
+    # canonical evidence path remains order -> observation -> item; this
+    # derived edge makes the selected restaurant's full product neighborhood
+    # immediately legible without publishing provider listing identities.
+    item_ids = {
+        node.id for node in public_nodes if node.label is PublicNodeLabel.ITEM
+    }
+    for item_id in sorted(item_ids):
+        edge_key = (item_id, identity_alias, "SERVED_BY")
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
+        edges.append(
+            PublicEdge(
+                id=_edge_id(item_id, identity_alias, "SERVED_BY"),
+                source=item_id,
+                target=identity_alias,
+                relationship="SERVED_BY",
+            )
+        )
     if not edges:
         raise PublicProjectionUnavailable("merchant neighborhood has no public relationships")
     node_ids = {node.id for node in public_nodes}
