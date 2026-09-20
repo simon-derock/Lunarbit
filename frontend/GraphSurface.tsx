@@ -5,6 +5,30 @@ import type { GraphEdge, GraphNode, Palette, VizProfile } from "./graph";
 
 type Pt = { x: number; y: number };
 type LinkDatum = GraphEdge & { source: GraphNode & Pt; target: GraphNode & Pt };
+type LabelSide = "left" | "right" | "top" | "bottom";
+
+/**
+ * Prefer the side away from the local chain direction.  For a left-to-right
+ * chain this puts the first node's label on the left and the next node's label
+ * on the right, instead of making both labels grow into the edge corridor.
+ */
+function preferredLabelSide(node: GraphNode & Pt, neighbors: Pt[], seed: number): LabelSide {
+  if (neighbors.length) {
+    const dx = neighbors.reduce((sum, point) => sum + (point.x - node.x), 0) / neighbors.length;
+    const dy = neighbors.reduce((sum, point) => sum + (point.y - node.y), 0) / neighbors.length;
+    if (Math.abs(dx) > Math.abs(dy) * 0.7 && Math.abs(dx) > 1) return dx > 0 ? "left" : "right";
+    if (Math.abs(dy) > 1) return dy > 0 ? "top" : "bottom";
+  }
+  return seed < 0.5 ? "left" : "right";
+}
+
+function labelCandidates(preferred: LabelSide): LabelSide[] {
+  const opposite: Record<LabelSide, LabelSide> = { left: "right", right: "left", top: "bottom", bottom: "top" };
+  const horizontal = preferred === "left" || preferred === "right";
+  return horizontal
+    ? [preferred, opposite[preferred], "top", "bottom"]
+    : [preferred, opposite[preferred], "left", "right"];
+}
 
 interface Props {
   nodes: GraphNode[];
@@ -53,6 +77,8 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
   const [ready, setReady] = useState(0);
   const introRef = useRef(0); // 0 → 1 reveal envelope
   const labelGridRef = useRef<Set<string>>(new Set());
+  const labelNeighborsRef = useRef<Map<string, Pt[]>>(new Map());
+  const nodeLookupRef = useRef<Map<string, GraphNode>>(new Map());
 
   const data = useMemo(() => {
     const ids = new Set(nodes.map((n) => n.id));
@@ -63,6 +89,10 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
         .map((e) => ({ ...e })) as unknown as LinkDatum[],
     };
   }, [nodes, edges]);
+
+  useEffect(() => {
+    nodeLookupRef.current = new Map(data.nodes.map((node) => [node.id, node]));
+  }, [data]);
 
   /* ---------- fluid intro: reveal envelope eased over ~1.1s ---------- */
   useEffect(() => {
@@ -632,14 +662,14 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     }
 
     // Names are part of the graph's meaning, not a hover-only decoration.
-    // Keep every node addressable in every visual system, while using a
-    // restrained screen-space hierarchy so dense projections stay legible.
+    // Keep them readable by choosing the side away from the local edge
+    // corridor and reserving screen-space cells before painting a label.
     const phone = size.w > 0 && size.w < 600;
-    // A phone cannot display hundreds of labels without turning the graph
-    // into an unreadable texture. Keep high-signal names visible and expose
-    // the complete identity in the selected-node sheet.
-    const show = !phone || !dense || active || n.id === hovered || n.source_count >= 2 || n.weight >= 6;
-    const desktopDense = size.w >= 900 && dense;
+    const highSignal = active || n.id === hovered || n.source_count >= 2 || n.weight >= 6;
+    // Mobile canvas space is intentionally sparse; the selected-node sheet is
+    // the complete identity surface there. Desktop styles still expose every
+    // node name, with collision-aware placement doing the decluttering.
+    const show = !phone || highSignal;
     if (show && (scale > 0.2 || active)) {
       const labelSize = active
         ? Math.max(10, Math.min(14, 8.4 / Math.max(scale, 0.6)))
@@ -648,40 +678,57 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
           : Math.max(6.2, Math.min(9.5, 7.6 / Math.max(scale, 0.7)));
       ctx.globalAlpha = (dim ? 0.12 : active ? 1 : 0.78) * intro;
       ctx.font = `${active ? 500 : 400} ${labelSize}px "IBM Plex Mono", ui-monospace, monospace`;
-      ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      // Dense desktop projections need a readable hierarchy. Keep selected,
-      // hovered, and high-signal labels, then reserve screen-space cells so
-      // neighboring secondary labels cannot paint over one another.
-      const highSignal = active || n.id === hovered || n.source_count >= 2 || n.weight >= 6;
-      const labelX = n.x + r * 2.9;
-      const labelWidth = ctx.measureText(n.label).width;
-      if (desktopDense && !highSignal) {
-        const cellW = 96 / Math.max(scale, 0.45);
-        const cellH = 22 / Math.max(scale, 0.45);
-        const left = Math.floor(labelX / cellW);
-        const right = Math.floor((labelX + labelWidth) / cellW);
-        const row = Math.floor(n.y / cellH);
+      const label = n.label?.trim() || n.type || n.id;
+      const labelWidth = ctx.measureText(label).width;
+      const neighbors = labelNeighborsRef.current.get(n.id) ?? [];
+      const preferred = preferredLabelSide(n, neighbors, hash(n.id));
+      const gap = Math.max(5 / Math.max(scale, 0.45), r * 0.72);
+      const labelHeight = labelSize * 1.45;
+      const cellW = 96 / Math.max(scale, 0.45);
+      const cellH = 20 / Math.max(scale, 0.45);
+      let chosen: { side: LabelSide; x: number; y: number } | null = null;
+      for (const side of labelCandidates(preferred)) {
+        const offset = r * 2.9 + gap;
+        const x = side === "left" ? n.x - offset : side === "right" ? n.x + offset : n.x;
+        const y = side === "top" ? n.y - offset : side === "bottom" ? n.y + offset : n.y;
+        const left = side === "right" ? x : side === "left" ? x - labelWidth : x - labelWidth / 2;
+        const right = side === "right" ? x + labelWidth : side === "left" ? x : x + labelWidth / 2;
+        const top = y - labelHeight / 2;
+        const bottom = y + labelHeight / 2;
+        const colStart = Math.floor((left - cellW * 0.08) / cellW);
+        const colEnd = Math.floor((right + cellW * 0.08) / cellW);
+        const rowStart = Math.floor((top - cellH * 0.15) / cellH);
+        const rowEnd = Math.floor((bottom + cellH * 0.15) / cellH);
         let occupied = false;
-        for (let col = left; col <= right; col += 1) {
-          if (labelGridRef.current.has(`${col}:${row}`)) {
-            occupied = true;
-            break;
+        for (let col = colStart; col <= colEnd && !occupied; col += 1) {
+          for (let row = rowStart; row <= rowEnd; row += 1) {
+            if (labelGridRef.current.has(`${col}:${row}`)) {
+              occupied = true;
+              break;
+            }
           }
         }
-        if (occupied) {
-          ctx.globalAlpha = 1;
-          return;
+        if (!occupied || active) {
+          chosen = { side, x, y };
+          for (let col = colStart; col <= colEnd; col += 1) {
+            for (let row = rowStart; row <= rowEnd; row += 1) labelGridRef.current.add(`${col}:${row}`);
+          }
+          break;
         }
-        for (let col = left; col <= right; col += 1) labelGridRef.current.add(`${col}:${row}`);
       }
+      if (!chosen) {
+        ctx.globalAlpha = 1;
+        return;
+      }
+      ctx.textAlign = chosen.side === "right" ? "left" : chosen.side === "left" ? "right" : "center";
       // A hairline paper keyline keeps labels readable over bright graph
       // marks without adding cards or dashboard chrome to the canvas.
       ctx.strokeStyle = fade(palette.paper, isDark ? 0.72 : 0.9);
       ctx.lineWidth = Math.max(1.5, labelSize * 0.22);
-      ctx.strokeText(n.label, n.x + r * 2.9, n.y);
+      ctx.strokeText(label, chosen.x, chosen.y);
       ctx.fillStyle = active ? palette.ink : fade(color, 0.82);
-      ctx.fillText(n.label, n.x + r * 2.9, n.y);
+      ctx.fillText(label, chosen.x, chosen.y);
     }
     ctx.globalAlpha = 1;
 
@@ -957,7 +1004,18 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
             }}
             onEngineTick={onTick}
             onEngineStop={() => fit()}
-            onRenderFramePre={() => labelGridRef.current.clear()}
+            onRenderFramePre={() => {
+              labelGridRef.current.clear();
+              const neighbors = new Map<string, Pt[]>();
+              for (const link of data.links) {
+                const source = (typeof link.source === "object" ? link.source : nodeLookupRef.current.get(String(link.source))) as (GraphNode & Pt) | undefined;
+                const target = (typeof link.target === "object" ? link.target : nodeLookupRef.current.get(String(link.target))) as (GraphNode & Pt) | undefined;
+                if (!source || !target) continue;
+                neighbors.set(source.id, [...(neighbors.get(source.id) ?? []), target]);
+                neighbors.set(target.id, [...(neighbors.get(target.id) ?? []), source]);
+              }
+              labelNeighborsRef.current = neighbors;
+            }}
 
           />
       )}
