@@ -68,8 +68,16 @@ def _check_shell(page: Any, config: BrowserConfig) -> None:
     page.goto(config.url, wait_until="domcontentloaded")
     page.locator("main.app-shell").wait_for(state="visible", timeout=15_000)
 
+    # The graph renderer is lazy-loaded and the Aura projection is network
+    # backed. Wait for either explicit state instead of sampling immediately;
+    # otherwise a healthy page can fail this check during the first render.
+    page.wait_for_function(
+        """() => Boolean(document.querySelector('canvas')) ||
+        document.body.innerText.toLowerCase().includes('live graph unavailable')""",
+        timeout=15_000,
+    )
     # A failed API must be rendered as an explicit state, never as synthetic
-    # graph content.  A live projection instead exposes the canvas.
+    # graph content. A live projection instead exposes the canvas.
     graph_ready = page.locator("canvas").count() > 0
     unavailable = page.get_by_text("live graph unavailable", exact=False).count() > 0
     _assert(graph_ready or unavailable, "graph shell did not reach a verifiable state")

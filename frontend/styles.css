@@ -181,19 +181,18 @@ html {
   }
   .menu-popover {
     position: fixed !important;
-    top: 70px !important;
-    right: 10px !important;
-    left: auto !important;
+    top: auto;
+    right: auto;
+    left: auto;
     height: auto !important;
-    width: min(12rem, calc(100vw - 44px)) !important;
-    max-width: calc(100vw - 44px);
+    width: min(12rem, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px);
     max-height: min(36dvh, 18rem);
     display: block !important;
     overflow-y: auto !important;
     background: color-mix(in oklab, var(--surface) 97%, var(--foreground));
   }
-  .menu-popover-start { left: 10px !important; right: auto !important; width: min(12rem, calc(100vw - 44px)) !important; max-width: calc(100vw - 44px); }
-  .menu-popover-end { right: 10px !important; left: auto !important; }
+  .menu-popover-start, .menu-popover-end { left: auto; right: auto; }
   .header-controls { gap: 4px !important; align-items: center; }
   .menu-wheel-hint { display: none; }
   .menu-popover > button { display: flex !important; width: 100%; min-height: 30px; height: auto !important; padding: 4px 6px; }

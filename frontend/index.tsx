@@ -47,8 +47,35 @@ function Menu({
   wheelExplore?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties | undefined>();
   const box = useRef<HTMLDivElement>(null);
   const active = options.find((o) => o.id === value) ?? options[0]!;
+
+  const positionPopover = () => {
+    const anchor = box.current?.querySelector<HTMLButtonElement>(":scope > button");
+    if (!anchor || window.innerWidth > 560) {
+      setPopoverStyle(undefined);
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const visual = window.visualViewport;
+    const viewportWidth = visual?.width ?? window.innerWidth;
+    const viewportHeight = visual?.height ?? window.innerHeight;
+    const width = Math.min(192, viewportWidth - 24);
+    const margin = 12;
+    const left = Math.max(margin, Math.min(rect.right - width, viewportWidth - width - margin));
+    const estimatedHeight = Math.min(360, Math.max(96, options.length * 52));
+    const below = rect.bottom + 6;
+    const top = below + estimatedHeight <= viewportHeight - margin
+      ? below
+      : Math.max(margin, rect.top - estimatedHeight - 6);
+    setPopoverStyle({
+      left: `${Math.round(left)}px`,
+      right: "auto",
+      top: `${Math.round(top)}px`,
+      width: `${Math.round(width)}px`,
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -56,13 +83,25 @@ function Menu({
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("pointerdown", onDoc);
-    return () => document.removeEventListener("pointerdown", onDoc);
-  }, [open]);
+    positionPopover();
+    const visual = window.visualViewport;
+    window.addEventListener("resize", positionPopover, { passive: true });
+    visual?.addEventListener("resize", positionPopover, { passive: true });
+    visual?.addEventListener("scroll", positionPopover, { passive: true });
+    return () => {
+      document.removeEventListener("pointerdown", onDoc);
+      window.removeEventListener("resize", positionPopover);
+      visual?.removeEventListener("resize", positionPopover);
+      visual?.removeEventListener("scroll", positionPopover);
+    };
+  }, [open, options.length]);
 
   return (
     <div ref={box} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
         onWheel={(event) => {
           if (!wheelExplore || options.length < 2) return;
           event.preventDefault();
@@ -88,7 +127,7 @@ function Menu({
       {open && (
         <div
           className={`menu-popover menu-popover-${align} absolute z-50 mt-[-1px] max-h-[22rem] overflow-y-auto no-scrollbar`}
-          style={{ width, [align === "end" ? "right" : "left"]: 0 }}
+          style={popoverStyle ?? { width, [align === "end" ? "right" : "left"]: 0 }}
         >
           {options.map((o) => (
             <button
@@ -97,6 +136,7 @@ function Menu({
                 onChange(o.id);
                 if (!keepOpenOnSelect) setOpen(false);
               }}
+              role="menuitem"
               className={`flex w-full items-start gap-2 border-b border-border px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-foreground/5 ${
                 o.id === value ? "bg-foreground/[0.07]" : ""
               }`}
