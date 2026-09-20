@@ -67,12 +67,43 @@ html {
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  --titlebar-top: env(titlebar-area-y, 0px);
+  --titlebar-height: env(titlebar-area-height, 0px);
 }
 
 .app-shell {
   height: 100dvh;
   min-height: 100svh;
   padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* Foreground controls stay in the browser/OS-safe region; the graph remains
+   full bleed behind them. This also covers installed desktop PWAs using
+   Window Controls Overlay on notched Mac displays. */
+.app-shell > header {
+  padding-top: max(1rem, calc(var(--safe-top) + var(--titlebar-height) + 1rem));
+  padding-right: max(1rem, calc(var(--safe-right) + 1rem));
+  padding-left: max(1rem, calc(var(--safe-left) + 1rem));
+}
+.app-shell > footer {
+  padding-right: max(1rem, calc(var(--safe-right) + 1rem));
+  padding-bottom: max(1rem, calc(var(--safe-bottom) + 1rem));
+  padding-left: max(1rem, calc(var(--safe-left) + 1rem));
+}
+
+/* Foldable / dual-segment browsers expose the hinge as the gap between two
+   viewport segments. Keep controls and the graph on one segment rather than
+   painting critical UI across the hinge. */
+@media (horizontal-viewport-segments: 2) {
+  .app-shell > header,
+  .app-shell > footer {
+    padding-inline-start: max(var(--safe-left), env(viewport-segment-left 0 0, 0px));
+    padding-inline-end: max(var(--safe-right), env(viewport-segment-right 1 0, 0px));
+  }
+}
+@media (vertical-viewport-segments: 2) {
+  .app-shell > header { padding-block-end: 0.5rem; }
+  .app-shell > footer { padding-block-start: 0.5rem; }
 }
 .mobile-selection { display: none; }
 
@@ -162,7 +193,12 @@ html {
   .mobile-selection { display: block; }
 }
 @media (max-width: 560px) {
-  header { padding: 10px !important; }
+  header {
+    padding-top: calc(10px + var(--safe-top)) !important;
+    padding-right: calc(10px + var(--safe-right)) !important;
+    padding-bottom: 10px !important;
+    padding-left: calc(10px + var(--safe-left)) !important;
+  }
   header > div:first-child { width: 100%; }
   header > div:last-child {
     width: 100%;
@@ -200,7 +236,7 @@ html {
   .github-link { width: 32px !important; max-width: 32px !important; flex: 0 0 32px !important; height: 32px; justify-content: center; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; transform: translateY(-1px); }
   .github-link span { display: none; }
   header { z-index: 30; }
-  footer { z-index: 30; flex-direction: column; align-items: stretch; padding: 10px !important; padding-bottom: calc(14px + env(safe-area-inset-bottom)) !important; gap: 6px !important; }
+  footer { z-index: 30; flex-direction: column; align-items: stretch; padding: 10px !important; padding-bottom: calc(14px + var(--safe-bottom)) !important; gap: 6px !important; }
   footer > div:first-child { width: 100%; max-width: none; align-items: stretch; }
   footer > div:first-child > div:first-child { width: 100%; }
   footer .w-\[19rem\] { width: 100%; }

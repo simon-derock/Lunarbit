@@ -380,6 +380,7 @@ export function Console() {
       data-orientation={viewport.orientation}
       data-pointer={viewport.coarsePointer ? "coarse" : "fine"}
       data-reduced-motion={viewport.reducedMotion ? "true" : "false"}
+      data-segmented={viewport.segmented ? "true" : "false"}
       className={`app-shell theme-${themeId} relative h-screen w-full overflow-hidden bg-background text-foreground`}
     >
       <GraphSurface

@@ -9,6 +9,7 @@ export interface ViewportState {
   orientation: "portrait" | "landscape";
   coarsePointer: boolean;
   reducedMotion: boolean;
+  segmented: boolean;
 }
 
 function readViewport(): ViewportState {
@@ -20,6 +21,7 @@ function readViewport(): ViewportState {
       orientation: "landscape",
       coarsePointer: false,
       reducedMotion: false,
+      segmented: false,
     };
   }
 
@@ -28,6 +30,7 @@ function readViewport(): ViewportState {
   const height = Math.round(visual?.height ?? window.innerHeight);
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const segmented = window.matchMedia("(horizontal-viewport-segments: 2), (vertical-viewport-segments: 2)").matches;
   const shortestSide = Math.min(width, height);
   const profile: ViewportProfile =
     shortestSide < 600 ? "phone" : shortestSide < 900 || coarsePointer ? "tablet" : "desktop";
@@ -39,6 +42,7 @@ function readViewport(): ViewportState {
     orientation: width >= height ? "landscape" : "portrait",
     coarsePointer,
     reducedMotion,
+    segmented,
   };
 }
 
@@ -49,6 +53,7 @@ export function useViewportState(): ViewportState {
     const visual = window.visualViewport;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const pointer = window.matchMedia("(pointer: coarse)");
+    const segments = window.matchMedia("(horizontal-viewport-segments: 2), (vertical-viewport-segments: 2)");
     const update = () => setState(readViewport());
 
     window.addEventListener("resize", update, { passive: true });
@@ -57,6 +62,7 @@ export function useViewportState(): ViewportState {
     visual?.addEventListener("scroll", update, { passive: true });
     motion.addEventListener("change", update);
     pointer.addEventListener("change", update);
+    segments.addEventListener("change", update);
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("orientationchange", update);
@@ -64,6 +70,7 @@ export function useViewportState(): ViewportState {
       visual?.removeEventListener("scroll", update);
       motion.removeEventListener("change", update);
       pointer.removeEventListener("change", update);
+      segments.removeEventListener("change", update);
     };
   }, []);
 
