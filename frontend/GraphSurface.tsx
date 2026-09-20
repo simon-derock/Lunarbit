@@ -605,7 +605,11 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // Names are part of the graph's meaning, not a hover-only decoration.
     // Keep every node addressable in every visual system, while using a
     // restrained screen-space hierarchy so dense projections stay legible.
-    const show = true;
+    const phone = size.w > 0 && size.w < 600;
+    // A phone cannot display hundreds of labels without turning the graph
+    // into an unreadable texture. Keep high-signal names visible and expose
+    // the complete identity in the selected-node sheet.
+    const show = !phone || !dense || active || n.id === hovered || n.source_count >= 2 || n.weight >= 6;
     const desktopDense = size.w >= 900 && dense;
     if (show && (scale > 0.2 || active)) {
       const labelSize = active

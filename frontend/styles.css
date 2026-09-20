@@ -208,7 +208,7 @@ html {
     gap: 4px;
   }
   header > div:last-child > * { min-width: 0; flex: 1 1 0; }
-  header .plate { min-width: 0; width: 100%; height: 32px; padding-inline: 7px; }
+  header .plate { min-width: 0; width: 100%; height: 40px; padding-inline: 7px; }
   header .plate button { min-width: 0; }
   header .plate .tag { flex: 0 0 auto; }
   .header-controls .plate.absolute {
@@ -231,9 +231,9 @@ html {
   .menu-popover-start, .menu-popover-end { left: auto; right: auto; }
   .header-controls { gap: 4px !important; align-items: center; }
   .menu-wheel-hint { display: none; }
-  .menu-popover > button { display: flex !important; width: 100%; min-height: 30px; height: auto !important; padding: 4px 6px; }
+  .menu-popover > button { display: flex !important; width: 100%; min-height: 44px; height: auto !important; padding: 7px 8px; }
   header .tag { letter-spacing: 0.12em; }
-  .github-link { width: 32px !important; max-width: 32px !important; flex: 0 0 32px !important; height: 32px; justify-content: center; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; transform: translateY(-1px); }
+  .github-link { width: 40px !important; max-width: 40px !important; flex: 0 0 40px !important; height: 40px; justify-content: center; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; transform: translateY(-1px); }
   .github-link span { display: none; }
   header { z-index: 30; }
   footer { z-index: 30; flex-direction: column; align-items: stretch; padding: 10px !important; padding-bottom: calc(14px + var(--safe-bottom)) !important; gap: 6px !important; }
@@ -241,10 +241,31 @@ html {
   footer > div:first-child > div:first-child { width: 100%; }
   footer .w-\[19rem\] { width: 100%; }
   footer .w-\[34rem\] { width: 100%; max-width: none; }
-  footer .ask-submit { width: 32px; height: 32px; }
+  footer .ask-submit { width: 44px; height: 44px; }
   footer > div:last-child { min-width: 0; }
   footer > div:last-child { width: 100%; max-width: none; }
   footer input { min-width: 0; }
+}
+
+@media (pointer: coarse) {
+  button, input, [role="menuitem"] { touch-action: manipulation; }
+  .ask-submit { min-width: 44px; min-height: 44px; }
+}
+
+/* On phones the selected-node card is a bottom sheet above the query dock;
+   keeping it near the graph would make it compete with the top command bar. */
+@media (max-width: 560px) {
+  .mobile-selection {
+    position: fixed !important;
+    top: auto !important;
+    bottom: calc(76px + var(--safe-bottom));
+    left: calc(10px + var(--safe-left));
+    right: calc(10px + var(--safe-right));
+  }
+  .mobile-selection > div {
+    max-height: min(9rem, 24dvh);
+    overflow: auto;
+  }
 }
 
 body {
