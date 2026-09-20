@@ -11,6 +11,7 @@ import {
   type SortId,
   type Snapshot,
 } from "./graph";
+import { useViewportState } from "./viewport";
 
 const EMPTY_SNAPSHOT: Snapshot = {
   metrics: [],
@@ -161,6 +162,7 @@ const STATUS: Record<string, string> = {
 };
 
 export function Console() {
+  const viewport = useViewportState();
   const defaultViz = VIZ_PROFILES.find((profile) => profile.id === "cortex") ?? VIZ_PROFILES[0]!;
   const [profileId, setProfileId] = useState(GRAPH_PROFILES[0]!.id);
   const [vizId, setVizId] = useState(defaultViz.id);
@@ -334,6 +336,10 @@ export function Console() {
   return (
     <main
       style={theme.vars as CSSProperties}
+      data-viewport-profile={viewport.profile}
+      data-orientation={viewport.orientation}
+      data-pointer={viewport.coarsePointer ? "coarse" : "fine"}
+      data-reduced-motion={viewport.reducedMotion ? "true" : "false"}
       className={`app-shell theme-${themeId} relative h-screen w-full overflow-hidden bg-background text-foreground`}
     >
       <GraphSurface
