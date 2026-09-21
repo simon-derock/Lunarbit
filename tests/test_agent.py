@@ -37,6 +37,14 @@ def test_query_plan_supports_merchant_spend_aggregation() -> None:
     assert plan.selected_templates == (QueryTemplate.MERCHANT_SPEND_TOTAL,)
 
 
+def test_follow_up_spend_intent_is_not_overridden_by_previous_order_context() -> None:
+    plan = build_query_plan(
+        "How many orders came from KMS Hakkim? Follow-up: How much did I spend there?"
+    )
+
+    assert plan.selected_templates == (QueryTemplate.MERCHANT_SPEND_TOTAL,)
+
+
 def test_query_plan_does_not_default_unknown_questions_to_merchant_count() -> None:
     plan = build_query_plan("What is my favorite color?")
 

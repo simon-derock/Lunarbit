@@ -26,6 +26,12 @@ from lunarbit.retrieval import (
 QUERY_WORKFLOW_VERSION = "query-workflow-v1.0.0"
 
 
+def _active_turn(question: str) -> str:
+    """Return the newest turn while retaining the full question for audit state."""
+
+    return question.rsplit(" Follow-up: ", 1)[-1]
+
+
 class QueryDisposition(StrEnum):
     SUPPORTED = "supported"
     CLARIFICATION_REQUIRED = "clarification_required"
@@ -67,12 +73,12 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
         return (QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,)
     if re.search(r"\b(?:show|list|find|search)\b.*\b(?:orders?|dishes?|items?)\b", normalized):
         return (QueryTemplate.FULLTEXT_EVIDENCE,)
-    if re.search(r"\b(?:orders?|times?)\b.*\b(?:from|at)\s+[a-z0-9]", normalized):
-        return (QueryTemplate.MERCHANT_ORDER_COUNT,)
     if any(token in normalized for token in ("spent", "spend", "spending")) and re.search(
-        r"\b(?:from|at)\s+[a-z0-9]", normalized
+        r"\b(?:from|at)\s+[a-z0-9]|\b(?:there|here|this restaurant|this hotel)\b", normalized
     ):
         return (QueryTemplate.MERCHANT_SPEND_TOTAL,)
+    if re.search(r"\b(?:orders?|times?)\b.*\b(?:from|at)\s+[a-z0-9]", normalized):
+        return (QueryTemplate.MERCHANT_ORDER_COUNT,)
     if any(
         token in normalized
         for token in ("which restaurants", "most orders", "most-ordered", "top restaurants")
@@ -172,9 +178,15 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
 
 
 def build_query_plan(question: str) -> QueryPlan:
-    classification = classify_query(question)
-    selected = _templates_for(question, classification.intent)
-    disposition, reason = _disposition_for(question, selected)
+    active_question = _active_turn(question)
+    classification = classify_query(active_question)
+    selected = _templates_for(active_question, classification.intent)
+    if selected is None and active_question != question:
+        # Follow-ups such as “there?” may need the previous turn's explicit
+        # entity while preserving the current turn's intent when available.
+        previous_classification = classify_query(question)
+        selected = _templates_for(question, previous_classification.intent)
+    disposition, reason = _disposition_for(active_question, selected)
     templates = selected or ()
     policy = TraversalPolicy(
         maximum_depth=4,
