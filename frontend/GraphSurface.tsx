@@ -665,16 +665,19 @@ export function GraphSurface({ nodes, edges, palette, viz, selectedId, onSelect,
     // Keep them readable by choosing the side away from the local edge
     // corridor and reserving screen-space cells before painting a label.
     const phone = size.w > 0 && size.w < 600;
-    const highSignal = active || n.id === hovered || n.source_count >= 2 || n.weight >= 6;
-    // Mobile canvas space is intentionally sparse; the selected-node sheet is
-    // the complete identity surface there. Desktop styles still expose every
-    // node name, with collision-aware placement doing the decluttering.
+    const degree = labelNeighborsRef.current.get(n.id)?.length ?? 0;
+    const highSignal = active || n.id === hovered || degree > 0 || n.source_count >= 2 || n.weight >= 6;
+    // The public projection may omit enrichment counters such as source_count
+    // and weight. Use real topology as the mobile signal so connected food,
+    // order, merchant, and evidence nodes retain their names instead of
+    // disappearing simply because optional metadata was not projected.
+    // Collision-aware placement still declutters dense formations.
     const show = !phone || highSignal;
     if (show && (scale > 0.2 || active)) {
       const labelSize = active
         ? Math.max(10, Math.min(14, 8.4 / Math.max(scale, 0.6)))
         : dense
-          ? Math.max(4.8, Math.min(7.2, 6.8 / Math.max(scale, 0.7)))
+          ? Math.max(5.2, Math.min(7.4, 6.8 / Math.max(scale, 0.7)))
           : Math.max(6.2, Math.min(9.5, 7.6 / Math.max(scale, 0.7)));
       ctx.globalAlpha = (dim ? 0.12 : active ? 1 : 0.78) * intro;
       ctx.font = `${active ? 500 : 400} ${labelSize}px "IBM Plex Mono", ui-monospace, monospace`;
