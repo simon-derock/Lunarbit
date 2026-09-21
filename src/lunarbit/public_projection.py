@@ -18,6 +18,7 @@ from typing import Protocol, Self
 
 from neo4j import READ_ACCESS, Driver, GraphDatabase
 
+from lunarbit.delivery_identity import delivery_public_id
 from lunarbit.public import PublicEdge, PublicMetric, PublicNode, PublicNodeLabel, PublicSnapshot
 
 _RELATIONSHIP = re.compile(r"^[A-Z_]+$")
@@ -187,7 +188,8 @@ _NAVIGATION_NODE_CYPHER = (
     "node.observed_amount AS observed_amount, node.amount AS amount, "
     "node.currency AS currency, node.component_type AS component_type, "
     "node.status AS status, node.scope AS scope "
-    ", node.public_id AS public_id, node.public_label AS public_label "
+    ", node.public_id AS public_id, node.public_label AS public_label, "
+    "node.normalized_value_private AS normalized_value_private "
     "ORDER BY COUNT { (node)--() } DESC, node.node_id LIMIT $limit"
 )
 
@@ -562,7 +564,7 @@ def _navigation_label(labels: object) -> PublicNodeLabel:
         return PublicNodeLabel.ORDER
     if values & {"MerchantIdentity", "Merchant", "Outlet"}:
         return PublicNodeLabel.MERCHANT
-    if "PersonIdentity" in values:
+    if values & {"PersonIdentity", "PersonMention"}:
         return PublicNodeLabel.PERSON
     if values & {"ItemObservation", "MerchantItem"}:
         return PublicNodeLabel.ITEM
@@ -621,12 +623,15 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
         title = "Deterministic reconciliation"
         subtitle = str(row.get("status") or "reviewed run")
     elif label is PublicNodeLabel.PERSON:
-        public_id = str(row.get("public_id") or "participant")
+        public_id = str(row.get("public_id") or "").strip()
+        if not public_id:
+            normalized = row.get("normalized_value_private")
+            if isinstance(normalized, str) and normalized.strip():
+                public_id = delivery_public_id(normalized)
+        if not public_id:
+            public_id = alias[-6:].upper()
         title = str(row.get("public_label") or f"Delivery participant {public_id}")
         subtitle = "Pseudonymous delivery participant"
-    elif "PersonMention" in label_values:
-        title = f"Delivery participant {alias[-6:].upper()}"
-        subtitle = "Anonymized delivery mention"
     else:
         evidence_kind = next(
             (
@@ -656,6 +661,9 @@ def _navigation_node(row: Mapping[str, object]) -> PublicNode:
                 "component_type": str(row.get("component_type") or ""),
             }
         )
+    if label is PublicNodeLabel.PERSON:
+        properties["public_id"] = public_id
+        alias = f"pub:person:{public_id}"
     return PublicNode(
         id=alias,
         label=label,
@@ -761,9 +769,7 @@ def build_merchant_neighborhood_snapshot(
     # canonical evidence path remains order -> observation -> item; this
     # derived edge makes the selected restaurant's full product neighborhood
     # immediately legible without publishing provider listing identities.
-    item_ids = {
-        node.id for node in public_nodes if node.label is PublicNodeLabel.ITEM
-    }
+    item_ids = {node.id for node in public_nodes if node.label is PublicNodeLabel.ITEM}
     for item_id in sorted(item_ids):
         edge_key = (item_id, identity_alias, "SERVED_BY")
         if edge_key in seen_edges:
@@ -898,14 +904,17 @@ class NavigationSnapshotSource:
 
     def snapshot(self) -> PublicSnapshot:
         rows = self._reader.navigation_nodes(per_class=self._per_class)
-        nodes = tuple(_navigation_node(row) for row in rows)
+        node_by_id: dict[str, PublicNode] = {}
+        aliases: dict[str, str] = {}
+        for row in rows:
+            node = _navigation_node(row)
+            node_by_id.setdefault(node.id, node)
+            canonical_id = row.get("canonical_id")
+            if isinstance(canonical_id, str):
+                aliases[canonical_id] = node.id
+        nodes = tuple(node_by_id.values())
         if not nodes:
             raise PublicProjectionUnavailable("canonical graph has no navigable public nodes")
-        aliases = {
-            str(row["canonical_id"]): _public_alias(str(row["canonical_id"]))
-            for row in rows
-            if isinstance(row.get("canonical_id"), str)
-        }
         relationships = self._reader.navigation_relationships(
             canonical_ids=tuple(aliases),
             limit=self._relationship_limit,

@@ -383,3 +383,56 @@ def test_numeric_only_item_names_are_quarantined_at_public_boundary() -> None:
 
     assert node.title == "Unresolved item observation"
     assert node.subtitle == "Numeric extraction quarantined"
+
+
+def test_delivery_mentions_collapse_to_one_pseudonymous_public_node() -> None:
+    from lunarbit.public_projection import NavigationSnapshotSource
+
+    class Reader:
+        def navigation_nodes(self, *, per_class):
+            return (
+                {
+                    "canonical_id": "order:one",
+                    "labels": ["LunarbitNode", "Order"],
+                    "platform": "swiggy",
+                },
+                {
+                    "canonical_id": "order:two",
+                    "labels": ["LunarbitNode", "Order"],
+                    "platform": "zomato",
+                },
+                {
+                    "canonical_id": "mention:one",
+                    "labels": ["LunarbitNode", "PersonMention"],
+                    "normalized_value_private": "courier alpha",
+                },
+                {
+                    "canonical_id": "mention:two",
+                    "labels": ["LunarbitNode", "PersonMention"],
+                    "normalized_value_private": "courier alpha",
+                },
+            )
+
+        def navigation_relationships(self, *, canonical_ids, limit):
+            return (
+                {
+                    "source_id": "order:one",
+                    "target_id": "mention:one",
+                    "relationship": "DELIVERED_BY",
+                },
+                {
+                    "source_id": "order:two",
+                    "target_id": "mention:two",
+                    "relationship": "DELIVERED_BY",
+                },
+            )
+
+        def graph_totals(self):
+            return (4, 2)
+
+    snapshot = NavigationSnapshotSource(Reader(), per_class=10, relationship_limit=10).snapshot()
+    people = [node for node in snapshot.nodes if node.label.value == "Person"]
+    assert len(people) == 1
+    assert people[0].title.startswith("Delivery participant ")
+    assert len([edge for edge in snapshot.edges if edge.relationship == "DELIVERED_BY"]) == 2
+    assert_public_payload(snapshot.model_dump(mode="json"))
