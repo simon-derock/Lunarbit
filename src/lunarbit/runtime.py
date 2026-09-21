@@ -79,6 +79,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"limit": limit}
     if template is QueryTemplate.FEE_DISCOUNT_ANALYSIS:
         return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
+    if template is QueryTemplate.SPENDING_CHANGE_DECOMPOSITION:
+        return {"limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -420,6 +422,57 @@ def _synthesize(
             f"leaving a net fee burden of {currency} {net:.2f}.",
             f"{currency} {fee_total:.2f} - {currency} {discount_total:.2f} = {currency} {net:.2f}",
             ("Fees and discounts are source-asserted components, not an inferred promotion ROI.",),
+        )
+    if QueryTemplate.SPENDING_CHANGE_DECOMPOSITION in plan.selected_templates:
+        priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
+        selected: dict[str, tuple[int, Decimal, str, str]] = {}
+        for row in rows:
+            order_id = row.get("order_id")
+            year = row.get("year")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            component_type = str(row.get("component_type", ""))
+            if order_id is None or year is None or amount is None or currency is None:
+                continue
+            candidate = (int(year), Decimal(str(amount)), str(currency), component_type)
+            current = selected.get(str(order_id))
+            if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
+                selected[str(order_id)] = candidate
+        if not selected:
+            return 0, None, None, ("No source-backed order totals were available.",)
+        currencies = {value[2] for value in selected.values()}
+        if len(currencies) != 1:
+            return 0, None, None, ("Spending periods use multiple currencies.",)
+        by_year: dict[int, list[Decimal]] = defaultdict(list)
+        currency = currencies.pop()
+        for year, amount, _currency, _component_type in selected.values():
+            by_year[year].append(amount)
+        years = sorted(by_year)
+        if len(years) < 2:
+            return len(selected), None, None, ("At least two spending years are required.",)
+        base_year, current_year = years[-2:]
+        base_count = Decimal(len(by_year[base_year]))
+        current_count = Decimal(len(by_year[current_year]))
+        base_total = sum(by_year[base_year], Decimal("0"))
+        current_total = sum(by_year[current_year], Decimal("0"))
+        base_average = base_total / base_count
+        current_average = current_total / current_count
+        volume_effect = (current_count - base_count) * base_average
+        average_effect = current_count * (current_average - base_average)
+        change = current_total - base_total
+        if volume_effect + average_effect != change:
+            return 0, None, None, ("The spending decomposition did not close exactly.",)
+        return (
+            len(selected),
+            f"Between {base_year} and {current_year}, spending increased by "
+            f"{currency} {change:.2f}: {currency} {volume_effect:.2f} from order volume "
+            f"and {currency} {average_effect:.2f} from average order cost.",
+            f"{currency} {change:.2f} = {currency} {volume_effect:.2f} volume effect + "
+            f"{currency} {average_effect:.2f} average-order effect",
+            (
+                "This decomposition separates order volume from average order cost; "
+                "item-level price and mix attribution requires matched item observations.",
+            ),
         )
     if QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY in plan.selected_templates:
         return _price_history_synthesis(rows)

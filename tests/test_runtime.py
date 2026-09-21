@@ -271,6 +271,42 @@ def test_fee_discount_analysis_calculates_offset_and_net_burden() -> None:
     assert result.calculation == "INR 60.00 - INR 15.00 = INR 45.00"
 
 
+def test_spending_change_decomposes_volume_and_average_order_effects() -> None:
+    reader = StubReader(
+        tuple(
+            {
+                "order_id": f"order:{year}-{index}",
+                "year": year,
+                "component_type": "customer_total",
+                "amount": str(amount),
+                "currency": "INR",
+                "chunk_id": f"chunk:{year}-{index}",
+                "source_id": f"message:{year}-{index}",
+                "source_hash": (chr(96 + year - 2022) * 64),
+            }
+            for year, amounts in ((2024, (100, 100)), (2025, (150, 150, 150)))
+            for index, amount in enumerate(amounts, start=1)
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="What caused my spending to change between years?",
+            slots=QuerySlots(),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.direct_answer == (
+        "Between 2024 and 2025, spending increased by INR 250.00: "
+        "INR 100.00 from order volume and INR 150.00 from average order cost."
+    )
+    assert (
+        result.calculation
+        == "INR 250.00 = INR 100.00 volume effect + INR 150.00 average-order effect"
+    )
+
+
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     reader = StubReader(
         (
