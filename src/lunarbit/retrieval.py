@@ -144,6 +144,7 @@ class QueryTemplate(StrEnum):
     EVIDENCE_FOR_MONEY_COMPONENT = "evidence_for_money_component"
     ORDER_RECONSTRUCTION = "order_reconstruction"
     FULLTEXT_EVIDENCE = "fulltext_evidence"
+    YEARLY_SPEND_TOTAL = "yearly_spend_total"
 
 
 class QueryClassification(ContractModel):
@@ -293,6 +294,20 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "chunk.source_hash AS source_hash, source.node_id AS source_id "
         "ORDER BY component.node_id SKIP $offset LIMIT $limit",
         frozenset({"component_type", "platform", "offset", "limit"}),
+    ),
+    QueryTemplate.YEARLY_SPEND_TOTAL: (
+        "MATCH (order:Order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        "WHERE component.component_type IN "
+        "['customer_total', 'invoice_total', 'payment_assertion'] "
+        "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
+        "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "RETURN order.node_id AS order_id, date(message.occurred_at).year AS year, "
+        "component.component_type AS component_type, component.amount AS amount, "
+        "component.currency AS currency, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, source.node_id AS source_id "
+        "ORDER BY year, order_id, component.component_type LIMIT $limit",
+        frozenset({"limit"}),
     ),
     QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: (
         "MATCH (component:MoneyComponent)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "

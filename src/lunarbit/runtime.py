@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
@@ -74,6 +75,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
             "offset": 0,
             "limit": limit,
         }
+    if template is QueryTemplate.YEARLY_SPEND_TOTAL:
+        return {"limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -326,6 +329,56 @@ def _synthesize(
             f"{currency} {total:.2f} across {count} distinct {noun}.",
             calculation,
             ("This is a sum of source-asserted components, not a bank-confirmed debit.",),
+        )
+    if QueryTemplate.YEARLY_SPEND_TOTAL in plan.selected_templates:
+        priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
+        selected: dict[str, tuple[int, Decimal, str, str]] = {}
+        for row in rows:
+            order_id = row.get("order_id")
+            year = row.get("year")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            component_type = str(row.get("component_type", ""))
+            if order_id is None or year is None or amount is None or currency is None:
+                continue
+            candidate = (int(year), Decimal(str(amount)), str(currency), component_type)
+            current = selected.get(str(order_id))
+            if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
+                selected[str(order_id)] = candidate
+            elif (
+                current[0] == candidate[0]
+                and current[1] != candidate[1]
+                and priority.get(component_type, 0) == priority.get(current[3], 0)
+            ):
+                selected.pop(str(order_id), None)
+        if not selected:
+            return 0, None, None, ("No source-backed customer totals were available.",)
+        currencies = {value[2] for value in selected.values()}
+        if len(currencies) != 1:
+            return 0, None, None, ("Yearly totals use multiple currencies and cannot be combined.",)
+        currency = currencies.pop()
+        totals: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        counts: dict[int, int] = defaultdict(int)
+        terms: dict[int, list[str]] = defaultdict(list)
+        for year, amount, _currency, _component_type in selected.values():
+            totals[year] += amount
+            counts[year] += 1
+            terms[year].append(f"{currency} {amount:.2f}")
+        ordered_years = sorted(totals)
+        preview = "; ".join(
+            f"{year}: {currency} {totals[year]:.2f} across {counts[year]} "
+            f"{'order' if counts[year] == 1 else 'orders'}"
+            for year in ordered_years
+        )
+        calculation = "; ".join(
+            f"{year}: {' + '.join(sorted(terms[year]))} = {currency} {totals[year]:.2f}"
+            for year in ordered_years
+        )
+        return (
+            len(selected),
+            f"Yearly source-backed spending: {preview}.",
+            calculation,
+            ("Customer totals are preferred; invoice totals are used only when needed.",),
         )
     if QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY in plan.selected_templates:
         return _price_history_synthesis(rows)

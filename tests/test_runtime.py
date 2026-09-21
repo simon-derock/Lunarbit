@@ -127,6 +127,99 @@ def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
     assert result.direct_answer == "The graph links this merchant to 14 source-backed orders."
 
 
+def test_yearly_spend_aggregates_distinct_orders_with_decimal_totals() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_id": "order:1",
+                "year": 2024,
+                "component_type": "customer_total",
+                "amount": "120.10",
+                "currency": "INR",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+            {
+                "order_id": "order:2",
+                "year": 2024,
+                "component_type": "customer_total",
+                "amount": "80.20",
+                "currency": "INR",
+                "chunk_id": "chunk:2",
+                "source_id": "message:2",
+                "source_hash": "b" * 64,
+            },
+            {
+                "order_id": "order:3",
+                "year": 2025,
+                "component_type": "customer_total",
+                "amount": "50.00",
+                "currency": "INR",
+                "chunk_id": "chunk:3",
+                "source_id": "message:3",
+                "source_hash": "c" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="What was my total food spending for each year?",
+            slots=QuerySlots(),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.fact_count == 3
+    assert result.direct_answer == (
+        "Yearly source-backed spending: 2024: INR 200.30 across 2 orders; "
+        "2025: INR 50.00 across 1 order."
+    )
+    assert (
+        result.calculation
+        == "2024: INR 120.10 + INR 80.20 = INR 200.30; 2025: INR 50.00 = INR 50.00"
+    )
+
+
+def test_yearly_spend_abstains_when_currencies_conflict() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_id": "order:1",
+                "year": 2024,
+                "component_type": "customer_total",
+                "amount": "120.00",
+                "currency": "INR",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+            {
+                "order_id": "order:2",
+                "year": 2025,
+                "component_type": "customer_total",
+                "amount": "10.00",
+                "currency": "USD",
+                "chunk_id": "chunk:2",
+                "source_id": "message:2",
+                "source_hash": "b" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="What was my total food spending for each year?",
+            slots=QuerySlots(),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.ABSTAINED
+    assert result.review_required is True
+    assert result.review_reason == "financial_conflict"
+
+
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     reader = StubReader(
         (

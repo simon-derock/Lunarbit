@@ -51,6 +51,10 @@ class QueryPlan(ContractModel):
 
 def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, ...] | None:
     normalized = " ".join(question.casefold().split())
+    if any(token in normalized for token in ("each year", "year-wise", "yearly", "annual")) and any(
+        token in normalized for token in ("spend", "spending", "food")
+    ):
+        return (QueryTemplate.YEARLY_SPEND_TOTAL,)
     # Platform-wide order questions have no merchant entity to bind. Route
     # them to the aggregate query instead of failing on a missing merchant.
     if re.search(r"\b(?:on|from)\s+(?:swiggy|zomato)\b", normalized) and any(
@@ -130,6 +134,7 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
             QueryTemplate.MERCHANT_SPEND_TOTAL,
             QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,
             QueryTemplate.ORDER_RECONSTRUCTION,
+            QueryTemplate.YEARLY_SPEND_TOTAL,
         }
         for template in templates
     ):
