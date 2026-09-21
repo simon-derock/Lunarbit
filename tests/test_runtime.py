@@ -90,7 +90,7 @@ def test_unbound_order_count_requests_scope_without_graph_access() -> None:
     assert result.review_reason == "clarification_required"
 
 
-def test_missing_financial_slots_abstain_without_graph_failure() -> None:
+def test_fee_discount_analysis_abstains_without_graph_facts() -> None:
     request = RuntimeRequest(
         question="Did discounts offset delivery fees at KMS Hakkim?",
         slots=QuerySlots(merchant_name="kms hakkim"),
@@ -98,9 +98,8 @@ def test_missing_financial_slots_abstain_without_graph_failure() -> None:
     result = retrieve_grounded_context(request, StubReader(()))
 
     assert result.status is RuntimeStatus.ABSTAINED
-    assert result.abstention_reason == "missing_query_slot"
-    assert result.review_required is True
-    assert result.review_reason == "missing_query_slot"
+    assert result.abstention_reason == "incomplete_evidence_coverage"
+    assert result.review_required is False
 
 
 def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
@@ -218,6 +217,58 @@ def test_yearly_spend_abstains_when_currencies_conflict() -> None:
     assert result.status is RuntimeStatus.ABSTAINED
     assert result.review_required is True
     assert result.review_reason == "financial_conflict"
+
+
+def test_fee_discount_analysis_calculates_offset_and_net_burden() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_id": "order:1",
+                "component_type": "delivery_charge",
+                "amount": "40.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+            {
+                "order_id": "order:1",
+                "component_type": "coupon_discount",
+                "amount": "15.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim",
+                "chunk_id": "chunk:2",
+                "source_id": "message:1",
+                "source_hash": "b" * 64,
+            },
+            {
+                "order_id": "order:2",
+                "component_type": "platform_fee",
+                "amount": "20.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim",
+                "chunk_id": "chunk:3",
+                "source_id": "message:2",
+                "source_hash": "c" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="Did discounts offset delivery fees at KMS Hakkim?",
+            slots=QuerySlots(merchant_name="kms hakkim"),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.fact_count == 3
+    assert result.direct_answer == (
+        "At KMS Hakkim, INR 60.00 of fees were offset by INR 15.00 in discounts "
+        "(25.00% offset), leaving a net fee burden of INR 45.00."
+    )
+    assert result.calculation == "INR 60.00 - INR 15.00 = INR 45.00"
 
 
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:

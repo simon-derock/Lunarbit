@@ -77,6 +77,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         }
     if template is QueryTemplate.YEARLY_SPEND_TOTAL:
         return {"limit": limit}
+    if template is QueryTemplate.FEE_DISCOUNT_ANALYSIS:
+        return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -379,6 +381,45 @@ def _synthesize(
             f"Yearly source-backed spending: {preview}.",
             calculation,
             ("Customer totals are preferred; invoice totals are used only when needed.",),
+        )
+    if QueryTemplate.FEE_DISCOUNT_ANALYSIS in plan.selected_templates:
+        charges = {
+            "packing_charge",
+            "handling_fee",
+            "delivery_charge",
+            "platform_fee",
+            "other_charge",
+        }
+        discounts = {"item_discount", "coupon_discount", "membership_benefit"}
+        merchant_names = {
+            str(row["merchant_name"]) for row in rows if row.get("merchant_name") is not None
+        }
+        if len(merchant_names) != 1:
+            return 0, None, None, ("The merchant phrase matched multiple reviewed identities.",)
+        currencies = {str(row["currency"]) for row in rows if row.get("currency") is not None}
+        if len(currencies) != 1:
+            return 0, None, None, ("Fee and discount components use multiple currencies.",)
+        currency = currencies.pop()
+        fee_total = sum(
+            (Decimal(str(row["amount"])) for row in rows if row.get("component_type") in charges),
+            Decimal("0"),
+        )
+        discount_total = sum(
+            (Decimal(str(row["amount"])) for row in rows if row.get("component_type") in discounts),
+            Decimal("0"),
+        )
+        if fee_total <= 0 and discount_total <= 0:
+            return 0, None, None, ("No source-backed fee or discount components were available.",)
+        net = fee_total - discount_total
+        offset = (discount_total / fee_total * Decimal("100")) if fee_total else Decimal("0")
+        merchant = next(iter(merchant_names))
+        return (
+            len(rows),
+            f"At {merchant}, {currency} {fee_total:.2f} of fees were offset by "
+            f"{currency} {discount_total:.2f} in discounts ({offset:.2f}% offset), "
+            f"leaving a net fee burden of {currency} {net:.2f}.",
+            f"{currency} {fee_total:.2f} - {currency} {discount_total:.2f} = {currency} {net:.2f}",
+            ("Fees and discounts are source-asserted components, not an inferred promotion ROI.",),
         )
     if QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY in plan.selected_templates:
         return _price_history_synthesis(rows)

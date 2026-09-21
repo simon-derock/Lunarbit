@@ -47,7 +47,8 @@ retrieval citations, not hidden reasoning.
 
 Allowlisted operations only: merchant_order_ranking, merchant_order_count,
 merchant_item_price_history, delivery_mention_count, financial_component_sum,
-evidence_for_money_component, order_reconstruction, fulltext_evidence.
+evidence_for_money_component, order_reconstruction, fulltext_evidence,
+yearly_spend_total, fee_discount_analysis.
 Extract only explicit slot values and preserve user spelling; deterministic resolution owns aliases.
 Never write Cypher, SQL, Python, tool calls, arithmetic, conclusions, citations, or prose. If no
 operation fits, return an invalid proposal so the deterministic planner can abstain safely.
@@ -183,6 +184,7 @@ class ResilientQueryPlanner:
             QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: ("component_id",),
             QueryTemplate.ORDER_RECONSTRUCTION: ("order_id",),
             QueryTemplate.FULLTEXT_EVIDENCE: ("lexical_query",),
+            QueryTemplate.FEE_DISCOUNT_ANALYSIS: ("merchant_name",),
         }
         for template in plan.selected_templates:
             missing = tuple(
