@@ -85,6 +85,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
     if template is QueryTemplate.ITEM_PRICE_CHANGE_RANKING:
         return {"limit": limit}
+    if template is QueryTemplate.PERSONAL_FOOD_PRICE_INDEX:
+        return {"limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -527,6 +529,62 @@ def _synthesize(
             (
                 "This ranks observed earliest-to-latest item prices; it is not a causal "
                 "inflation estimate and does not infer missing observations.",
+            ),
+        )
+    if QueryTemplate.PERSONAL_FOOD_PRICE_INDEX in plan.selected_templates:
+        observations: dict[str, list[tuple[datetime, Decimal, str]]] = defaultdict(list)
+        for row in rows:
+            item_name = row.get("item_name")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            occurred_at = row.get("occurred_at")
+            if not all(
+                value is not None and str(value).strip()
+                for value in (item_name, amount, currency, occurred_at)
+            ):
+                continue
+            timestamp = datetime.fromisoformat(str(occurred_at))
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError("food-index rows require timezone-aware occurrence times")
+            observations[str(item_name)].append((timestamp, Decimal(str(amount)), str(currency)))
+        currencies = {
+            currency for values in observations.values() for _timestamp, _amount, currency in values
+        }
+        if len(currencies) != 1:
+            return 0, None, None, ("Food-basket observations use multiple currencies.",)
+        currency = currencies.pop()
+        matched: list[tuple[str, Decimal, Decimal]] = []
+        for item_name, values in observations.items():
+            ordered = sorted(values, key=lambda value: value[0])
+            if len(ordered) < 2 or ordered[0][1] <= 0:
+                continue
+            matched.append((item_name, ordered[0][1], ordered[-1][1]))
+        if not matched:
+            return (
+                0,
+                None,
+                None,
+                (
+                    "At least two source-backed observations per item are required for a "
+                    "matched food-basket index.",
+                ),
+            )
+        index = sum(
+            (latest / earliest * Decimal("100") for _item, earliest, latest in matched),
+            Decimal("0"),
+        ) / Decimal(len(matched))
+        change = index - Decimal("100")
+        direction = "increased" if change >= 0 else "decreased"
+        return (
+            len(matched),
+            f"The matched personal food-basket price index is {index:.2f} "
+            f"({direction} {abs(change):.2f}% from the observed baseline).",
+            f"Equal-weighted index across {len(matched)} matched items: "
+            f"{index:.2f} = average(latest price / earliest price x 100)",
+            (
+                f"The index compares {len(matched)} items with repeated observations in "
+                f"{currency}; it is an observed basket signal, not an official CPI or "
+                "causal inflation estimate.",
             ),
         )
     if QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL in plan.selected_templates:

@@ -78,6 +78,17 @@ def _templates_for(question: str, intent: QueryIntent) -> tuple[QueryTemplate, .
         )
     ) and any(token in normalized for token in ("dish", "dishes", "item", "items", "price")):
         return (QueryTemplate.ITEM_PRICE_CHANGE_RANKING,)
+    if any(
+        token in normalized
+        for token in (
+            "food price index",
+            "food basket",
+            "basket inflation",
+            "personal price index",
+            "food inflation",
+        )
+    ):
+        return (QueryTemplate.PERSONAL_FOOD_PRICE_INDEX,)
     # Platform-wide order questions have no merchant entity to bind. Route
     # them to the aggregate query instead of failing on a missing merchant.
     if re.search(r"\b(?:on|from)\s+(?:swiggy|zomato)\b", normalized) and any(
@@ -162,6 +173,7 @@ def _traversal_for(templates: tuple[QueryTemplate, ...]) -> tuple[TraversalStep,
             QueryTemplate.SPENDING_CHANGE_DECOMPOSITION,
             QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL,
             QueryTemplate.ITEM_PRICE_CHANGE_RANKING,
+            QueryTemplate.PERSONAL_FOOD_PRICE_INDEX,
         }
         for template in templates
     ):

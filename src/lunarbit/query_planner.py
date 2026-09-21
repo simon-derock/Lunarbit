@@ -51,9 +51,11 @@ evidence_for_money_component, order_reconstruction, fulltext_evidence,
 yearly_spend_total, fee_discount_analysis, spending_change_decomposition,
 delivery_fee_counterfactual.
 item_price_change_ranking.
+personal_food_price_index.
 Use spending_change_decomposition for questions asking what caused spending to change or for
 volume-versus-average-order-cost attribution.
 Use item_price_change_ranking for questions asking which dishes or items increased in price most.
+Use personal_food_price_index for matched repeated-item food-basket price-index questions.
 Extract only explicit slot values and preserve user spelling; deterministic resolution owns aliases.
 Never write Cypher, SQL, Python, tool calls, arithmetic, conclusions, citations, or prose. If no
 operation fits, return an invalid proposal so the deterministic planner can abstain safely.
