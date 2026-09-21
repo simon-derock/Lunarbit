@@ -90,6 +90,19 @@ def test_unbound_order_count_requests_scope_without_graph_access() -> None:
     assert result.review_reason == "clarification_required"
 
 
+def test_missing_financial_slots_abstain_without_graph_failure() -> None:
+    request = RuntimeRequest(
+        question="Did discounts offset delivery fees at KMS Hakkim?",
+        slots=QuerySlots(merchant_name="kms hakkim"),
+    )
+    result = retrieve_grounded_context(request, StubReader(()))
+
+    assert result.status is RuntimeStatus.ABSTAINED
+    assert result.abstention_reason == "missing_query_slot"
+    assert result.review_required is True
+    assert result.review_reason == "missing_query_slot"
+
+
 def test_merchant_order_count_accepts_reviewed_name_prefixes() -> None:
     reader = StubReader(
         (

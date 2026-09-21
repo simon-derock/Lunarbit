@@ -512,7 +512,31 @@ def retrieve_grounded_context(
                 else None
             ),
         )
-    queries = bind_query_plan(plan, request.slots)
+    try:
+        queries = bind_query_plan(plan, request.slots)
+    except MissingQuerySlotError:
+        # A model proposal can identify a financial family without supplying
+        # every bounded slot. Treat that as a governed clarification state,
+        # never as an internal server failure or an unbounded fallback.
+        claim_id = _claim_id(request, plan)
+        return GroundedContext(
+            status=RuntimeStatus.ABSTAINED,
+            question=request.question,
+            plan=plan,
+            fact_count=0,
+            limitations=("The question needs a more specific financial scope.",),
+            citations=(),
+            verification=EvidenceVerification(
+                status=VerificationStatus.ABSTAINED,
+                covered_claim_ids=(),
+                missing_claim_ids=(claim_id,),
+                citation_ids=(),
+                abstention_reason="missing_query_slot",
+            ),
+            abstention_reason="missing_query_slot",
+            review_required=True,
+            review_reason="missing_query_slot",
+        )
     rows, query_complete = _execute_bounded(plan, queries, reader)
     claim_id = _claim_id(request, plan)
     citations = tuple(
