@@ -89,6 +89,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"limit": limit}
     if template is QueryTemplate.SPENDING_ANOMALY_DETECTION:
         return {"limit": limit}
+    if template is QueryTemplate.SPENDING_CONCENTRATION:
+        return {"limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -680,6 +682,62 @@ def _synthesize(
             (
                 "This is a robust statistical signal, not a claim of fraud, error, or cause; "
                 "ambiguous totals are excluded.",
+            ),
+        )
+    if QueryTemplate.SPENDING_CONCENTRATION in plan.selected_templates:
+        priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
+        selected: dict[str, tuple[str, Decimal, str, str]] = {}
+        ambiguous: set[str] = set()
+        for row in rows:
+            order_id = row.get("order_id")
+            merchant_name = row.get("merchant_name")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            component_type = str(row.get("component_type", ""))
+            if not all(
+                value is not None and str(value).strip()
+                for value in (order_id, merchant_name, amount, currency)
+            ):
+                continue
+            candidate = (str(merchant_name), Decimal(str(amount)), str(currency), component_type)
+            key = str(order_id)
+            current = selected.get(key)
+            if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
+                selected[key] = candidate
+            elif current[3] == component_type and current[1:] != candidate[1:]:
+                ambiguous.add(key)
+        for order_id in ambiguous:
+            selected.pop(order_id, None)
+        if not selected:
+            return 0, None, None, ("No unambiguous source-backed merchant spend was available.",)
+        currencies = {value[2] for value in selected.values()}
+        if len(currencies) != 1:
+            return 0, None, None, ("Merchant spending observations use multiple currencies.",)
+        currency = currencies.pop()
+        by_merchant: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+        for merchant, amount, _currency, _component_type in selected.values():
+            by_merchant[merchant] += amount
+        total = sum(by_merchant.values(), Decimal("0"))
+        if total <= 0:
+            return 0, None, None, ("Merchant spending totals must be positive for concentration.",)
+        shares = {
+            merchant: amount / total * Decimal("100") for merchant, amount in by_merchant.items()
+        }
+        hhi = sum((share * share for share in shares.values()), Decimal("0"))
+        top_merchant, top_share = max(shares.items(), key=lambda item: (-item[1], item[0]))
+        top_preview = "; ".join(
+            f"{merchant}: {share:.2f}%"
+            for merchant, share in sorted(shares.items(), key=lambda item: (-item[1], item[0]))[:5]
+        )
+        return (
+            len(selected),
+            f"Food spending concentration is {hhi:.2f} HHI; {top_merchant} represents "
+            f"{top_share:.2f}% of source-backed spend. Merchant shares: {top_preview}.",
+            f"HHI = sum of squared merchant shares = {hhi:.2f}; total spend = "
+            f"{currency} {total:.2f}",
+            (
+                "HHI is a descriptive concentration signal over reviewed order totals, "
+                "not a credit-risk or causal dependence judgment; ambiguous orders are excluded.",
             ),
         )
     if QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL in plan.selected_templates:

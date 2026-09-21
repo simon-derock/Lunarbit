@@ -487,6 +487,38 @@ def test_spending_anomaly_detection_uses_robust_modified_z_score() -> None:
     assert "order:4: INR 500.00" in result.direct_answer
 
 
+def test_spending_concentration_reports_hhi_and_top_merchant_share() -> None:
+    rows = tuple(
+        {
+            "merchant_name": merchant,
+            "order_id": f"order:{index}",
+            "component_type": "customer_total",
+            "amount": str(amount),
+            "currency": "INR",
+            "chunk_id": f"chunk:{index}",
+            "source_id": f"message:{index}",
+            "source_hash": f"{index:x}" * 64,
+        }
+        for index, (merchant, amount) in enumerate(
+            (("KMS Hakkim", "100.00"), ("KMS Hakkim", "100.00"), ("Other Kitchen", "200.00"))
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How concentrated is my restaurant spending?",
+            slots=QuerySlots(),
+        ),
+        StubReader(rows),
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.direct_answer == (
+        "Food spending concentration is 5000.00 HHI; Other Kitchen represents "
+        "50.00% of source-backed spend. Merchant shares: KMS Hakkim: 50.00%; "
+        "Other Kitchen: 50.00%."
+    )
+
+
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     reader = StubReader(
         (
