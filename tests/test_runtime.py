@@ -459,6 +459,34 @@ def test_personal_food_price_index_uses_equal_weighted_matched_items() -> None:
     )
 
 
+def test_spending_anomaly_detection_uses_robust_modified_z_score() -> None:
+    rows = tuple(
+        {
+            "order_id": f"order:{index}",
+            "component_type": "customer_total",
+            "amount": str(amount),
+            "currency": "INR",
+            "occurred_at": f"2025-01-{index + 1:02d}T12:00:00+00:00",
+            "chunk_id": f"chunk:{index}",
+            "source_id": f"message:{index}",
+            "source_hash": f"{index:x}" * 64,
+        }
+        for index, amount in enumerate((100, 105, 110, 115, 500))
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="Which spending orders are unusual outliers?",
+            slots=QuerySlots(),
+        ),
+        StubReader(rows),
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.direct_answer is not None
+    assert "Detected 1 source-backed spending anomaly" in result.direct_answer
+    assert "order:4: INR 500.00" in result.direct_answer
+
+
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     reader = StubReader(
         (

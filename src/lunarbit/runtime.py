@@ -87,6 +87,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"limit": limit}
     if template is QueryTemplate.PERSONAL_FOOD_PRICE_INDEX:
         return {"limit": limit}
+    if template is QueryTemplate.SPENDING_ANOMALY_DETECTION:
+        return {"limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -585,6 +587,99 @@ def _synthesize(
                 f"The index compares {len(matched)} items with repeated observations in "
                 f"{currency}; it is an observed basket signal, not an official CPI or "
                 "causal inflation estimate.",
+            ),
+        )
+    if QueryTemplate.SPENDING_ANOMALY_DETECTION in plan.selected_templates:
+        priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
+        selected: dict[str, tuple[datetime, Decimal, str, str]] = {}
+        ambiguous: set[str] = set()
+        for row in rows:
+            order_id = row.get("order_id")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            occurred_at = row.get("occurred_at")
+            component_type = str(row.get("component_type", ""))
+            if not all(
+                value is not None and str(value).strip()
+                for value in (order_id, amount, currency, occurred_at)
+            ):
+                continue
+            timestamp = datetime.fromisoformat(str(occurred_at))
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError("anomaly rows require timezone-aware occurrence times")
+            candidate = (timestamp, Decimal(str(amount)), str(currency), component_type)
+            key = str(order_id)
+            current = selected.get(key)
+            if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
+                selected[key] = candidate
+            elif current[3] == component_type and current[1:] != candidate[1:]:
+                ambiguous.add(key)
+        for order_id in ambiguous:
+            selected.pop(order_id, None)
+        if len(selected) < 5:
+            return (
+                len(selected),
+                None,
+                None,
+                (
+                    "At least five unambiguous source-backed order totals are required for "
+                    "robust anomaly detection.",
+                ),
+            )
+        currencies = {value[2] for value in selected.values()}
+        if len(currencies) != 1:
+            return 0, None, None, ("Spending observations use multiple currencies.",)
+        currency = currencies.pop()
+        values = sorted(value[1] for value in selected.values())
+        midpoint = len(values) // 2
+        median = (
+            values[midpoint]
+            if len(values) % 2
+            else (values[midpoint - 1] + values[midpoint]) / Decimal("2")
+        )
+        deviations = sorted(abs(value - median) for value in values)
+        mad_midpoint = len(deviations) // 2
+        mad = (
+            deviations[mad_midpoint]
+            if len(deviations) % 2
+            else (deviations[mad_midpoint - 1] + deviations[mad_midpoint]) / Decimal("2")
+        )
+        anomalies: list[tuple[Decimal, str, datetime, Decimal]] = []
+        for order_id, (timestamp, amount, _currency, _component_type) in selected.items():
+            if mad:
+                score = Decimal("0.6745") * (amount - median) / mad
+                is_anomaly = abs(score) >= Decimal("3.5")
+            else:
+                score = Decimal("0")
+                is_anomaly = median > 0 and abs(amount - median) >= median / Decimal("2")
+            if is_anomaly:
+                anomalies.append((abs(score), order_id, timestamp, amount))
+        anomalies.sort(key=lambda value: (-value[0], value[1]))
+        if not anomalies:
+            return (
+                len(selected),
+                f"No robust source-backed spending anomalies were detected across "
+                f"{len(selected)} orders.",
+                f"Median order total = {currency} {median:.2f}; MAD = {currency} {mad:.2f}",
+                (
+                    "Anomalies use a robust modified-z threshold of 3.5 over selected "
+                    "source-backed order totals.",
+                ),
+            )
+        preview = "; ".join(
+            f"{order_id}: {currency} {amount:.2f} on {timestamp.date().isoformat()} "
+            f"(modified z {score:.2f})"
+            for score, order_id, timestamp, amount in anomalies[:10]
+        )
+        return (
+            len(selected),
+            f"Detected {len(anomalies)} source-backed spending "
+            f"{'anomaly' if len(anomalies) == 1 else 'anomalies'}: {preview}.",
+            f"Median order total = {currency} {median:.2f}; MAD = {currency} {mad:.2f}; "
+            "threshold = |modified z| >= 3.50",
+            (
+                "This is a robust statistical signal, not a claim of fraud, error, or cause; "
+                "ambiguous totals are excluded.",
             ),
         )
     if QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL in plan.selected_templates:

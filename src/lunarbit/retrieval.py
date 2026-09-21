@@ -150,6 +150,7 @@ class QueryTemplate(StrEnum):
     DELIVERY_FEE_COUNTERFACTUAL = "delivery_fee_counterfactual"
     ITEM_PRICE_CHANGE_RANKING = "item_price_change_ranking"
     PERSONAL_FOOD_PRICE_INDEX = "personal_food_price_index"
+    SPENDING_ANOMALY_DETECTION = "spending_anomaly_detection"
 
 
 class QueryClassification(ContractModel):
@@ -381,6 +382,20 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "observation.currency AS currency, message.occurred_at AS occurred_at, "
         "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, source.node_id AS source_id "
         "ORDER BY item_name, occurred_at LIMIT $limit",
+        frozenset({"limit"}),
+    ),
+    QueryTemplate.SPENDING_ANOMALY_DETECTION: (
+        "MATCH (order:Order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        "WHERE component.component_type IN "
+        "['customer_total', 'invoice_total', 'payment_assertion'] "
+        "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
+        "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "RETURN order.node_id AS order_id, component.component_type AS component_type, "
+        "component.amount AS amount, component.currency AS currency, "
+        "message.occurred_at AS occurred_at, chunk.node_id AS chunk_id, "
+        "chunk.source_hash AS source_hash, source.node_id AS source_id "
+        "ORDER BY occurred_at, order_id, component.component_type LIMIT $limit",
         frozenset({"limit"}),
     ),
     QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: (
