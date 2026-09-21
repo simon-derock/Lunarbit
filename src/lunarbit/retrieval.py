@@ -148,6 +148,7 @@ class QueryTemplate(StrEnum):
     FEE_DISCOUNT_ANALYSIS = "fee_discount_analysis"
     SPENDING_CHANGE_DECOMPOSITION = "spending_change_decomposition"
     DELIVERY_FEE_COUNTERFACTUAL = "delivery_fee_counterfactual"
+    ITEM_PRICE_CHANGE_RANKING = "item_price_change_ranking"
 
 
 class QueryClassification(ContractModel):
@@ -356,6 +357,18 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, source.node_id AS source_id "
         "ORDER BY order.node_id LIMIT $limit",
         frozenset({"merchant_name", "limit"}),
+    ),
+    QueryTemplate.ITEM_PRICE_CHANGE_RANKING: (
+        "MATCH (order:Order)-[:HAS_ITEM_OBSERVATION]->"
+        "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
+        "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
+        "OPTIONAL MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "RETURN item.normalized_name_private AS item_name, observation.observed_amount AS amount, "
+        "observation.currency AS currency, message.occurred_at AS occurred_at, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, source.node_id AS source_id "
+        "ORDER BY item_name, occurred_at LIMIT $limit",
+        frozenset({"limit"}),
     ),
     QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: (
         "MATCH (component:MoneyComponent)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "

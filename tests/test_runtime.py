@@ -347,6 +347,62 @@ def test_delivery_fee_counterfactual_reports_observed_savings_without_mutating_h
     assert result.calculation == "INR 40.00 + INR 25.00 = INR 65.00 simulated saving"
 
 
+def test_item_price_change_ranking_reports_largest_source_backed_increases() -> None:
+    reader = StubReader(
+        (
+            {
+                "item_name": "biryani",
+                "amount": "200.00",
+                "currency": "INR",
+                "occurred_at": "2024-01-10T12:00:00+00:00",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+            {
+                "item_name": "biryani",
+                "amount": "260.00",
+                "currency": "INR",
+                "occurred_at": "2025-01-10T12:00:00+00:00",
+                "chunk_id": "chunk:2",
+                "source_id": "message:2",
+                "source_hash": "b" * 64,
+            },
+            {
+                "item_name": "parotta",
+                "amount": "100.00",
+                "currency": "INR",
+                "occurred_at": "2024-01-10T12:00:00+00:00",
+                "chunk_id": "chunk:3",
+                "source_id": "message:3",
+                "source_hash": "c" * 64,
+            },
+            {
+                "item_name": "parotta",
+                "amount": "110.00",
+                "currency": "INR",
+                "occurred_at": "2025-01-10T12:00:00+00:00",
+                "chunk_id": "chunk:4",
+                "source_id": "message:4",
+                "source_hash": "d" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="Which dishes increased in price the most?",
+            slots=QuerySlots(),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.direct_answer == (
+        "Largest source-backed item price increases: biryani: INR 200.00 to INR 260.00 "
+        "(+INR 60.00, +30.00%); parotta: INR 100.00 to INR 110.00 (+INR 10.00, +10.00%)."
+    )
+
+
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     reader = StubReader(
         (

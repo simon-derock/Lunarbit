@@ -83,6 +83,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"limit": limit}
     if template is QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL:
         return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
+    if template is QueryTemplate.ITEM_PRICE_CHANGE_RANKING:
+        return {"limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -474,6 +476,57 @@ def _synthesize(
             (
                 "This decomposition separates order volume from average order cost; "
                 "item-level price and mix attribution requires matched item observations.",
+            ),
+        )
+    if QueryTemplate.ITEM_PRICE_CHANGE_RANKING in plan.selected_templates:
+        observations: dict[str, list[tuple[datetime, Decimal, str]]] = defaultdict(list)
+        for row in rows:
+            item_name = row.get("item_name")
+            amount = row.get("amount")
+            currency = row.get("currency")
+            occurred_at = row.get("occurred_at")
+            if not all(
+                value is not None and str(value).strip()
+                for value in (item_name, amount, currency, occurred_at)
+            ):
+                continue
+            timestamp = datetime.fromisoformat(str(occurred_at))
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError("item-price ranking rows require timezone-aware occurrence times")
+            observations[str(item_name)].append((timestamp, Decimal(str(amount)), str(currency)))
+        if not observations:
+            return 0, None, None, ("No source-backed item price observations were available.",)
+        changes: list[tuple[Decimal, Decimal, str, Decimal, Decimal, str]] = []
+        currencies = {
+            currency for values in observations.values() for _timestamp, _amount, currency in values
+        }
+        if len(currencies) != 1:
+            return 0, None, None, ("Item price observations use multiple currencies.",)
+        currency = currencies.pop()
+        for item_name, values in observations.items():
+            ordered = sorted(values, key=lambda value: value[0])
+            earliest = ordered[0]
+            latest = ordered[-1]
+            if latest[1] <= earliest[1]:
+                continue
+            delta = latest[1] - earliest[1]
+            percentage = delta / earliest[1] * Decimal("100") if earliest[1] else Decimal("0")
+            changes.append((percentage, delta, item_name, earliest[1], latest[1], currency))
+        if not changes:
+            return 0, None, None, ("No item had a source-backed price increase.",)
+        changes.sort(key=lambda value: (-value[0], -value[1], value[2]))
+        preview = "; ".join(
+            f"{item}: {currency} {earliest:.2f} to {currency} {latest:.2f} "
+            f"(+{currency} {delta:.2f}, +{percentage:.2f}%)"
+            for percentage, delta, item, earliest, latest, currency in changes[:10]
+        )
+        return (
+            len(changes),
+            f"Largest source-backed item price increases: {preview}.",
+            None,
+            (
+                "This ranks observed earliest-to-latest item prices; it is not a causal "
+                "inflation estimate and does not infer missing observations.",
             ),
         )
     if QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL in plan.selected_templates:
