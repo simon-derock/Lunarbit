@@ -147,6 +147,7 @@ class QueryTemplate(StrEnum):
     YEARLY_SPEND_TOTAL = "yearly_spend_total"
     FEE_DISCOUNT_ANALYSIS = "fee_discount_analysis"
     SPENDING_CHANGE_DECOMPOSITION = "spending_change_decomposition"
+    DELIVERY_FEE_COUNTERFACTUAL = "delivery_fee_counterfactual"
 
 
 class QueryClassification(ContractModel):
@@ -341,6 +342,20 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         "chunk.source_hash AS source_hash, source.node_id AS source_id "
         "ORDER BY year, order_id, component.component_type LIMIT $limit",
         frozenset({"limit"}),
+    ),
+    QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL: (
+        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
+        "<-[:OUTLET_OF]-(outlet:Outlet)<-[:ORDERED_FROM]-(order:Order) "
+        "WHERE identity.normalized_name_private CONTAINS $merchant_name "
+        "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        "WHERE component.component_type = 'delivery_charge' "
+        "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
+        "RETURN order.node_id AS order_id, component.amount AS amount, "
+        "component.currency AS currency, identity.canonical_name_private AS merchant_name, "
+        "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, source.node_id AS source_id "
+        "ORDER BY order.node_id LIMIT $limit",
+        frozenset({"merchant_name", "limit"}),
     ),
     QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT: (
         "MATCH (component:MoneyComponent)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "

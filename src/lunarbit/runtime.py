@@ -81,6 +81,8 @@ def _parameters(template: QueryTemplate, slots: QuerySlots) -> dict[str, str | i
         return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
     if template is QueryTemplate.SPENDING_CHANGE_DECOMPOSITION:
         return {"limit": limit}
+    if template is QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL:
+        return {"merchant_name": _require(slots.merchant_name, "merchant_name"), "limit": limit}
     if template is QueryTemplate.EVIDENCE_FOR_MONEY_COMPONENT:
         return {"component_id": _require(slots.component_id, "component_id"), "limit": limit}
     if template is QueryTemplate.ORDER_RECONSTRUCTION:
@@ -472,6 +474,38 @@ def _synthesize(
             (
                 "This decomposition separates order volume from average order cost; "
                 "item-level price and mix attribution requires matched item observations.",
+            ),
+        )
+    if QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL in plan.selected_templates:
+        merchant_names = {
+            str(row["merchant_name"]) for row in rows if row.get("merchant_name") is not None
+        }
+        currencies = {str(row["currency"]) for row in rows if row.get("currency") is not None}
+        if len(merchant_names) != 1:
+            return 0, None, None, ("The merchant phrase matched multiple reviewed identities.",)
+        if len(currencies) != 1:
+            return 0, None, None, ("Delivery-fee evidence uses multiple currencies.",)
+        if not rows:
+            return 0, None, None, ("No source-backed delivery charges were available.",)
+        currency = currencies.pop()
+        by_order: dict[str, Decimal] = {}
+        for row in rows:
+            order_id = row.get("order_id")
+            amount = row.get("amount")
+            if order_id is not None and amount is not None:
+                by_order[str(order_id)] = Decimal(str(amount))
+        total = sum(by_order.values(), Decimal("0"))
+        merchant = next(iter(merchant_names))
+        terms = " + ".join(f"{currency} {amount:.2f}" for amount in by_order.values())
+        return (
+            len(by_order),
+            f"Waiving observed delivery fees at {merchant} would have saved "
+            f"{currency} {total:.2f} across {len(by_order)} "
+            f"{'order' if len(by_order) == 1 else 'orders'}.",
+            f"{terms} = {currency} {total:.2f} simulated saving",
+            (
+                "This is a bounded counterfactual over observed delivery charges; "
+                "order history is unchanged.",
             ),
         )
     if QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY in plan.selected_templates:

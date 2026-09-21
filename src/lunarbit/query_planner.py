@@ -48,7 +48,8 @@ retrieval citations, not hidden reasoning.
 Allowlisted operations only: merchant_order_ranking, merchant_order_count,
 merchant_item_price_history, delivery_mention_count, financial_component_sum,
 evidence_for_money_component, order_reconstruction, fulltext_evidence,
-yearly_spend_total, fee_discount_analysis, spending_change_decomposition.
+yearly_spend_total, fee_discount_analysis, spending_change_decomposition,
+delivery_fee_counterfactual.
 Use spending_change_decomposition for questions asking what caused spending to change or for
 volume-versus-average-order-cost attribution.
 Extract only explicit slot values and preserve user spelling; deterministic resolution owns aliases.
@@ -187,6 +188,7 @@ class ResilientQueryPlanner:
             QueryTemplate.ORDER_RECONSTRUCTION: ("order_id",),
             QueryTemplate.FULLTEXT_EVIDENCE: ("lexical_query",),
             QueryTemplate.FEE_DISCOUNT_ANALYSIS: ("merchant_name",),
+            QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL: ("merchant_name",),
         }
         for template in plan.selected_templates:
             missing = tuple(

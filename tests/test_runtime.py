@@ -307,6 +307,46 @@ def test_spending_change_decomposes_volume_and_average_order_effects() -> None:
     )
 
 
+def test_delivery_fee_counterfactual_reports_observed_savings_without_mutating_history() -> None:
+    reader = StubReader(
+        (
+            {
+                "order_id": "order:1",
+                "component_type": "delivery_charge",
+                "amount": "40.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim",
+                "chunk_id": "chunk:1",
+                "source_id": "message:1",
+                "source_hash": "a" * 64,
+            },
+            {
+                "order_id": "order:2",
+                "component_type": "delivery_charge",
+                "amount": "25.00",
+                "currency": "INR",
+                "merchant_name": "KMS Hakkim",
+                "chunk_id": "chunk:2",
+                "source_id": "message:2",
+                "source_hash": "b" * 64,
+            },
+        )
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="How much would I have saved if delivery fees were waived at KMS Hakkim?",
+            slots=QuerySlots(merchant_name="kms hakkim"),
+        ),
+        reader,
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert result.direct_answer == (
+        "Waiving observed delivery fees at KMS Hakkim would have saved INR 65.00 across 2 orders."
+    )
+    assert result.calculation == "INR 40.00 + INR 25.00 = INR 65.00 simulated saving"
+
+
 def test_merchant_order_count_abstains_on_ambiguous_identity_prefix() -> None:
     reader = StubReader(
         (
