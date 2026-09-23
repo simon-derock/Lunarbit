@@ -34,7 +34,7 @@ jobs:
       # CORS contract fail-closed while allowing it to run before the frontend
       # has a public hostname; the real deployment must override this secret.
       LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS || 'https://localhost' }}
-      LUNARBIT_SESSION_DB: /tmp/lunarbit-conversations.sqlite3
+      LUNARBIT_SESSION_DB: /var/lib/lunarbit/conversations.sqlite3
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
