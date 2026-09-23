@@ -91,5 +91,21 @@ jobs:
           docker logs lunarbit-api-live 2>&1 \
             | grep -Eo 'code[=:][A-Za-z0-9_-]+|answer_[A-Za-z0-9_-]+|retrieval_[A-Za-z0-9_-]+' \
             | sort -u || true
+      - name: Verify authenticated HITL resume contract
+        run: |
+          chat_payload=$(curl --silent --show-error --fail \
+            --header "Authorization: Bearer ${LUNARBIT_PRIVATE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"question":"How much platform fee did I pay?"}' \
+            http://127.0.0.1:8016/v1/private/chat)
+          session_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["session_id"])' <<<"${chat_payload}")
+          turn_index=$(python -c 'import json,sys; print(json.load(sys.stdin)["turn_index"])' <<<"${chat_payload}")
+          python -c 'import json,sys; assert json.load(sys.stdin)["answer"]["review_required"] is True' <<<"${chat_payload}"
+          review_payload=$(curl --silent --show-error --fail \
+            --header "Authorization: Bearer ${LUNARBIT_PRIVATE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "{\"turn_index\":${turn_index},\"decision\":\"approved\"}" \
+            "http://127.0.0.1:8016/v1/private/chat/${session_id}/review/resume")
+          python -c 'import json,sys; payload=json.load(sys.stdin); assert payload["answer"]["status"] in {"verified", "abstained"}' <<<"${review_payload}"
       - if: always()
         run: docker stop lunarbit-api-live || true
