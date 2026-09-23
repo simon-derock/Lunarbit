@@ -527,6 +527,40 @@ def test_private_chat_review_applies_one_authenticated_hitl_transition() -> None
     assert repeated.status_code == 409
 
 
+def test_private_chat_review_resume_reuses_approved_query_scope() -> None:
+    sessions = ConversationStore()
+    session_id = sessions.create()
+    sessions.append(
+        session_id,
+        question="How much platform fee did I pay?",
+        slots=QuerySlots(platform="swiggy", component_type="platform_fee"),
+        status="abstained",
+        review_required=True,
+        review_reason="clarification_required",
+    )
+    client = TestClient(
+        create_app(
+            private_answer_backend=StubPrivateAnswerBackend(),
+            private_api_token="local-secret-token",
+            conversation_store=sessions,
+        )
+    )
+    response = client.post(
+        f"/v1/private/chat/{session_id}/review/resume",
+        headers={"Authorization": "Bearer local-secret-token"},
+        json={"turn_index": 1, "decision": "approved"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["turn_index"] == 2
+    assert response.json()["answer"]["status"] == "verified"
+    history = client.get(
+        f"/v1/private/chat/{session_id}/history",
+        headers={"Authorization": "Bearer local-secret-token"},
+    )
+    assert len(history.json()["turns"]) == 2
+
+
 class StubPrivateWorkflow:
     def invoke(self, question: str, *, slots: QuerySlots, thread_id: str) -> GroundedContext:
         assert slots.platform == "swiggy"

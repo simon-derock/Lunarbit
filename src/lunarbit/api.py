@@ -787,6 +787,67 @@ def create_app(
                 review_status=cast(Literal["approved", "rejected"], turn.review_status),
             )
 
+        @app.post(
+            "/v1/private/chat/{session_id}/review/resume",
+            response_model=PrivateChatResponse,
+        )
+        def private_chat_review_resume(
+            session_id: ConversationSessionId,
+            request: PrivateReviewRequest,
+            http_request: Request,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> PrivateChatResponse:
+            """Resume one approved review with the original bounded query scope."""
+            enforce_rate_limit(http_request, private_limiter)
+            if (
+                private_answer_backend is None and private_workflow is None
+            ) or private_api_token is None:
+                raise HTTPException(status_code=503, detail="private answer is not configured")
+            authorize_private(authorization)
+            if request.decision != "approved":
+                raise HTTPException(status_code=409, detail="only approved reviews can resume")
+            try:
+                turn = sessions.turn(session_id, request.turn_index)
+                if not turn.review_required or turn.review_status != "pending":
+                    raise ReviewStateError("review is not pending")
+                if private_workflow is not None:
+                    answer = run_private_workflow(
+                        turn.question,
+                        slots=turn.slots,
+                        thread_id=session_id,
+                    )
+                else:
+                    assert private_answer_backend is not None
+                    answer = private_answer_backend.answer(
+                        RuntimeRequest(question=turn.question, slots=turn.slots)
+                    )
+                sessions.resolve_review(session_id, request.turn_index, "approved")
+                resumed_index = sessions.append(
+                    session_id,
+                    question=turn.question,
+                    slots=turn.slots,
+                    status=answer.status,
+                    review_required=answer.review_required,
+                    review_reason=answer.review_reason,
+                )
+            except SessionNotFoundError as error:
+                raise HTTPException(
+                    status_code=404, detail="conversation session not found"
+                ) from error
+            except ReviewStateError as error:
+                raise HTTPException(status_code=409, detail=str(error)) from error
+            record_trace(
+                http_request,
+                "private.chat.review.resume",
+                {"turn_index": request.turn_index, "resumed_turn_index": resumed_index},
+            )
+            return PrivateChatResponse(
+                session_id=session_id,
+                turn_index=resumed_index,
+                context_reused=True,
+                answer=answer,
+            )
+
         @app.post("/v1/private/chat/stream")
         def private_chat_stream(
             request: PrivateChatRequest,

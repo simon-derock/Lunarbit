@@ -261,6 +261,15 @@ class ConversationStore:
             self._purge_expired(now)
             return tuple(self._require(session_id).turns)
 
+    def turn(self, session_id: str, turn_index: int) -> SessionTurn:
+        now = self.clock()
+        with self._lock:
+            self._purge_expired(now)
+            for turn in self._require(session_id).turns:
+                if turn.turn_index == turn_index:
+                    return turn
+            raise ReviewStateError("review turn not found")
+
     def resolve_review(
         self,
         session_id: str,
@@ -454,6 +463,11 @@ class SQLiteConversationStore:
         with self._lock:
             self._load(session_id)
             return self._memory.history(session_id)
+
+    def turn(self, session_id: str, turn_index: int) -> SessionTurn:
+        with self._lock:
+            self._load(session_id)
+            return self._memory.turn(session_id, turn_index)
 
     def resolve_review(
         self,
