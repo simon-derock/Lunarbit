@@ -350,7 +350,7 @@ def _synthesize(
         )
     if QueryTemplate.YEARLY_SPEND_TOTAL in plan.selected_templates:
         priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
-        selected: dict[str, tuple[int, Decimal, str, str]] = {}
+        yearly_selected: dict[str, tuple[int, Decimal, str, str]] = {}
         for row in rows:
             order_id = row.get("order_id")
             year = row.get("year")
@@ -359,26 +359,26 @@ def _synthesize(
             component_type = str(row.get("component_type", ""))
             if order_id is None or year is None or amount is None or currency is None:
                 continue
-            candidate = (int(year), Decimal(str(amount)), str(currency), component_type)
-            current = selected.get(str(order_id))
+            yearly_candidate = (int(year), Decimal(str(amount)), str(currency), component_type)
+            current = yearly_selected.get(str(order_id))
             if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
-                selected[str(order_id)] = candidate
+                yearly_selected[str(order_id)] = yearly_candidate
             elif (
-                current[0] == candidate[0]
-                and current[1] != candidate[1]
+                current[0] == yearly_candidate[0]
+                and current[1] != yearly_candidate[1]
                 and priority.get(component_type, 0) == priority.get(current[3], 0)
             ):
-                selected.pop(str(order_id), None)
-        if not selected:
+                yearly_selected.pop(str(order_id), None)
+        if not yearly_selected:
             return 0, None, None, ("No source-backed customer totals were available.",)
-        currencies = {value[2] for value in selected.values()}
+        currencies = {value[2] for value in yearly_selected.values()}
         if len(currencies) != 1:
             return 0, None, None, ("Yearly totals use multiple currencies and cannot be combined.",)
         currency = currencies.pop()
         totals: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
         counts: dict[int, int] = defaultdict(int)
         terms: dict[int, list[str]] = defaultdict(list)
-        for year, amount, _currency, _component_type in selected.values():
+        for year, amount, _currency, _component_type in yearly_selected.values():
             totals[year] += amount
             counts[year] += 1
             terms[year].append(f"{currency} {amount:.2f}")
@@ -393,7 +393,7 @@ def _synthesize(
             for year in ordered_years
         )
         return (
-            len(selected),
+            len(yearly_selected),
             f"Yearly source-backed spending: {preview}.",
             calculation,
             ("Customer totals are preferred; invoice totals are used only when needed.",),
@@ -439,7 +439,7 @@ def _synthesize(
         )
     if QueryTemplate.SPENDING_CHANGE_DECOMPOSITION in plan.selected_templates:
         priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
-        selected: dict[str, tuple[int, Decimal, str, str]] = {}
+        decomposition_selected: dict[str, tuple[int, Decimal, str, str]] = {}
         for row in rows:
             order_id = row.get("order_id")
             year = row.get("year")
@@ -448,22 +448,32 @@ def _synthesize(
             component_type = str(row.get("component_type", ""))
             if order_id is None or year is None or amount is None or currency is None:
                 continue
-            candidate = (int(year), Decimal(str(amount)), str(currency), component_type)
-            current = selected.get(str(order_id))
+            decomposition_candidate = (
+                int(year),
+                Decimal(str(amount)),
+                str(currency),
+                component_type,
+            )
+            current = decomposition_selected.get(str(order_id))
             if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
-                selected[str(order_id)] = candidate
-        if not selected:
+                decomposition_selected[str(order_id)] = decomposition_candidate
+        if not decomposition_selected:
             return 0, None, None, ("No source-backed order totals were available.",)
-        currencies = {value[2] for value in selected.values()}
+        currencies = {value[2] for value in decomposition_selected.values()}
         if len(currencies) != 1:
             return 0, None, None, ("Spending periods use multiple currencies.",)
         by_year: dict[int, list[Decimal]] = defaultdict(list)
         currency = currencies.pop()
-        for year, amount, _currency, _component_type in selected.values():
+        for year, amount, _currency, _component_type in decomposition_selected.values():
             by_year[year].append(amount)
         years = sorted(by_year)
         if len(years) < 2:
-            return len(selected), None, None, ("At least two spending years are required.",)
+            return (
+                len(decomposition_selected),
+                None,
+                None,
+                ("At least two spending years are required.",),
+            )
         base_year, current_year = years[-2:]
         base_count = Decimal(len(by_year[base_year]))
         current_count = Decimal(len(by_year[current_year]))
@@ -477,7 +487,7 @@ def _synthesize(
         if volume_effect + average_effect != change:
             return 0, None, None, ("The spending decomposition did not close exactly.",)
         return (
-            len(selected),
+            len(decomposition_selected),
             f"Between {base_year} and {current_year}, spending increased by "
             f"{currency} {change:.2f}: {currency} {volume_effect:.2f} from order volume "
             f"and {currency} {average_effect:.2f} from average order cost.",
@@ -514,13 +524,13 @@ def _synthesize(
             return 0, None, None, ("Item price observations use multiple currencies.",)
         currency = currencies.pop()
         for item_name, values in observations.items():
-            ordered = sorted(values, key=lambda value: value[0])
-            earliest = ordered[0]
-            latest = ordered[-1]
+            price_ordered = sorted(values, key=lambda value: value[0])
+            earliest = price_ordered[0]
+            latest = price_ordered[-1]
             if latest[1] <= earliest[1]:
                 continue
             delta = latest[1] - earliest[1]
-            percentage = delta / earliest[1] * Decimal("100") if earliest[1] else Decimal("0")
+            percentage = (delta / earliest[1] * Decimal("100")) if earliest[1] else Decimal("0")
             changes.append((percentage, delta, item_name, earliest[1], latest[1], currency))
         if not changes:
             return 0, None, None, ("No item had a source-backed price increase.",)
@@ -540,7 +550,7 @@ def _synthesize(
             ),
         )
     if QueryTemplate.PERSONAL_FOOD_PRICE_INDEX in plan.selected_templates:
-        observations: dict[str, list[tuple[datetime, Decimal, str]]] = defaultdict(list)
+        basket_observations: dict[str, list[tuple[datetime, Decimal, str]]] = defaultdict(list)
         for row in rows:
             item_name = row.get("item_name")
             amount = row.get("amount")
@@ -554,19 +564,23 @@ def _synthesize(
             timestamp = datetime.fromisoformat(str(occurred_at))
             if timestamp.tzinfo is None or timestamp.utcoffset() is None:
                 raise ValueError("food-index rows require timezone-aware occurrence times")
-            observations[str(item_name)].append((timestamp, Decimal(str(amount)), str(currency)))
+            basket_observations[str(item_name)].append(
+                (timestamp, Decimal(str(amount)), str(currency))
+            )
         currencies = {
-            currency for values in observations.values() for _timestamp, _amount, currency in values
+            currency
+            for values in basket_observations.values()
+            for _timestamp, _amount, currency in values
         }
         if len(currencies) != 1:
             return 0, None, None, ("Food-basket observations use multiple currencies.",)
         currency = currencies.pop()
         matched: list[tuple[str, Decimal, Decimal]] = []
-        for item_name, values in observations.items():
-            ordered = sorted(values, key=lambda value: value[0])
-            if len(ordered) < 2 or ordered[0][1] <= 0:
+        for item_name, values in basket_observations.items():
+            basket_ordered = sorted(values, key=lambda value: value[0])
+            if len(basket_ordered) < 2 or basket_ordered[0][1] <= 0:
                 continue
-            matched.append((item_name, ordered[0][1], ordered[-1][1]))
+            matched.append((item_name, basket_ordered[0][1], basket_ordered[-1][1]))
         if not matched:
             return (
                 0,
@@ -597,8 +611,8 @@ def _synthesize(
         )
     if QueryTemplate.SPENDING_ANOMALY_DETECTION in plan.selected_templates:
         priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
-        selected: dict[str, tuple[datetime, Decimal, str, str]] = {}
-        ambiguous: set[str] = set()
+        anomaly_selected: dict[str, tuple[datetime, Decimal, str, str]] = {}
+        anomaly_ambiguous: set[str] = set()
         for row in rows:
             order_id = row.get("order_id")
             amount = row.get("amount")
@@ -613,18 +627,23 @@ def _synthesize(
             timestamp = datetime.fromisoformat(str(occurred_at))
             if timestamp.tzinfo is None or timestamp.utcoffset() is None:
                 raise ValueError("anomaly rows require timezone-aware occurrence times")
-            candidate = (timestamp, Decimal(str(amount)), str(currency), component_type)
+            anomaly_candidate = (timestamp, Decimal(str(amount)), str(currency), component_type)
             key = str(order_id)
-            current = selected.get(key)
-            if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
-                selected[key] = candidate
-            elif current[3] == component_type and current[1:] != candidate[1:]:
-                ambiguous.add(key)
-        for order_id in ambiguous:
-            selected.pop(order_id, None)
-        if len(selected) < 5:
+            anomaly_current = anomaly_selected.get(key)
+            if anomaly_current is None or priority.get(component_type, 0) > priority.get(
+                anomaly_current[3], 0
+            ):
+                anomaly_selected[key] = anomaly_candidate
+            elif (
+                anomaly_current[3] == component_type
+                and anomaly_current[1:] != anomaly_candidate[1:]
+            ):
+                anomaly_ambiguous.add(key)
+        for order_id in anomaly_ambiguous:
+            anomaly_selected.pop(order_id, None)
+        if len(anomaly_selected) < 5:
             return (
-                len(selected),
+                len(anomaly_selected),
                 None,
                 None,
                 (
@@ -632,19 +651,19 @@ def _synthesize(
                     "robust anomaly detection.",
                 ),
             )
-        ordered_selected = sorted(selected.items(), key=lambda item: (item[1][0], item[0]))
-        currencies = {value[2] for value in selected.values()}
+        anomaly_ordered = sorted(anomaly_selected.items(), key=lambda item: (item[1][0], item[0]))
+        currencies = {value[2] for value in anomaly_selected.values()}
         if len(currencies) != 1:
             return 0, None, None, ("Spending observations use multiple currencies.",)
         currency = currencies.pop()
-        values = sorted(value[1] for value in selected.values())
-        midpoint = len(values) // 2
+        anomaly_values = sorted(value[1] for value in anomaly_selected.values())
+        midpoint = len(anomaly_values) // 2
         median = (
-            values[midpoint]
-            if len(values) % 2
-            else (values[midpoint - 1] + values[midpoint]) / Decimal("2")
+            anomaly_values[midpoint]
+            if len(anomaly_values) % 2
+            else (anomaly_values[midpoint - 1] + anomaly_values[midpoint]) / Decimal("2")
         )
-        deviations = sorted(abs(value - median) for value in values)
+        deviations = sorted(abs(value - median) for value in anomaly_values)
         mad_midpoint = len(deviations) // 2
         mad = (
             deviations[mad_midpoint]
@@ -652,7 +671,7 @@ def _synthesize(
             else (deviations[mad_midpoint - 1] + deviations[mad_midpoint]) / Decimal("2")
         )
         anomalies: list[tuple[Decimal, str, datetime, Decimal]] = []
-        for order_id, (timestamp, amount, _currency, _component_type) in selected.items():
+        for order_id, (timestamp, amount, _currency, _component_type) in anomaly_selected.items():
             if mad:
                 score = Decimal("0.6745") * (amount - median) / mad
                 is_anomaly = abs(score) >= Decimal("3.5")
@@ -664,9 +683,9 @@ def _synthesize(
         anomalies.sort(key=lambda value: (-value[0], value[1]))
         change_points: list[tuple[datetime, Decimal, Decimal]] = []
         minimum_segment = 3
-        for split in range(minimum_segment, len(ordered_selected) - minimum_segment + 1):
-            before = sorted(value[1] for _order_id, value in ordered_selected[:split])
-            after = sorted(value[1] for _order_id, value in ordered_selected[split:])
+        for split in range(minimum_segment, len(anomaly_ordered) - minimum_segment + 1):
+            before = sorted(value[1] for _order_id, value in anomaly_ordered[:split])
+            after = sorted(value[1] for _order_id, value in anomaly_ordered[split:])
             before_mid = len(before) // 2
             after_mid = len(after) // 2
             before_median = (
@@ -688,16 +707,16 @@ def _synthesize(
                 else Decimal("0")
             )
             if relative_change >= Decimal("0.50"):
-                change_points.append((ordered_selected[split][1][0], before_median, after_median))
+                change_points.append((anomaly_ordered[split][1][0], before_median, after_median))
         change_preview = "; ".join(
             f"{timestamp.date().isoformat()} ({currency} {before:.2f} → {after:.2f})"
             for timestamp, before, after in change_points[:5]
         )
         if not anomalies and not change_points:
             return (
-                len(selected),
+                len(anomaly_selected),
                 f"No robust source-backed spending anomalies were detected across "
-                f"{len(selected)} orders.",
+                f"{len(anomaly_selected)} orders.",
                 f"Median order total = {currency} {median:.2f}; MAD = {currency} {mad:.2f}",
                 (
                     "Anomalies use a robust modified-z threshold of 3.5 over selected "
@@ -706,7 +725,7 @@ def _synthesize(
             )
         if not anomalies:
             return (
-                len(selected),
+                len(anomaly_selected),
                 f"Detected {len(change_points)} source-backed spending regime "
                 f"{'shift' if len(change_points) == 1 else 'shifts'} at {change_preview}.",
                 f"Change point{'s' if len(change_points) != 1 else ''}: {change_preview}; "
@@ -722,7 +741,7 @@ def _synthesize(
             for score, order_id, timestamp, amount in anomalies[:10]
         )
         answer = (
-            len(selected),
+            len(anomaly_selected),
             f"Detected {len(anomalies)} source-backed spending "
             f"{'anomaly' if len(anomalies) == 1 else 'anomalies'}: {preview}.",
             f"Median order total = {currency} {median:.2f}; MAD = {currency} {mad:.2f}; "
@@ -743,8 +762,8 @@ def _synthesize(
         return answer
     if QueryTemplate.SPENDING_CONCENTRATION in plan.selected_templates:
         priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
-        selected: dict[str, tuple[str, Decimal, str, str]] = {}
-        ambiguous: set[str] = set()
+        concentration_selected: dict[str, tuple[str, Decimal, str, str]] = {}
+        concentration_ambiguous: set[str] = set()
         for row in rows:
             order_id = row.get("order_id")
             merchant_name = row.get("merchant_name")
@@ -756,23 +775,33 @@ def _synthesize(
                 for value in (order_id, merchant_name, amount, currency)
             ):
                 continue
-            candidate = (str(merchant_name), Decimal(str(amount)), str(currency), component_type)
+            concentration_candidate = (
+                str(merchant_name),
+                Decimal(str(amount)),
+                str(currency),
+                component_type,
+            )
             key = str(order_id)
-            current = selected.get(key)
-            if current is None or priority.get(component_type, 0) > priority.get(current[3], 0):
-                selected[key] = candidate
-            elif current[3] == component_type and current[1:] != candidate[1:]:
-                ambiguous.add(key)
-        for order_id in ambiguous:
-            selected.pop(order_id, None)
-        if not selected:
+            concentration_current = concentration_selected.get(key)
+            if concentration_current is None or priority.get(component_type, 0) > priority.get(
+                concentration_current[3], 0
+            ):
+                concentration_selected[key] = concentration_candidate
+            elif (
+                concentration_current[3] == component_type
+                and concentration_current[1:] != concentration_candidate[1:]
+            ):
+                concentration_ambiguous.add(key)
+        for order_id in concentration_ambiguous:
+            concentration_selected.pop(order_id, None)
+        if not concentration_selected:
             return 0, None, None, ("No unambiguous source-backed merchant spend was available.",)
-        currencies = {value[2] for value in selected.values()}
+        currencies = {value[2] for value in concentration_selected.values()}
         if len(currencies) != 1:
             return 0, None, None, ("Merchant spending observations use multiple currencies.",)
         currency = currencies.pop()
         by_merchant: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
-        for merchant, amount, _currency, _component_type in selected.values():
+        for merchant, amount, _currency, _component_type in concentration_selected.values():
             by_merchant[merchant] += amount
         total = sum(by_merchant.values(), Decimal("0"))
         if total <= 0:
@@ -787,7 +816,7 @@ def _synthesize(
             for merchant, share in sorted(shares.items(), key=lambda item: (-item[1], item[0]))[:5]
         )
         return (
-            len(selected),
+            len(concentration_selected),
             f"Food spending concentration is {hhi:.2f} HHI; {top_merchant} represents "
             f"{top_share:.2f}% of source-backed spend. Merchant shares: {top_preview}.",
             f"HHI = sum of squared merchant shares = {hhi:.2f}; total spend = "
@@ -817,13 +846,13 @@ def _synthesize(
                 by_order[str(order_id)] = Decimal(str(amount))
         total = sum(by_order.values(), Decimal("0"))
         merchant = next(iter(merchant_names))
-        terms = " + ".join(f"{currency} {amount:.2f}" for amount in by_order.values())
+        fee_terms = " + ".join(f"{currency} {amount:.2f}" for amount in by_order.values())
         return (
             len(by_order),
             f"Waiving observed delivery fees at {merchant} would have saved "
             f"{currency} {total:.2f} across {len(by_order)} "
             f"{'order' if len(by_order) == 1 else 'orders'}.",
-            f"{terms} = {currency} {total:.2f} simulated saving",
+            f"{fee_terms} = {currency} {total:.2f} simulated saving",
             (
                 "This is a bounded counterfactual over observed delivery charges; "
                 "order history is unchanged.",
@@ -852,14 +881,16 @@ def _synthesize(
             component_type = str(row.get("component_type", ""))
             if order_id is None or amount is None or currency is None:
                 continue
-            candidate = (Decimal(str(amount)), str(currency), component_type)
-            current = totals_by_order.get(str(order_id))
+            spend_candidate = (Decimal(str(amount)), str(currency), component_type)
+            spend_current = totals_by_order.get(str(order_id))
             candidate_priority = priority.get(component_type, 0)
-            current_priority = priority.get(current[2], 0) if current is not None else -1
-            if current is None or candidate_priority > current_priority:
-                totals_by_order[str(order_id)] = candidate
+            current_priority = (
+                priority.get(spend_current[2], 0) if spend_current is not None else -1
+            )
+            if spend_current is None or candidate_priority > current_priority:
+                totals_by_order[str(order_id)] = spend_candidate
             elif candidate_priority == current_priority and (
-                current[0] != candidate[0] or current[1] != candidate[1]
+                spend_current[0] != spend_candidate[0] or spend_current[1] != spend_candidate[1]
             ):
                 ambiguous_orders.add(str(order_id))
         for order_id in ambiguous_orders:
@@ -895,10 +926,12 @@ def _synthesize(
                 None,
                 ("The merchant phrase matched multiple reviewed restaurant identities.",),
             )
-        counts = {int(row["order_count"]) for row in rows if row.get("order_count") is not None}
-        if len(counts) > 1:
+        order_counts = {
+            int(row["order_count"]) for row in rows if row.get("order_count") is not None
+        }
+        if len(order_counts) > 1:
             raise ValueError("merchant-order rows returned conflicting aggregate counts")
-        count = counts.pop() if counts else 0
+        count = order_counts.pop() if order_counts else 0
         noun = "order" if count == 1 else "orders"
         return (
             count,
