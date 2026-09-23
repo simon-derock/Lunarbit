@@ -40,6 +40,10 @@ class QuerySlots(ContractModel):
 class MissingQuerySlotError(ValueError):
     """Raised when a governed template needs an explicit runtime slot."""
 
+    def __init__(self, slot: str) -> None:
+        self.slot = slot
+        super().__init__(f"{slot} is required for the selected governed query")
+
 
 class RuntimeRequest(ContractModel):
     question: str = Field(min_length=3, max_length=500)
@@ -48,7 +52,7 @@ class RuntimeRequest(ContractModel):
 
 def _require(value: str | None, name: str) -> str:
     if value is None:
-        raise MissingQuerySlotError(f"{name} is required for the selected governed query")
+        raise MissingQuerySlotError(name)
     return value
 
 
@@ -1012,7 +1016,7 @@ def retrieve_grounded_context(
         )
     try:
         queries = bind_query_plan(plan, request.slots)
-    except MissingQuerySlotError:
+    except MissingQuerySlotError as error:
         # A model proposal can identify a financial family without supplying
         # every bounded slot. Treat that as a governed clarification state,
         # never as an internal server failure or an unbounded fallback.
@@ -1029,9 +1033,9 @@ def retrieve_grounded_context(
                 covered_claim_ids=(),
                 missing_claim_ids=(claim_id,),
                 citation_ids=(),
-                abstention_reason="missing_query_slot",
+                abstention_reason=f"missing_query_slot:{error.slot}",
             ),
-            abstention_reason="missing_query_slot",
+            abstention_reason=f"missing_query_slot:{error.slot}",
             review_required=True,
             review_reason="missing_query_slot",
         )
