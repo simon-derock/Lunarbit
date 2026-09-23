@@ -37,7 +37,14 @@ def test_production_environment_returns_safe_typed_config() -> None:
         ("LUNARBIT_PRIVATE_API_TOKEN", "short", "32 characters"),
         ("LUNARBIT_PUBLIC_ALLOWED_ORIGINS", "*", "HTTPS origins"),
         ("LUNARBIT_PUBLIC_ALLOWED_ORIGINS", "https://app.example/?next=home", "HTTPS origins"),
+        (
+            "LUNARBIT_PUBLIC_ALLOWED_ORIGINS",
+            "https://app.example,https://app.example",
+            "duplicates",
+        ),
         ("LUNARBIT_SESSION_DB", "relative.sqlite3", "absolute"),
+        ("LUNARBIT_SESSION_DB", "/tmp/conversations.sqlite3", "ephemeral"),
+        ("LUNARBIT_SESSION_DB", "/var/lib/lunarbit/conversations.txt", "SQLite database suffix"),
     ),
 )
 def test_production_environment_fails_closed(name: str, value: str, message: str) -> None:

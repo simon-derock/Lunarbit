@@ -44,6 +44,8 @@ def validate_deployment_environment(
     origins = tuple(origin.strip().rstrip("/") for origin in raw_origins.split(","))
     if not origins or any(not origin for origin in origins):
         raise DeploymentConfigError("allowed origins cannot be empty")
+    if len(set(origins)) != len(origins):
+        raise DeploymentConfigError("allowed origins cannot contain duplicates")
     for origin in origins:
         parsed = urlparse(origin)
         if (
@@ -61,6 +63,10 @@ def validate_deployment_environment(
     session_db = Path(required("LUNARBIT_SESSION_DB"))
     if not session_db.is_absolute():
         raise DeploymentConfigError("LUNARBIT_SESSION_DB must be an absolute persistent path")
+    if session_db.suffix.lower() not in {".sqlite3", ".db"}:
+        raise DeploymentConfigError("LUNARBIT_SESSION_DB must use a SQLite database suffix")
+    if session_db.parts[:2] == ("/", "tmp") or session_db.parts[:3] == ("/", "var", "tmp"):
+        raise DeploymentConfigError("LUNARBIT_SESSION_DB cannot use ephemeral temporary storage")
     return DeploymentConfig(
         neo4j_uri=uri,
         database=required("NEO4J_DATABASE"),
