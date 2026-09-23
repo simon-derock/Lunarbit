@@ -146,6 +146,34 @@ def test_sqlite_store_persists_hitl_review_state(tmp_path) -> None:
     assert turn.review_reason == "identity_ambiguity"
 
 
+def test_sqlite_store_expires_sessions_across_restart(tmp_path, monkeypatch) -> None:
+    database = tmp_path / "sessions.sqlite3"
+    monkeypatch.setattr("lunarbit.conversation.time", lambda: 100.0)
+    first = SQLiteConversationStore(str(database), ttl_seconds=10)
+    session_id = first.create()
+    first.close()
+
+    monkeypatch.setattr("lunarbit.conversation.time", lambda: 111.0)
+    reopened = SQLiteConversationStore(str(database), ttl_seconds=10)
+    with pytest.raises(SessionNotFoundError):
+        reopened.history(session_id)
+
+
+def test_sqlite_store_bounds_sessions_after_restart(tmp_path, monkeypatch) -> None:
+    database = tmp_path / "sessions.sqlite3"
+    monkeypatch.setattr("lunarbit.conversation.time", lambda: 100.0)
+    store = SQLiteConversationStore(str(database), max_sessions=1)
+    first = store.create()
+    monkeypatch.setattr("lunarbit.conversation.time", lambda: 101.0)
+    second = store.create()
+    store.close()
+
+    reopened = SQLiteConversationStore(str(database), max_sessions=1)
+    with pytest.raises(SessionNotFoundError):
+        reopened.history(first)
+    assert reopened.history(second) == ()
+
+
 class StubConversationBackend:
     def __init__(self) -> None:
         self.requests: list[RuntimeRequest] = []

@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from time import monotonic
+from time import monotonic, time
 from uuid import uuid4
 
 from lunarbit.runtime import QuerySlots
@@ -266,6 +266,9 @@ class SQLiteConversationStore:
         self._memory = ConversationStore(
             ttl_seconds=ttl_seconds, max_sessions=max_sessions, max_turns=max_turns
         )
+        self._ttl_seconds = ttl_seconds
+        self._max_sessions = max_sessions
+        self._max_turns = max_turns
         database_path = Path(path)
         database_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path, check_same_thread=False)
@@ -290,43 +293,74 @@ class SQLiteConversationStore:
             self._db.execute("ALTER TABLE turns ADD COLUMN review_reason TEXT")
         self._db.commit()
 
-    def _load(self, session_id: str) -> None:
-        rows = self._db.execute(
-            "SELECT question, slots, status, review_required, review_reason "
-            "FROM turns WHERE session_id = ? ORDER BY turn_index",
-            (session_id,),
+    def _purge_database(self, now: float) -> None:
+        """Expire durable sessions before they are admitted into memory."""
+        expired = self._db.execute(
+            "SELECT id FROM sessions WHERE ? - updated >= ?",
+            (now, self._ttl_seconds),
         ).fetchall()
+        for (session_id,) in expired:
+            self._db.execute("DELETE FROM turns WHERE session_id = ?", (session_id,))
+            self._db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        count = self._db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        while count >= self._max_sessions:
+            oldest = self._db.execute(
+                "SELECT id FROM sessions ORDER BY updated ASC LIMIT 1"
+            ).fetchone()
+            if oldest is None:
+                break
+            self._db.execute("DELETE FROM turns WHERE session_id = ?", (oldest[0],))
+            self._db.execute("DELETE FROM sessions WHERE id = ?", (oldest[0],))
+            count -= 1
+        self._db.commit()
+
+    def _load(self, session_id: str) -> None:
+        session = self._db.execute(
+            "SELECT created, updated FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if session is None:
+            raise SessionNotFoundError(session_id)
+        if time() - float(session[1]) >= self._ttl_seconds:
+            self._db.execute("DELETE FROM turns WHERE session_id = ?", (session_id,))
+            self._db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            self._db.commit()
+            raise SessionNotFoundError(session_id)
+        rows = self._db.execute(
+            "SELECT turn_index, question, slots, status, review_required, review_reason "
+            "FROM turns WHERE session_id = ? ORDER BY turn_index DESC LIMIT ?",
+            (session_id, self._max_turns),
+        ).fetchall()
+        rows.reverse()
         if session_id not in self._memory._sessions:
-            if not self._db.execute(
-                "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone():
-                raise SessionNotFoundError(session_id)
             now = self._memory.clock()
             self._memory._sessions[session_id] = _SessionState(
                 session_id=session_id,
                 created_at=now,
                 updated_at=now,
-                next_turn_index=len(rows) + 1,
+                next_turn_index=(int(rows[-1][0]) + 1) if rows else 1,
                 turns=[],
             )
         state = self._memory._sessions[session_id]
         state.turns = [
             SessionTurn(
-                question=q,
-                slots=QuerySlots.model_validate(json.loads(slots)),
-                status=status,
-                review_required=bool(review_required),
-                review_reason=review_reason,
+                question=row[1],
+                slots=QuerySlots.model_validate(json.loads(row[2])),
+                status=row[3],
+                review_required=bool(row[4]),
+                review_reason=row[5],
             )
-            for q, slots, status, review_required, review_reason in rows
+            for row in rows
         ]
-        state.next_turn_index = len(state.turns) + 1
+        state.next_turn_index = (int(rows[-1][0]) + 1) if rows else 1
 
     def create(self) -> str:
         with self._lock:
+            self._purge_database(time())
             session_id = self._memory.create()
+            now = time()
             self._db.execute(
-                "INSERT INTO sessions(id, created, updated) VALUES (?, ?, ?)", (session_id, 0, 0)
+                "INSERT INTO sessions(id, created, updated) VALUES (?, ?, ?)",
+                (session_id, now, now),
             )
             self._db.commit()
             return session_id
@@ -369,6 +403,7 @@ class SQLiteConversationStore:
                     review_reason,
                 ),
             )
+            self._db.execute("UPDATE sessions SET updated = ? WHERE id = ?", (time(), session_id))
             self._db.commit()
             return index
 
