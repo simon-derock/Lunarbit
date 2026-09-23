@@ -6,10 +6,11 @@ import json
 import re
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from threading import Lock
 from time import monotonic, time
+from typing import Literal
 from uuid import uuid4
 
 from lunarbit.runtime import QuerySlots
@@ -19,13 +20,22 @@ class SessionNotFoundError(LookupError):
     """Raised when a client refers to an expired or unknown conversation."""
 
 
+class ReviewStateError(ValueError):
+    """Raised when an invalid human-review transition is requested."""
+
+
+ReviewStatus = Literal["not_required", "pending", "approved", "rejected"]
+
+
 @dataclass(frozen=True, slots=True)
 class SessionTurn:
     question: str
     slots: QuerySlots
     status: str
+    turn_index: int = 0
     review_required: bool = False
     review_reason: str | None = None
+    review_status: ReviewStatus = "not_required"
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,8 +240,10 @@ class ConversationStore:
                     question=question,
                     slots=slots,
                     status=status,
+                    turn_index=turn_index,
                     review_required=review_required,
                     review_reason=review_reason,
+                    review_status="pending" if review_required else "not_required",
                 )
             )
             state.turns = state.turns[-self.max_turns :]
@@ -248,6 +260,29 @@ class ConversationStore:
         with self._lock:
             self._purge_expired(now)
             return tuple(self._require(session_id).turns)
+
+    def resolve_review(
+        self,
+        session_id: str,
+        turn_index: int,
+        decision: Literal["approved", "rejected"],
+    ) -> SessionTurn:
+        if decision not in {"approved", "rejected"}:
+            raise ReviewStateError("review decision must be approved or rejected")
+        now = self.clock()
+        with self._lock:
+            self._purge_expired(now)
+            state = self._require(session_id)
+            for index, turn in enumerate(state.turns):
+                if turn.turn_index != turn_index:
+                    continue
+                if not turn.review_required or turn.review_status != "pending":
+                    raise ReviewStateError("review is not pending")
+                updated = replace(turn, review_status=decision)
+                state.turns[index] = updated
+                state.updated_at = now
+                return updated
+            raise ReviewStateError("review turn not found")
 
 
 class SQLiteConversationStore:
@@ -291,6 +326,10 @@ class SQLiteConversationStore:
             )
         if "review_reason" not in columns:
             self._db.execute("ALTER TABLE turns ADD COLUMN review_reason TEXT")
+        if "review_status" not in columns:
+            self._db.execute(
+                "ALTER TABLE turns ADD COLUMN review_status TEXT NOT NULL DEFAULT 'not_required'"
+            )
         self._db.commit()
 
     def _purge_database(self, now: float) -> None:
@@ -326,7 +365,8 @@ class SQLiteConversationStore:
             self._db.commit()
             raise SessionNotFoundError(session_id)
         rows = self._db.execute(
-            "SELECT turn_index, question, slots, status, review_required, review_reason "
+            "SELECT turn_index, question, slots, status, review_required, review_reason, "
+            "review_status "
             "FROM turns WHERE session_id = ? ORDER BY turn_index DESC LIMIT ?",
             (session_id, self._max_turns),
         ).fetchall()
@@ -346,8 +386,10 @@ class SQLiteConversationStore:
                 question=row[1],
                 slots=QuerySlots.model_validate(json.loads(row[2])),
                 status=row[3],
+                turn_index=int(row[0]),
                 review_required=bool(row[4]),
                 review_reason=row[5],
+                review_status=("pending" if bool(row[4]) and row[6] == "not_required" else row[6]),
             )
             for row in rows
         ]
@@ -392,7 +434,7 @@ class SQLiteConversationStore:
             )
             self._db.execute(
                 "INSERT INTO turns(session_id, turn_index, question, slots, status, "
-                "review_required, review_reason) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "review_required, review_reason, review_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     session_id,
                     index,
@@ -401,6 +443,7 @@ class SQLiteConversationStore:
                     status,
                     int(review_required),
                     review_reason,
+                    "pending" if review_required else "not_required",
                 ),
             )
             self._db.execute("UPDATE sessions SET updated = ? WHERE id = ?", (time(), session_id))
@@ -411,6 +454,23 @@ class SQLiteConversationStore:
         with self._lock:
             self._load(session_id)
             return self._memory.history(session_id)
+
+    def resolve_review(
+        self,
+        session_id: str,
+        turn_index: int,
+        decision: Literal["approved", "rejected"],
+    ) -> SessionTurn:
+        with self._lock:
+            self._load(session_id)
+            updated = self._memory.resolve_review(session_id, turn_index, decision)
+            self._db.execute(
+                "UPDATE turns SET review_status = ? WHERE session_id = ? AND turn_index = ?",
+                (decision, session_id, turn_index),
+            )
+            self._db.execute("UPDATE sessions SET updated = ? WHERE id = ?", (time(), session_id))
+            self._db.commit()
+            return updated
 
     def close(self) -> None:
         """Release the SQLite connection during graceful service shutdown."""

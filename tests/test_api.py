@@ -13,6 +13,7 @@ from lunarbit.api import (
     create_app,
     parse_public_origins,
 )
+from lunarbit.conversation import ConversationStore
 from lunarbit.langgraph_workflow import LangGraphExecutionError
 from lunarbit.observability import InMemoryTraceSink
 from lunarbit.public import PublicMetric, PublicSnapshot, assert_public_payload, build_demo_snapshot
@@ -487,6 +488,43 @@ def test_private_chat_stream_preserves_session_history_across_turns() -> None:
         if line.startswith("data: ") and '"session_id"' in line
     ][-1]
     assert json.loads(second_terminal)["context_reused"] is True
+
+
+def test_private_chat_review_applies_one_authenticated_hitl_transition() -> None:
+    sessions = ConversationStore()
+    session_id = sessions.create()
+    sessions.append(
+        session_id,
+        question="How many orders came from an ambiguous restaurant?",
+        slots=QuerySlots(merchant_name="ambiguous restaurant"),
+        status="abstained",
+        review_required=True,
+        review_reason="identity_ambiguity",
+    )
+    client = TestClient(
+        create_app(
+            private_api_token="local-secret-token",
+            conversation_store=sessions,
+        )
+    )
+    headers = {"Authorization": "Bearer local-secret-token"}
+
+    approved = client.post(
+        f"/v1/private/chat/{session_id}/review",
+        headers=headers,
+        json={"turn_index": 1, "decision": "approved"},
+    )
+
+    assert approved.status_code == 200
+    assert approved.json()["review_status"] == "approved"
+    history = client.get(f"/v1/private/chat/{session_id}/history", headers=headers)
+    assert history.json()["turns"][0]["review_status"] == "approved"
+    repeated = client.post(
+        f"/v1/private/chat/{session_id}/review",
+        headers=headers,
+        json={"turn_index": 1, "decision": "rejected"},
+    )
+    assert repeated.status_code == 409
 
 
 class StubPrivateWorkflow:

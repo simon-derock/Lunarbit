@@ -5,7 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from secrets import compare_digest
 from time import monotonic, sleep
-from typing import Annotated
+from typing import Annotated, Literal, cast
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -26,6 +26,8 @@ from lunarbit.api_contracts import (
     PrivateGroundedAnswer,
     PrivateRetrievalBackend,
     PrivateRetrievalTrace,
+    PrivateReviewRequest,
+    PrivateReviewResponse,
     PrivateSessionHistory,
     PrivateSessionTurn,
     PrivateWorkflowBackend,
@@ -40,6 +42,7 @@ from lunarbit.api_contracts import (
 )
 from lunarbit.conversation import (
     ConversationStore,
+    ReviewStateError,
     SessionNotFoundError,
     SQLiteConversationStore,
     infer_query_slots,
@@ -739,9 +742,49 @@ def create_app(
                         status=turn.status,
                         review_required=turn.review_required,
                         review_reason=turn.review_reason,
+                        review_status=turn.review_status,
                     )
                     for index, turn in enumerate(turns, start=1)
                 ),
+            )
+
+        @app.post(
+            "/v1/private/chat/{session_id}/review",
+            response_model=PrivateReviewResponse,
+        )
+        def private_chat_review(
+            session_id: ConversationSessionId,
+            request: PrivateReviewRequest,
+            http_request: Request,
+            authorization: Annotated[str | None, Header()] = None,
+        ) -> PrivateReviewResponse:
+            """Apply one authenticated HITL decision to a pending turn."""
+            enforce_rate_limit(http_request, private_limiter)
+            authorize_private(authorization)
+            try:
+                turn = sessions.resolve_review(
+                    session_id,
+                    request.turn_index,
+                    request.decision,
+                )
+            except SessionNotFoundError as error:
+                raise HTTPException(
+                    status_code=404, detail="conversation session not found"
+                ) from error
+            except ReviewStateError as error:
+                raise HTTPException(status_code=409, detail=str(error)) from error
+            record_trace(
+                http_request,
+                "private.chat.review",
+                {"turn_index": request.turn_index, "decision": request.decision},
+            )
+            assert turn.review_status in {"approved", "rejected"}
+            return PrivateReviewResponse(
+                session_id=session_id,
+                turn_index=turn.turn_index,
+                review_required=turn.review_required,
+                review_reason=turn.review_reason,
+                review_status=cast(Literal["approved", "rejected"], turn.review_status),
             )
 
         @app.post("/v1/private/chat/stream")

@@ -59,6 +59,11 @@ class PrivateChatRequest(ContractModel):
     slots: QuerySlots | None = None
 
 
+class PrivateReviewRequest(ContractModel):
+    turn_index: int = Field(ge=1)
+    decision: Literal["approved", "rejected"]
+
+
 type RuntimeCitationId = Annotated[
     str,
     Field(pattern=r"^(?:runtime:)?citation:[1-9][0-9]*$"),
@@ -103,11 +108,20 @@ class PrivateSessionTurn(ContractModel):
     status: str
     review_required: bool = False
     review_reason: str | None = None
+    review_status: Literal["not_required", "pending", "approved", "rejected"] = "not_required"
 
 
 class PrivateSessionHistory(ContractModel):
     session_id: ConversationSessionId
     turns: tuple[PrivateSessionTurn, ...]
+
+
+class PrivateReviewResponse(ContractModel):
+    session_id: ConversationSessionId
+    turn_index: int = Field(ge=1)
+    review_required: bool
+    review_reason: str | None
+    review_status: Literal["approved", "rejected"]
 
 
 class PrivateAnswerBackend(Protocol):

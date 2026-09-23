@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from lunarbit.api import PrivateGroundedAnswer, create_app
 from lunarbit.conversation import (
     ConversationStore,
+    ReviewStateError,
     SessionNotFoundError,
     SQLiteConversationStore,
     infer_query_slots,
@@ -144,6 +145,11 @@ def test_sqlite_store_persists_hitl_review_state(tmp_path) -> None:
     turn = reopened.history(session_id)[0]
     assert turn.review_required is True
     assert turn.review_reason == "identity_ambiguity"
+    assert turn.review_status == "pending"
+    approved = reopened.resolve_review(session_id, turn.turn_index, "approved")
+    assert approved.review_status == "approved"
+    with pytest.raises(ReviewStateError):
+        reopened.resolve_review(session_id, turn.turn_index, "rejected")
 
 
 def test_sqlite_store_expires_sessions_across_restart(tmp_path, monkeypatch) -> None:
