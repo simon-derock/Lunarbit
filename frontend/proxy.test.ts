@@ -90,4 +90,36 @@ describe("Vercel private API proxy", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("forwards the bounded HITL resume route with the server token", async () => {
+    const response = responseDouble();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ turn_index: 2, answer: { status: "verified" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await handler(
+      {
+        method: "POST",
+        query: { path: "chat/session%3Atest/review/resume" },
+        body: { turn_index: 1, decision: "approved" },
+        headers: { accept: "application/json" },
+      } as never,
+      response as never,
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://api.example.test/v1/private/chat/session%3Atest/review/resume"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer server-secret" }),
+      }),
+    );
+    expect(response.status).toHaveBeenCalledWith(200);
+  });
 });
