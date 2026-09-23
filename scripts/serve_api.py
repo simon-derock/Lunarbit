@@ -16,7 +16,7 @@ from neo4j import Driver, GraphDatabase
 from lunarbit.api import DEFAULT_PUBLIC_ORIGINS, create_app, parse_public_origins
 from lunarbit.cohere import CohereClient
 from lunarbit.conversation import SQLiteConversationStore
-from lunarbit.deployment_config import validate_deployment_environment
+from lunarbit.deployment_config import DeploymentConfig, validate_deployment_environment
 from lunarbit.hybrid import HybridRetriever, Neo4jHybridGraph
 from lunarbit.langgraph_workflow import GraphRAGWorkflow
 from lunarbit.public_projection import (
@@ -74,6 +74,25 @@ def _connect_neo4j(
     return driver
 
 
+def _session_database_path(production_config: DeploymentConfig | None) -> Path | None:
+    """Resolve durable conversation storage without using container paths locally."""
+    if production_config is not None:
+        return production_config.session_db
+    configured = os.environ.get("LUNARBIT_SESSION_DB", "").strip()
+    if not configured:
+        return None
+    candidate = Path(configured)
+    try:
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        if os.access(candidate.parent, os.W_OK):
+            return candidate
+    except OSError:
+        pass
+    fallback = Path(".lunarbit/conversations.sqlite3")
+    fallback.parent.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
 def main() -> int:
     args = _args()
     load_dotenv(".env", override=False)
@@ -96,23 +115,12 @@ def main() -> int:
     graph = Neo4jHybridGraph(driver, database=database)
     reader = Neo4jGraphReader(driver, database=database)
     public_reader = Neo4jAggregateReader(driver, database=database)
-    session_store = (
-        SQLiteConversationStore(
-            str(production_config.session_db)
-            if production_config is not None
-            else os.environ["LUNARBIT_SESSION_DB"]
-        )
-        if production_config is not None or os.environ.get("LUNARBIT_SESSION_DB")
-        else None
-    )
+    session_path = _session_database_path(production_config)
+    session_store = SQLiteConversationStore(str(session_path)) if session_path else None
     checkpoint_connection: sqlite3.Connection | None = None
     try:
         if session_store is not None:
-            session_path = Path(
-                str(production_config.session_db)
-                if production_config is not None
-                else os.environ["LUNARBIT_SESSION_DB"]
-            )
+            assert session_path is not None
             checkpoint_path = session_path.with_name(
                 f"{session_path.stem}.langgraph{session_path.suffix}"
             )
