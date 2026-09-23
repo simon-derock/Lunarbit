@@ -102,6 +102,23 @@ export async function fetchSessionHistory(sessionId: string): Promise<SessionHis
   return (await response.json()) as SessionHistory;
 }
 
+export async function resumeReviewedChat(
+  sessionId: string,
+  turnIndex: number,
+): Promise<ChatStreamResult> {
+  const response = await fetchWithRetry(
+    `/api/private/chat/${encodeURIComponent(sessionId)}/review/resume`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turn_index: turnIndex, decision: "approved" }),
+    },
+    1,
+  );
+  if (!response.ok) throw new Error(`review resume failed: ${response.status}`);
+  return (await response.json()) as ChatStreamResult;
+}
+
 export async function streamPrivateChat(
   question: string,
   onStage: (stage: string) => void,

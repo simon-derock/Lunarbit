@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { GraphSurface } from "./GraphSurface";
-import { fetchPublicMerchantNeighborhood, fetchPublicSnapshot, fetchSessionHistory, mapPublicSnapshot, streamPrivateChat, type ChatStreamResult, type SessionHistory } from "./api";
+import { fetchPublicMerchantNeighborhood, fetchPublicSnapshot, fetchSessionHistory, mapPublicSnapshot, resumeReviewedChat, streamPrivateChat, type ChatStreamResult, type SessionHistory } from "./api";
 import {
   GRAPH_PROFILES,
   SORTS,
@@ -223,6 +223,7 @@ export function Console() {
   const [queryState, setQueryState] = useState<string | null>(null);
   const [chatResult, setChatResult] = useState<ChatStreamResult | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [streamCitations, setStreamCitations] = useState<ChatStreamResult["answer"]["citations"]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionHistory | null>(null);
   const [graphFocusIds, setGraphFocusIds] = useState<string[]>([]);
@@ -255,6 +256,19 @@ export function Console() {
         if (chatAbort.current === controller) chatAbort.current = null;
         setChatBusy(false);
       });
+  };
+
+  const resumeReview = () => {
+    if (!chatResult?.answer.review_required || reviewBusy) return;
+    setReviewBusy(true);
+    resumeReviewedChat(chatResult.session_id, chatResult.turn_index)
+      .then((result) => {
+        setChatResult(result);
+        setQueryState(result.answer.status);
+        return fetchSessionHistory(result.session_id).then(setSessionHistory);
+      })
+      .catch((error) => setQueryState(error instanceof Error ? error.message : "review unavailable"))
+      .finally(() => setReviewBusy(false));
   };
 
   useEffect(() => () => chatAbort.current?.abort(), []);
@@ -707,11 +721,14 @@ export function Console() {
             </div>
             <p className="ask-answer-text">{chatResult.answer.direct_answer ?? "Lunarbit abstained because the evidence was insufficient."}</p>
             {chatResult.answer.review_required && (
-              <p className="ask-calculation">
+              <div className="ask-calculation">
                 {chatResult.answer.review_reason === "clarification_required"
-                  ? "Please narrow the restaurant, platform, item, or time scope before Lunarbit reads the graph."
-                  : "Lunarbit is waiting for a human clarification before continuing."}
-              </p>
+                  ? <p>Please narrow the restaurant, platform, item, or time scope before Lunarbit reads the graph.</p>
+                  : <p>Lunarbit is waiting for a human clarification before continuing.</p>}
+                <button className="ask-review-action" onClick={resumeReview} disabled={reviewBusy}>
+                  {reviewBusy ? "reviewing…" : "approve and continue"}
+                </button>
+              </div>
             )}
             {chatResult.answer.calculation && <p className="ask-calculation">{chatResult.answer.calculation}</p>}
             <div className="ask-meta">{chatResult.answer.citation_ids.length} citations · {graphFocusIds.length} focus nodes · turn {chatResult.turn_index}{chatResult.context_reused ? " · context reused" : ""}</div>

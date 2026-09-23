@@ -182,6 +182,8 @@ html {
   padding: 14px 16px;
 }
 .ask-answer-text { margin: 8px 0 5px; font-family: var(--font-display); font-size: 18px; line-height: 1.25; }
+.ask-review-action { margin-top: 8px; border: 1px solid color-mix(in oklab, var(--border) 65%, var(--foreground)); padding: 5px 8px; color: var(--foreground); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.ask-review-action:disabled { cursor: wait; opacity: .55; }
 .ask-calculation { margin: 0; color: var(--muted-foreground); font-size: 10px; }
 .ask-meta { margin-top: 10px; color: var(--muted-foreground); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
 .ask-citations { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }

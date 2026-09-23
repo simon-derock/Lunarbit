@@ -4,6 +4,7 @@ import {
   fetchPublicSnapshot,
   mapPublicSnapshot,
   parseSseFrame,
+  resumeReviewedChat,
   streamPrivateChat,
   type PublicSnapshotPayload,
   type StreamAnswer,
@@ -105,6 +106,43 @@ describe("public snapshot adapter", () => {
 });
 
 describe("SSE protocol parser", () => {
+  it("resumes an approved review through the private proxy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        session_id: "session:test",
+        turn_index: 2,
+        context_reused: true,
+        answer: {
+          status: "verified",
+          direct_answer: "Verified answer.",
+          calculation: null,
+          fact_count: 1,
+          citation_ids: [],
+          citations: [],
+          verification_status: "verified",
+          limitations: [],
+          abstention_reason: null,
+          review_required: false,
+          review_reason: null,
+        },
+      }), { status: 200 }),
+    );
+
+    try {
+      const result = await resumeReviewedChat("session:test", 1);
+      expect(result.turn_index).toBe(2);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/private/chat/session%3Atest/review/resume",
+        expect.objectContaining({
+          method: "POST",
+          body: '{"turn_index":1,"decision":"approved"}',
+        }),
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("parses typed JSON events and ignores incomplete frames", () => {
     expect(parseSseFrame("event: citation\ndata: {\"citation_id\":\"runtime:citation:1\"}"))?.toEqual({
       event: "citation",
