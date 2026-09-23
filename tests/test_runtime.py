@@ -219,6 +219,34 @@ def test_yearly_spend_abstains_when_currencies_conflict() -> None:
     assert result.review_reason == "financial_conflict"
 
 
+def test_spending_change_point_reports_temporal_regime_shift() -> None:
+    rows = tuple(
+        {
+            "order_id": f"order:{index}",
+            "component_type": "customer_total",
+            "amount": str("100.00" if index < 3 else "250.00"),
+            "currency": "INR",
+            "occurred_at": f"2024-0{index + 1}-15T12:00:00+00:00",
+            "chunk_id": f"chunk:{index}",
+            "source_id": f"message:{index}",
+            "source_hash": chr(97 + index) * 64,
+        }
+        for index in range(6)
+    )
+    result = retrieve_grounded_context(
+        RuntimeRequest(
+            question="When did my spending change point occur?",
+            slots=QuerySlots(),
+        ),
+        StubReader(rows),
+    )
+
+    assert result.status is RuntimeStatus.VERIFIED
+    assert "spending regime shift" in (result.direct_answer or "")
+    assert "2024-04-15" in (result.direct_answer or "")
+    assert "change point" in (result.calculation or "").lower()
+
+
 def test_fee_discount_analysis_calculates_offset_and_net_burden() -> None:
     reader = StubReader(
         (

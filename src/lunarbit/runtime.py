@@ -628,6 +628,7 @@ def _synthesize(
                     "robust anomaly detection.",
                 ),
             )
+        ordered_selected = sorted(selected.items(), key=lambda item: (item[1][0], item[0]))
         currencies = {value[2] for value in selected.values()}
         if len(currencies) != 1:
             return 0, None, None, ("Spending observations use multiple currencies.",)
@@ -657,7 +658,38 @@ def _synthesize(
             if is_anomaly:
                 anomalies.append((abs(score), order_id, timestamp, amount))
         anomalies.sort(key=lambda value: (-value[0], value[1]))
-        if not anomalies:
+        change_points: list[tuple[datetime, Decimal, Decimal]] = []
+        minimum_segment = 3
+        for split in range(minimum_segment, len(ordered_selected) - minimum_segment + 1):
+            before = sorted(value[1] for _order_id, value in ordered_selected[:split])
+            after = sorted(value[1] for _order_id, value in ordered_selected[split:])
+            before_mid = len(before) // 2
+            after_mid = len(after) // 2
+            before_median = (
+                before[before_mid]
+                if len(before) % 2
+                else (before[before_mid - 1] + before[before_mid]) / Decimal("2")
+            )
+            after_median = (
+                after[after_mid]
+                if len(after) % 2
+                else (after[after_mid - 1] + after[after_mid]) / Decimal("2")
+            )
+            denominator = abs(before_median)
+            relative_change = (
+                abs(after_median - before_median) / denominator
+                if denominator
+                else Decimal("1")
+                if after_median != before_median
+                else Decimal("0")
+            )
+            if relative_change >= Decimal("0.50"):
+                change_points.append((ordered_selected[split][1][0], before_median, after_median))
+        change_preview = "; ".join(
+            f"{timestamp.date().isoformat()} ({currency} {before:.2f} → {after:.2f})"
+            for timestamp, before, after in change_points[:5]
+        )
+        if not anomalies and not change_points:
             return (
                 len(selected),
                 f"No robust source-backed spending anomalies were detected across "
@@ -668,12 +700,24 @@ def _synthesize(
                     "source-backed order totals.",
                 ),
             )
+        if not anomalies:
+            return (
+                len(selected),
+                f"Detected {len(change_points)} source-backed spending regime "
+                f"{'shift' if len(change_points) == 1 else 'shifts'} at {change_preview}.",
+                f"Change point{'s' if len(change_points) != 1 else ''}: {change_preview}; "
+                "median segment change threshold = 50.00%",
+                (
+                    "Change points compare chronological median spending segments; this is "
+                    "a descriptive signal, not a causal explanation or fraud judgment.",
+                ),
+            )
         preview = "; ".join(
             f"{order_id}: {currency} {amount:.2f} on {timestamp.date().isoformat()} "
             f"(modified z {score:.2f})"
             for score, order_id, timestamp, amount in anomalies[:10]
         )
-        return (
+        answer = (
             len(selected),
             f"Detected {len(anomalies)} source-backed spending "
             f"{'anomaly' if len(anomalies) == 1 else 'anomalies'}: {preview}.",
@@ -684,6 +728,15 @@ def _synthesize(
                 "ambiguous totals are excluded.",
             ),
         )
+        if change_points:
+            return (
+                answer[0],
+                f"{answer[1]} Also detected {len(change_points)} spending regime "
+                f"{'shift' if len(change_points) == 1 else 'shifts'} at {change_preview}.",
+                f"{answer[2]}; change points: {change_preview}",
+                answer[3],
+            )
+        return answer
     if QueryTemplate.SPENDING_CONCENTRATION in plan.selected_templates:
         priority = {"customer_total": 3, "invoice_total": 2, "payment_assertion": 1}
         selected: dict[str, tuple[str, Decimal, str, str]] = {}
