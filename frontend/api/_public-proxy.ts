@@ -41,6 +41,17 @@ function pathSegments(request: PublicProxyRequest): string[] | null {
   return segments;
 }
 
+function allowedPath(namespace: "public" | "query", segments: string[]): boolean {
+  if (namespace === "query") return segments.length === 1 && segments[0] === "plan";
+  if (segments.length === 1) return segments[0] === "snapshot" || segments[0] === "showcase-answer";
+  return (
+    segments.length === 3 &&
+    segments[0] === "merchant" &&
+    /^pub:node:[a-j]{12}$/.test(segments[1]) &&
+    segments[2] === "neighborhood"
+  );
+}
+
 export function createPublicProxy(namespace: "public" | "query") {
   return async function handler(
     request: PublicProxyRequest,
@@ -63,7 +74,7 @@ export function createPublicProxy(namespace: "public" | "query") {
       return;
     }
     const segments = pathSegments(request);
-    if (!segments) {
+    if (!segments || !allowedPath(namespace, segments)) {
       reject(response, 400, "invalid public API path");
       return;
     }
@@ -119,4 +130,3 @@ export function createPublicProxy(namespace: "public" | "query") {
     }
   };
 }
-

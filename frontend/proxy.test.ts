@@ -189,4 +189,19 @@ describe("Vercel public API proxies", () => {
       }),
     );
   });
+
+  it("rejects an unlisted public route before contacting the upstream API", async () => {
+    const response = responseDouble();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createPublicProxy("public")(
+      { method: "GET", query: { path: "future-admin" }, headers: {} } as never,
+      response as never,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith({ error: "invalid public API path" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
