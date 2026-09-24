@@ -109,17 +109,31 @@ def _check_mobile_layout(page: Any, config: BrowserConfig) -> None:
     controls = page.locator("header .header-controls")
     buttons = controls.locator("button")
     _assert(buttons.count() >= 3, "mobile graph controls are incomplete")
-    buttons.nth(0).click()
+    _check_menu_containment(page, buttons.nth(0), "view", minimum_options=2)
+    _check_menu_containment(page, buttons.nth(1), "style", minimum_options=2)
+    _check_menu_containment(page, buttons.nth(2), "theme", minimum_options=2)
+
+
+def _check_menu_containment(page: Any, trigger: Any, label: str, minimum_options: int) -> None:
+    """Open one responsive menu and prove it stays inside the viewport."""
+    # Menu state is intentionally closed by an outside pointer event.  Close
+    # any menu left by the previous assertion before opening the next one;
+    # relying on Escape would test a keyboard behavior the UI does not claim.
+    page.locator("main.app-shell").click(position={"x": 1, "y": 1})
+    trigger.click()
     menu = page.locator(".menu-popover:visible").last
     menu.wait_for(state="visible", timeout=2_000)
     option_count = menu.locator(":scope > button").count()
-    _assert(option_count >= 2, "view menu exposes fewer than two profiles")
-    menu_box = menu.bounding_box()
-    _assert(menu_box is not None, "view menu has no layout box")
-    _assert(menu_box["x"] >= 0, "view menu leaves the left mobile viewport")
     _assert(
-        menu_box["x"] + menu_box["width"] <= 390,
-        f"view menu leaves the right mobile viewport: {menu_box}",
+        option_count >= minimum_options, f"{label} menu exposes too few options: {option_count}"
+    )
+    menu_box = menu.bounding_box()
+    _assert(menu_box is not None, f"{label} menu has no layout box")
+    viewport_width = page.evaluate("() => document.documentElement.clientWidth")
+    _assert(menu_box["x"] >= 0, f"{label} menu leaves the left mobile viewport: {menu_box}")
+    _assert(
+        menu_box["x"] + menu_box["width"] <= viewport_width,
+        f"{label} menu leaves the right mobile viewport: {menu_box}",
     )
     page.keyboard.press("Escape")
 
