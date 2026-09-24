@@ -36,8 +36,8 @@ jobs:
       LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS || 'https://localhost' }}
       LUNARBIT_SESSION_DB: /var/lib/lunarbit/conversations.sqlite3
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.22"
           python-version: "3.12"
