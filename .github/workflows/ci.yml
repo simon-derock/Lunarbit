@@ -136,8 +136,36 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Install frontend dependencies
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Start frontend for browser smoke
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run dev -- --host 127.0.0.1 > /tmp/lunarbit-vite.log 2>&1 &
+          echo $! > /tmp/lunarbit-vite.pid
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/lunarbit-vite.log
+          exit 1
+      - name: Install Chromium for browser smoke
+        run: uv run --with playwright python -m playwright install --with-deps chromium
+      - name: Verify responsive browser contract
+        run: >-
+          uv run --with playwright python scripts/verify_frontend_browser.py
+          --strict --url http://127.0.0.1:5173/
       - if: always()
-        run: docker stop lunarbit-public-api || true
+        run: |
+          if [ -f /tmp/lunarbit-vite.pid ]; then kill "$(cat /tmp/lunarbit-vite.pid)" || true; fi
+          docker stop lunarbit-public-api || true
 
   api-container:
     name: Production API container
