@@ -3,11 +3,11 @@
 ## Session handoff
 
 - Last updated: 2026-09-23
-- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, durable SQLite session/checkpoint store, authenticated HITL review transitions and approved-answer resumption, frontend review control, Cortex favicon, citation identifiers, canonical merchant identity resolution, evidence-backed spend totals, and complete economic graph ingestion are implemented and pushed; remaining gates are human-reviewed language quality, durable production hosting, live E2E coverage, and final security/privacy review.
+- Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, durable SQLite session/checkpoint store, authenticated HITL review transitions and approved-answer resumption, frontend review control, Cortex favicon, citation identifiers, canonical merchant identity resolution, evidence-backed spend totals, and complete economic graph ingestion are implemented and pushed; remaining gates are human-reviewed language quality, durable production hosting, deployed-target E2E coverage, and final security/privacy review.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `479f681` (`fix(local): resolve container session path safely`), pushed to `main`.
-- Recent commits: `479f681` local launcher fallback and smoke coverage, `c19163f` persistent Aura smoke session volume, `4ad3503` deployment persistence validation, `7c432b0` Vercel HITL proxy coverage.
+- Last verified implementation commit: `66e5dfe` (`docs(memory): record launcher regression coverage`), pushed to `main`.
+- Recent commits: `66e5dfe` launcher regression coverage, `479f681` local launcher fallback and smoke coverage, `c19163f` persistent Aura smoke session volume, `4ad3503` deployment persistence validation, `7c432b0` Vercel HITL proxy coverage.
 - Last passing checks: 353 Python tests, 4 launcher tests, Ruff format/lint, strict MyPy across 45 modules, repository hygiene, frontend Vitest (16 tests), frontend TypeScript/Vite production build, live Aura snapshot and authenticated browser-proxy SSE plus HITL resume verification, standalone public-only Aura release audit, browser-origin SSE proxy smoke test, production API image build/non-root inspection, green GitHub CI/CodeQL/Aura workflows, and real headless Chrome desktop/mobile local smoke (live 344-node/84-edge projection).
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, abstention, or HITL review quality drops. The report schema is `grounded-answer-evaluation-v1.1.0`.
 - Deployment verification: the complete economic archive was loaded idempotently into Aura and verified at exactly 53,983 nodes and 85,607 relationships (298 write batches; replay unchanged). The production launcher returned `/health` 200, `/ready` 200 with `graph=configured`, a live 346-node/99-edge bounded navigation projection, authenticated hybrid retrieval (`verified`, 30 dense + 30 lexical candidates, 10 evidence citations), and ordered SSE chat events. The local smoke server used a temporary writable session volume and was stopped after verification.
@@ -116,7 +116,7 @@ The finish line is a deployable, privacy-safe financial-intelligence product, no
   - Added deterministic question and slot guardrails that normalize Unicode, reject control/format obfuscation, prompt/secret extraction, arbitrary Cypher/SQL/tool commands, and explicit off-scope model-use tasks while regression-testing ordinary food-commerce phrasing.
   - Added a private `/v1/private/chat` contract with TTL-bound process-local sessions, bounded follow-up context, explicit slot carry-forward, high-confidence platform/fee inference, safe missing-scope abstention, and generic expired-session handling.
   - Added generated request correlation IDs and a bounded privacy-safe trace sink for routing, retrieval, verification, abstention, latency, and chat-turn metadata; trace attributes cannot contain raw questions, answers, evidence, secrets, or Cypher.
-- In progress: Public privacy review and cloud deployment preparation. The current public UI consumes only the reviewed FastAPI contract. HITL exposes explicit clarification, identity-ambiguity, and financial-conflict review metadata; graph writes remain disabled. Full operator pause/resume approval remains to be implemented.
+- In progress: Public privacy review and cloud deployment preparation. The current public UI consumes only the reviewed FastAPI contract. HITL exposes explicit clarification, identity-ambiguity, and financial-conflict review metadata; authenticated approval and read-only answer resumption are implemented, while graph writes remain disabled.
 - The dependency lock constrains AnyIO to `<4.15` because the local locked httpx 0.27 ASGI test transport deadlocks with AnyIO 4.15; `uv lock --check` passes. A local shell-specific sync-worker hang remains separately reproducible even with the corrected lock and is not treated as an application result.
 - Pending external input: public deployment target, durable host volume, and final privacy-reviewed API exposure. Aura credentials are configured locally and provider credentials load from the ignored `.env`; do not expose or commit them.
 - Retrieval architecture now includes adaptive Matryoshka embeddings, HNSW
@@ -262,12 +262,20 @@ Copy the XML below as initialization context when handing Lunarbit to another co
 ## Next actions — ordered
 
 1. Complete a human-reviewed language-quality golden set and measure answer/citation/abstention regressions.
-2. Add explicit HITL state transitions for identity ambiguity and mutation proposals while keeping graph writes read-only by default.
-3. Add live browser E2E coverage for the deployed frontend, SSE chat, citations, graph focus, reconnect, and mobile layout.
-4. Complete cloud release rehearsal: Aura secrets, durable session volume, HTTPS/CORS, monitoring, backups, rollback, and privacy review.
-5. Publish the reviewed public deployment and record its image digest, schema/index versions, and release evidence.
+2. Run the browser verifier against the chosen deployment target, including SSE chat, citations, graph focus, reconnect, and mobile layout.
+3. Complete cloud release rehearsal: Aura secrets, durable session volume, HTTPS/CORS, monitoring, backups, rollback, and privacy review.
+4. Publish the reviewed public deployment and record its image digest, schema/index versions, and release evidence.
 
 ## Decisions — append-only, newest first
+
+### 2026-09-24 — Reconcile HITL and release-gate state
+
+- Decision: Treat authenticated HITL review/resume as implemented and move it out of the pending list; retain graph writes as disabled by design. Keep deployment, deployed-browser E2E, language review, and privacy review as the actual release gates.
+- Rationale: The API review and resume routes, frontend approval control, proxy forwarding test, and live Aura workflow now exercise the complete read-only approval path. The old state entry contradicted executable contracts and made the handoff unreliable.
+- Alternatives rejected: Marking the entire product “production complete” before a real host, durable volume, browser target, and human privacy sign-off exist.
+- Files/contracts affected: `MEMORY.md`, `/v1/private/chat/{session_id}/review`, `/review/resume`, live Aura workflow, frontend review control.
+- Validation performed: 353 Python tests, strict MyPy, frontend Vitest/build, live Aura SSE plus HITL resume smoke, and browser-proxy forwarding tests are recorded above.
+- Revisit trigger: A deployed browser run or security review finds a defect in the approval, persistence, or privacy boundary.
 
 ### 2026-08-12 — Make canonical archives the oracle for financial answers
 
