@@ -20,4 +20,15 @@ describe("Vercel static security policy", () => {
     );
     expect(config.rewrites).toBeUndefined();
   });
+
+  it("ships same-origin public, query, and private proxy handlers", () => {
+    const routes = [
+      ["./api/private/[...path].ts", "Authorization"],
+      ["./api/public/[...path].ts", "createPublicProxy"],
+      ["./api/query/[...path].ts", "createPublicProxy"],
+    ] as const;
+    for (const [route, marker] of routes) {
+      expect(readFileSync(new URL(route, import.meta.url), "utf8")).toContain(marker);
+    }
+  });
 });

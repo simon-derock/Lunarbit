@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import handler from "./api/private/[...path]";
+import { createPublicProxy } from "./api/_public-proxy";
 
 function responseDouble() {
   const response = {
@@ -121,5 +122,71 @@ describe("Vercel private API proxy", () => {
       }),
     );
     expect(response.status).toHaveBeenCalledWith(200);
+  });
+});
+
+describe("Vercel public API proxies", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.LUNARBIT_API_URL = "https://api.example.test";
+  });
+
+  it("forwards the public snapshot without private credentials", async () => {
+    const response = responseDouble();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response('{"mode":"neo4j_navigation_projection"}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await createPublicProxy("public")(
+      { method: "GET", query: { path: "snapshot" }, headers: {} } as never,
+      response as never,
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://api.example.test/v1/public/snapshot"),
+      expect.objectContaining({
+        method: "GET",
+        headers: { Accept: "application/json" },
+      }),
+    );
+    expect(response.status).toHaveBeenCalledWith(200);
+  });
+
+  it("forwards query plans without an authorization header", async () => {
+    const response = responseDouble();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response('{"intent":"financial_aggregation"}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await createPublicProxy("query")(
+      {
+        method: "POST",
+        query: { path: "plan" },
+        body: { question: "How much did I spend?" },
+        headers: { accept: "application/json" },
+      } as never,
+      response as never,
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://api.example.test/v1/query/plan"),
+      expect.objectContaining({
+        method: "POST",
+        body: '{"question":"How much did I spend?"}',
+        headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+      }),
+    );
   });
 });
