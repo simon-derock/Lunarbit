@@ -56,6 +56,8 @@ def assert_public_release(
     showcase: object,
     private_route_status: int,
     expected_origin: str,
+    query_plan: object | None = None,
+    demo_answer: object | None = None,
 ) -> None:
     """Validate safe public routes, responses, and browser-origin handling."""
     openapi_payload = _mapping(openapi, name="openapi")
@@ -100,3 +102,7 @@ def assert_public_release(
     assert_public_payload(health_payload)
     assert_public_payload(snapshot_payload)
     assert_public_payload(showcase_payload)
+    if query_plan is not None:
+        assert_public_payload(_mapping(query_plan, name="query plan"))
+    if demo_answer is not None:
+        assert_public_payload(_mapping(demo_answer, name="demo answer"))

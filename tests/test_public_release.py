@@ -44,7 +44,36 @@ def test_public_release_audit_accepts_the_deployed_public_contract() -> None:
             "/v1/private/retrieval", json={"question": "historic meal price"}
         ).status_code,
         expected_origin=origin,
+        query_plan=client.post(
+            "/v1/query/plan", json={"question": "How much did I spend at my restaurants?"}
+        ).json(),
+        demo_answer=client.get("/v1/demo/answers/fee-offset").json(),
     )
+
+
+def test_public_release_audit_checks_all_optional_public_payloads() -> None:
+    client = TestClient(create_app(include_private_routes=False))
+    origin = "http://127.0.0.1:5173"
+    with pytest.raises(ValueError, match="public payload"):
+        assert_public_release(
+            openapi=client.get("/openapi.json").json(),
+            health=client.get("/health").json(),
+            ready=client.get("/ready").json(),
+            snapshot=client.get("/v1/public/snapshot", headers={"Origin": origin}).json(),
+            snapshot_cors_origin=origin,
+            snapshot_headers={
+                **SECURITY_HEADERS,
+                "x-request-id": "trace:release-test",
+            },
+            showcase=client.post(
+                "/v1/public/showcase-answer",
+                json={"question": "Did discounts offset platform and delivery fees?"},
+            ).json(),
+            private_route_status=404,
+            expected_origin=origin,
+            query_plan={"source_hash": "a" * 64},
+            demo_answer=client.get("/v1/demo/answers/fee-offset").json(),
+        )
 
 
 def test_public_release_audit_rejects_private_routes_and_payload_leaks() -> None:

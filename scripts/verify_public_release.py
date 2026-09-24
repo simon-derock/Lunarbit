@@ -94,6 +94,17 @@ def main() -> int:
             timeout=args.timeout,
         )
     )
+    query_plan = _required_json(
+        _request(
+            f"{api_url}/v1/query/plan",
+            method="POST",
+            payload={"question": "How much did I spend at my restaurants?"},
+            timeout=args.timeout,
+        )
+    )
+    demo_answer = _required_json(
+        _request(f"{api_url}/v1/demo/answers/fee-offset", timeout=args.timeout)
+    )
     private_status, _, _, _ = _request(
         f"{api_url}/v1/private/retrieval",
         method="POST",
@@ -110,6 +121,8 @@ def main() -> int:
         showcase=showcase,
         private_route_status=private_status,
         expected_origin=args.origin,
+        query_plan=query_plan,
+        demo_answer=demo_answer,
     )
     print("public release audit passed")
     return 0
