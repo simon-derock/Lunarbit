@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 """Repair order-to-merchant paths using only source-backed merchant evidence.
 
-The repair is deliberately conservative: it deduplicates provider outlet edges when the
-canonical identity is unambiguous, creates a missing path only when the order evidence contains
-exactly one reviewed merchant identity, and quarantines unresolved orders instead of guessing.
+The repair is deliberately conservative:
+
+* Evidence is order-local. Chunks from a source that documents several orders, such as a
+  provider order-history report, name many restaurants and never identify one order's merchant.
+* A unique canonical identity reached through the order's resolved outlet is authoritative.
+  Order-local text that names a different reviewed merchant is reported as a conflict for
+  review; the planner never chooses between two deterministic signals.
+* Orders without an outlet path resolve from exactly one reviewed merchant named in their own
+  evidence, then from an existing direct link, then from the source receipt's merchant name.
+  Anything else is quarantined instead of guessed.
+* Every change is reversible from the printed plan: removed direct links carry the identity they
+  pointed to, and ``ORDERED_FROM`` relationship IDs are deterministic.
 """
 
 from __future__ import annotations
@@ -88,6 +97,18 @@ def _merchant_catalog(session: Any) -> tuple[dict[str, object], ...]:
     return tuple(dict(row) for row in rows)
 
 
+def _identity_names(session: Any) -> dict[str, str]:
+    """Return every canonical identity, including ones created from source receipts."""
+
+    rows = session.run(
+        "MATCH (identity:MerchantIdentity) "
+        "RETURN identity.node_id AS identity_id, "
+        "identity.canonical_name_private AS canonical_name "
+        "ORDER BY identity.node_id"
+    )
+    return {str(row["identity_id"]): str(row["canonical_name"] or "") for row in rows}
+
+
 def _orders(session: Any) -> tuple[dict[str, object], ...]:
     rows = session.run(
         "MATCH (order:Order) "
@@ -97,14 +118,32 @@ def _orders(session: Any) -> tuple[dict[str, object], ...]:
         "identity_id: identity.node_id}) AS paths "
         "OPTIONAL MATCH (order)-[:ORDERED_FROM]->(direct:MerchantIdentity) "
         "WITH order, paths, collect(DISTINCT direct.node_id) AS direct_identity_ids "
-        "OPTIONAL MATCH (order)-[:HAS_CHUNK|DOCUMENTED_BY*1..2]->(chunk:EvidenceChunk) "
+        "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
+        "(chunk:EvidenceChunk) "
+        "WITH order, paths, direct_identity_ids, chunk, "
+        "CASE WHEN source IS NULL THEN 0 "
+        "ELSE COUNT { (:Order)-[:DOCUMENTED_BY]->(source) } END AS source_orders "
         "RETURN order.node_id AS order_id, order.platform AS platform, "
         "order.order_type AS order_type, "
         "order.identity_status AS identity_status, paths, direct_identity_ids, "
-        "collect(DISTINCT chunk.normalized_text_private) AS evidence "
+        "collect(DISTINCT {text: chunk.normalized_text_private, "
+        "source_orders: source_orders}) AS evidence_items "
         "ORDER BY order.node_id"
     )
     return tuple(dict(row) for row in rows)
+
+
+def _order_local_evidence(order: Mapping[str, object]) -> tuple[str, ...]:
+    """Keep only evidence from sources that document this order alone."""
+
+    items = order.get("evidence_items")
+    if not isinstance(items, list | tuple):
+        return ()
+    return tuple(
+        str(item["text"])
+        for item in items
+        if item and item.get("text") and item.get("source_orders") == 1
+    )
 
 
 def _candidate_identities(
@@ -131,61 +170,76 @@ def _candidate_identities(
     return tuple(sorted(identity for identity, score in scores.items() if score == highest))
 
 
-def plan_repair(session: Any) -> dict[str, object]:
-    catalog = _merchant_catalog(session)
-    known_identity_ids = {str(row["identity_id"]) for row in catalog}
-    known_identity_names = {
-        str(row["identity_id"]): str(row.get("canonical_name") or "") for row in catalog
-    }
-    orders = _orders(session)
-    actions: list[dict[str, str]] = []
-    unresolved: list[str] = []
-    for order in orders:
-        paths = tuple(path for path in order.get("paths", ()) if path and path.get("outlet_id"))
-        identities = {str(path.get("identity_id")) for path in paths if path.get("identity_id")}
-        candidates = _candidate_identities(order, catalog)
-        source_name = _source_merchant_name(order)
-        if not candidates and source_name:
-            exact = {
+def _exact_source_identities(
+    source_name: str, catalog: tuple[dict[str, object], ...]
+) -> tuple[str, ...]:
+    normalized = _normalize(source_name)
+    return tuple(
+        sorted(
+            {
                 str(row["identity_id"])
                 for row in catalog
-                if _normalize(source_name)
+                if normalized
                 in {
                     _normalize(row.get("listing_name")),
                     _normalize(row.get("canonical_name")),
                     *(_normalize(value) for value in str(row.get("aliases") or "").split(" | ")),
                 }
             }
-            candidates = tuple(sorted(exact))
+        )
+    )
+
+
+def plan_repair(session: Any) -> dict[str, object]:
+    catalog = _merchant_catalog(session)
+    identity_names = _identity_names(session)
+    orders = _orders(session)
+    actions: list[dict[str, str]] = []
+    unresolved: list[str] = []
+    conflicting: list[str] = []
+    for raw_order in orders:
+        order = {**raw_order, "evidence": _order_local_evidence(raw_order)}
+        order_id = str(order["order_id"])
+        paths = tuple(path for path in order.get("paths", ()) if path and path.get("outlet_id"))
+        outlet_identities = {str(path["identity_id"]) for path in paths if path.get("identity_id")}
         direct_identities = {
             str(identity) for identity in order.get("direct_identity_ids", ()) if identity
         }
-        target_identity = (
-            candidates[0]
-            if len(candidates) == 1
-            else (
-                next(iter(identities))
-                if len(identities) == 1
-                else (
-                    next(iter(direct_identities))
-                    if len(direct_identities) == 1
-                    else (_identity_id(source_name) if source_name else None)
-                )
-            )
-        )
+        source_name = _source_merchant_name(order)
+        candidates = _candidate_identities(order, catalog)
+        if not candidates and source_name:
+            candidates = _exact_source_identities(source_name, catalog)
+        evidence_identity = candidates[0] if len(candidates) == 1 else None
+
+        target_identity: str | None
+        if len(outlet_identities) == 1:
+            target_identity = next(iter(outlet_identities))
+            if evidence_identity is not None and evidence_identity != target_identity:
+                conflicting.append(order_id)
+                continue
+        elif outlet_identities:
+            if evidence_identity not in outlet_identities:
+                conflicting.append(order_id)
+                continue
+            target_identity = evidence_identity
+        elif evidence_identity is not None:
+            target_identity = evidence_identity
+        elif len(direct_identities) == 1:
+            target_identity = next(iter(direct_identities))
+        elif source_name:
+            target_identity = _identity_id(source_name)
+        else:
+            target_identity = None
+
         if target_identity is None:
             if order.get("order_type") != "instamart":
-                order_id = str(order["order_id"])
                 unresolved.append(order_id)
                 actions.append({"order_id": order_id, "action": "quarantine"})
             continue
         if (
             source_name
             and target_identity == _identity_id(source_name)
-            and (
-                target_identity not in known_identity_ids
-                or known_identity_names.get(target_identity) != source_name
-            )
+            and identity_names.get(target_identity) != source_name
         ):
             actions.append(
                 {
@@ -194,25 +248,20 @@ def plan_repair(session: Any) -> dict[str, object]:
                     "action": "ensure_identity",
                 }
             )
-            known_identity_ids.add(target_identity)
-            known_identity_names[target_identity] = source_name
+            identity_names[target_identity] = source_name
         for path in paths:
-            if (
-                path.get("identity_id") != target_identity
-                and len(identities) > 1
-                and len(candidates) == 1
-            ):
+            if path.get("identity_id") != target_identity:
                 actions.append(
-                    {
-                        "order_id": str(order["order_id"]),
-                        "outlet_id": str(path["outlet_id"]),
-                        "action": "remove",
-                    }
+                    {"order_id": order_id, "outlet_id": str(path["outlet_id"]), "action": "remove"}
                 )
+        for identity_id in sorted(direct_identities - {target_identity}):
+            actions.append(
+                {"order_id": order_id, "identity_id": identity_id, "action": "remove_direct"}
+            )
         if target_identity not in direct_identities:
             actions.append(
                 {
-                    "order_id": str(order["order_id"]),
+                    "order_id": order_id,
                     "identity_id": target_identity,
                     "identity_name": source_name or "",
                     "action": "add_direct",
@@ -222,7 +271,9 @@ def plan_repair(session: Any) -> dict[str, object]:
         "orders_scanned": len(orders),
         "actions": actions,
         "unresolved_order_ids": unresolved,
+        "conflicting_order_ids": conflicting,
         "remove_count": sum(action["action"] == "remove" for action in actions),
+        "remove_direct_count": sum(action["action"] == "remove_direct" for action in actions),
         "add_count": sum(action["action"] == "add_direct" for action in actions),
     }
 
@@ -254,6 +305,14 @@ def apply_repair(tx: Any, actions: list[dict[str, str]]) -> int:
                 "(outlet:Outlet {node_id: $outlet_id}) DELETE edge RETURN count(*) AS changed",
                 order_id=action["order_id"],
                 outlet_id=action["outlet_id"],
+            ).single()
+        elif action["action"] == "remove_direct":
+            result = tx.run(
+                "MATCH (order:Order {node_id: $order_id})-[edge:ORDERED_FROM]->"
+                "(identity:MerchantIdentity {node_id: $identity_id}) "
+                "DELETE edge RETURN count(*) AS changed",
+                order_id=action["order_id"],
+                identity_id=action["identity_id"],
             ).single()
         elif action["action"] == "add_direct":
             result = tx.run(
