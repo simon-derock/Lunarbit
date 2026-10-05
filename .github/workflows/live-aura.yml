@@ -21,19 +21,9 @@ jobs:
     name: Aura-backed release smoke
     runs-on: ubuntu-latest
     environment: production
+    # Secrets are scoped to the steps that need them so dependency installation
+    # and image builds, which execute third-party code, never receive them.
     env:
-      NEO4J_URI: ${{ secrets.NEO4J_URI }}
-      NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
-      NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
-      NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
-      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-      LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
-      # The Aura smoke job exercises the API without a browser. Keep its
-      # CORS contract fail-closed while allowing it to run before the frontend
-      # has a public hostname; the real deployment must override this secret.
-      LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS || 'https://localhost' }}
       LUNARBIT_SESSION_DB: /var/lib/lunarbit/conversations.sqlite3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,9 +33,36 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked --extra api --extra graph --extra agent
-      - run: uv run python scripts/verify_deployment_config.py
+      - name: Verify deployment configuration
+        env:
+          NEO4J_URI: ${{ secrets.NEO4J_URI }}
+          NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+          NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
+          # The Aura smoke job exercises the API without a browser. Keep its
+          # CORS contract fail-closed while allowing it to run before the frontend
+          # has a public hostname; the real deployment must override this secret.
+          LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS || 'https://localhost' }}
+        run: uv run python scripts/verify_deployment_config.py
       - run: docker build --file Dockerfile.api --tag lunarbit-api:live-smoke .
       - name: Start Aura-backed API
+        env:
+          NEO4J_URI: ${{ secrets.NEO4J_URI }}
+          NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+          NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
+          # The Aura smoke job exercises the API without a browser. Keep its
+          # CORS contract fail-closed while allowing it to run before the frontend
+          # has a public hostname; the real deployment must override this secret.
+          LUNARBIT_PUBLIC_ALLOWED_ORIGINS: ${{ secrets.LUNARBIT_PUBLIC_ALLOWED_ORIGINS || 'https://localhost' }}
         run: |
           docker run --detach --rm --name lunarbit-api-live \
             --publish 127.0.0.1:8016:8000 \
@@ -65,9 +82,10 @@ jobs:
             fi
             sleep 2
           done
-          docker logs lunarbit-api-live
           exit 1
       - name: Verify authenticated SSE answer contract
+        env:
+          LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
         run: |
           curl --silent --show-error --no-buffer \
             --header "Authorization: Bearer ${LUNARBIT_PRIVATE_API_TOKEN}" \
@@ -92,6 +110,8 @@ jobs:
             | grep -Eo 'code[=:][A-Za-z0-9_-]+|answer_[A-Za-z0-9_-]+|retrieval_[A-Za-z0-9_-]+' \
             | sort -u || true
       - name: Verify authenticated HITL resume contract
+        env:
+          LUNARBIT_PRIVATE_API_TOKEN: ${{ secrets.LUNARBIT_PRIVATE_API_TOKEN }}
         run: |
           chat_payload=$(curl --silent --show-error --fail \
             --header "Authorization: Bearer ${LUNARBIT_PRIVATE_API_TOKEN}" \
