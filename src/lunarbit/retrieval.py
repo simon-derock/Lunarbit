@@ -209,17 +209,30 @@ class GovernedQuery(ContractModel):
         return self
 
 
+# An order reaches its canonical restaurant through a direct link, which the merchant repair adds
+# when the provider outlet is absent, or through its resolved provider outlet. UNION returns each
+# order once per identity, so an order listed under two provider listings never repeats rows.
+_CANONICAL_ORDERS = (
+    "CALL (identity) { "
+    "MATCH (identity)<-[:ORDERED_FROM]-(order:Order) RETURN order UNION "
+    "MATCH (identity)<-[:CANONICAL_OF]-(:Merchant)<-[:OUTLET_OF]-(:Outlet)"
+    "<-[:ORDERED_FROM]-(order:Order) RETURN order } "
+)
+# Numeric item names are fee or price cells extracted as items. Graph builds flag them with
+# quality_status; the name test also covers graphs loaded before that property existed.
+_REVIEWED_ITEM = (
+    "coalesce(item.quality_status, 'normal_item_identity') <> 'numeric_extraction_quarantined' "
+    "AND NOT trim(coalesce(item.display_name_private, '')) =~ '[0-9]+([.,][0-9]+)?' "
+)
+
 _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
     QueryTemplate.MERCHANT_ORDER_RANKING: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)"
-        "<-[:ORDERED_FROM]-(order:Order) "
-        "WITH identity, count(DISTINCT order) AS order_count "
+        "MATCH (identity:MerchantIdentity) "
+        + _CANONICAL_ORDERS
+        + "WITH identity, count(DISTINCT order) AS order_count "
         "ORDER BY order_count DESC, identity.canonical_name_private LIMIT $limit "
-        "OPTIONAL MATCH (identity)<-[:CANONICAL_OF]-(evidence_merchant:Merchant)"
-        "<-[:OUTLET_OF]-(evidence_outlet:Outlet)"
-        "<-[:ORDERED_FROM]-(evidence_order:Order) "
-        "OPTIONAL MATCH (evidence_order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
+        + _CANONICAL_ORDERS
+        + "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
         "(chunk:EvidenceChunk) "
         "WITH identity, order_count, "
         "collect(DISTINCT {chunk_id: chunk.node_id, source_id: source.node_id, "
@@ -231,11 +244,10 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"limit"}),
     ),
     QueryTemplate.MERCHANT_ORDER_COUNT: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)"
-        "<-[:ORDERED_FROM]-(order:Order) "
+        "MATCH (identity:MerchantIdentity) "
         "WHERE identity.normalized_name_private CONTAINS $normalized_name "
-        "MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
+        + _CANONICAL_ORDERS
+        + "MATCH (order)-[:DOCUMENTED_BY]->(source:LunarbitNode)-[:HAS_CHUNK]->"
         "(chunk:EvidenceChunk) "
         "WITH identity, count(DISTINCT order) AS order_count, "
         "collect(DISTINCT {chunk_id: chunk.node_id, source_id: source.node_id, "
@@ -246,10 +258,10 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"normalized_name", "limit"}),
     ),
     QueryTemplate.MERCHANT_SPEND_TOTAL: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)<-[:ORDERED_FROM]-(order:Order) "
+        "MATCH (identity:MerchantIdentity) "
         "WHERE identity.normalized_name_private CONTAINS $merchant_name "
-        "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        + _CANONICAL_ORDERS
+        + "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
         "WHERE component.component_type IN "
         "['customer_total', 'invoice_total', 'payment_assertion'] "
         "MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
@@ -262,13 +274,14 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"merchant_name", "limit"}),
     ),
     QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)"
-        "<-[:ORDERED_FROM]-(order:Order)-[:HAS_ITEM_OBSERVATION]->"
-        "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
+        "MATCH (identity:MerchantIdentity) "
         "WHERE identity.normalized_name_private CONTAINS $merchant_name "
-        "AND item.normalized_name_private CONTAINS $item_name "
-        "MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
+        + _CANONICAL_ORDERS
+        + "MATCH (order)-[:HAS_ITEM_OBSERVATION]->"
+        "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
+        "WHERE item.normalized_name_private CONTAINS $item_name AND "
+        + _REVIEWED_ITEM
+        + "MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
         "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
         "RETURN order.node_id AS order_id, observation.observed_amount AS amount, "
@@ -317,10 +330,10 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"limit"}),
     ),
     QueryTemplate.FEE_DISCOUNT_ANALYSIS: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)<-[:ORDERED_FROM]-(order:Order) "
+        "MATCH (identity:MerchantIdentity) "
         "WHERE identity.normalized_name_private CONTAINS $merchant_name "
-        "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        + _CANONICAL_ORDERS
+        + "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
         "WHERE component.component_type IN "
         "['packing_charge', 'handling_fee', 'delivery_charge', 'platform_fee', "
         "'other_charge', 'item_discount', 'coupon_discount', 'membership_benefit'] "
@@ -348,10 +361,10 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"limit"}),
     ),
     QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)<-[:ORDERED_FROM]-(order:Order) "
+        "MATCH (identity:MerchantIdentity) "
         "WHERE identity.normalized_name_private CONTAINS $merchant_name "
-        "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        + _CANONICAL_ORDERS
+        + "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
         "WHERE component.component_type = 'delivery_charge' "
         "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
         "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
@@ -364,7 +377,7 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
     QueryTemplate.ITEM_PRICE_CHANGE_RANKING: (
         "MATCH (order:Order)-[:HAS_ITEM_OBSERVATION]->"
         "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
-        "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
+        "WHERE " + _REVIEWED_ITEM + "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
         "OPTIONAL MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
         "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "RETURN item.normalized_name_private AS item_name, observation.observed_amount AS amount, "
@@ -376,7 +389,7 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
     QueryTemplate.PERSONAL_FOOD_PRICE_INDEX: (
         "MATCH (order:Order)-[:HAS_ITEM_OBSERVATION]->"
         "(observation:ItemObservation)-[:LISTING_OF]->(item:MerchantItem) "
-        "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
+        "WHERE " + _REVIEWED_ITEM + "MATCH (order)-[:DOCUMENTED_BY]->(message:SourceMessage) "
         "OPTIONAL MATCH (observation)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
         "OPTIONAL MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
         "RETURN item.normalized_name_private AS item_name, observation.observed_amount AS amount, "
@@ -400,9 +413,9 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
         frozenset({"limit"}),
     ),
     QueryTemplate.SPENDING_CONCENTRATION: (
-        "MATCH (identity:MerchantIdentity)<-[:CANONICAL_OF]-(merchant:Merchant)"
-        "<-[:OUTLET_OF]-(outlet:Outlet)<-[:ORDERED_FROM]-(order:Order) "
-        "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
+        "MATCH (identity:MerchantIdentity) "
+        + _CANONICAL_ORDERS
+        + "MATCH (order)-[:HAS_COMPONENT]->(component:MoneyComponent) "
         "WHERE component.component_type IN "
         "['customer_total', 'invoice_total', 'payment_assertion'] "
         "OPTIONAL MATCH (component)-[:EVIDENCED_BY]->(chunk:EvidenceChunk) "
