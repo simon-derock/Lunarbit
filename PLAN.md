@@ -82,15 +82,15 @@ Measured metrics must replace adjectives before this statement appears on the fi
 
 The initial golden corpus contains five supplied PDFs. These samples define the minimum ontology and reconciliation requirements.
 
-### 3.1 Zomato order bundle: Order `8368252638`
+### 3.1 Zomato order bundle: golden order `ZM-GOLDEN-01`
 
 #### Customer summary
 
-Source: `Order_ID_8368252638(1).pdf`, pages 1–2.
+Source: the order-summary PDF of the bundle, pages 1–2.
 
 Observed facts include:
 
-- order timestamp: 18 July 2026, 02:01 PM;
+- order timestamp (minute precision);
 - merchant: C3 Cafe;
 - delivery-partner name mention;
 - Chicken Zinger Burger: ₹227;
@@ -117,7 +117,7 @@ Customer total                       ₹223.14
 
 #### Restaurant invoice
 
-Source: `Order_Invoice8368252638(1).pdf`, page 1.
+Source: the restaurant-invoice PDF of the bundle, page 1.
 
 Observed facts include:
 
@@ -145,7 +145,7 @@ Restaurant invoice total            ₹242.72
 
 #### Platform-fee invoice
 
-Source: `User_Charge_Invoice8368252638(1).pdf`, page 1.
+Source: the platform user-charge invoice PDF of the bundle, page 1.
 
 Observed facts include:
 
@@ -179,7 +179,7 @@ It must not be silently labeled platform-funded. Candidate explanations may incl
 
 ### 3.2 Swiggy food invoice
 
-Source: `taco_240334882204256_merged(1).pdf`, page 1.
+Source: a Swiggy food tax-invoice PDF (golden `SW-FOOD-01`), page 1.
 
 The schema must support:
 
@@ -194,7 +194,7 @@ The schema must support:
 
 ### 3.3 Swiggy Instamart invoice
 
-Source: `taco_241432382897862_merged(1).pdf`, page 1.
+Source: a Swiggy Instamart tax-invoice PDF (golden `SW-IM-01`), page 1.
 
 The schema must support:
 
@@ -2899,7 +2899,7 @@ Example:
 
 ```markdown
 ### 2026-08-03 — Keep discount residual unresolved
-- Decision: Store ₹37.16 from Zomato order 8368252638 as
+- Decision: Store ₹37.16 from golden Zomato order ZM-GOLDEN-01 as
   UNEXPLAINED_DISCOUNT_RESIDUAL with funding_status=UNRESOLVED.
 - Rationale: The customer summary shows ₹140 coupon value while the restaurant
   invoice exposes ₹102.84 merchant-side discount; the supplied documents do not
