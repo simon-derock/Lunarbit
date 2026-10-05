@@ -127,6 +127,9 @@ def test_delivery_query_supports_pseudonymous_identity_ids() -> None:
 
     assert "identity.public_id = $normalized_name" in query.cypher
     assert "person_public_id" in query.cypher
+    # A WHERE attached to OPTIONAL MATCH only nulls the identity; it must filter mentions.
+    optional = "OPTIONAL MATCH (mention)-[:RESOLVED_TO]->(identity:PersonIdentity) "
+    assert f"{optional}WITH order, mention, identity WHERE " in query.cypher
     with pytest.raises(ValueError, match="row limit"):
         governed_query(
             QueryTemplate.MERCHANT_ORDER_COUNT,
