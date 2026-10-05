@@ -33,6 +33,7 @@ jobs:
       - name: Run Python contracts without third-party pytest autoload hooks
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          LANGGRAPH_STRICT_MSGPACK: "true"
         run: |
           set -o pipefail
           uv run pytest -p pytest_timeout -vv -x --timeout=60 --tb=long --junitxml=pytest-report.xml 2>&1 | tee pytest-report.log
