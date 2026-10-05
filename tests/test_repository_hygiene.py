@@ -46,3 +46,23 @@ def test_repository_hygiene_rejects_private_artifacts_and_configuration() -> Non
     )
     with pytest.raises(RepositoryHygieneError, match="6 prohibited"):
         assert_repository_hygiene(prohibited)
+
+
+def test_repository_hygiene_rejects_conversation_and_checkpoint_databases() -> None:
+    prohibited = prohibited_tracked_paths(
+        (
+            ".lunarbit/conversations.sqlite3",
+            "var/conversations.langgraph.sqlite3",
+            "local/cache.db",
+            "local/session.sqlite",
+            "local/session.sqlite3-wal",
+        )
+    )
+
+    assert prohibited == (
+        ".lunarbit/conversations.sqlite3",
+        "local/cache.db",
+        "local/session.sqlite",
+        "local/session.sqlite3-wal",
+        "var/conversations.langgraph.sqlite3",
+    )
