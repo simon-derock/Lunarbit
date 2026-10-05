@@ -57,6 +57,13 @@ AUDITS: dict[str, str] = {
         "WITH order, count(DISTINCT identity) AS identities WHERE identities > 1 "
         "RETURN count(order) AS count"
     ),
+    "orders_with_conflicting_merchant_paths": (
+        "MATCH (order:Order)-[:ORDERED_FROM]->(direct:MerchantIdentity) "
+        "WHERE (order)-[:ORDERED_FROM]->(:Outlet) "
+        "AND NOT (order)-[:ORDERED_FROM]->(:Outlet)-[:OUTLET_OF]->(:Merchant)"
+        "-[:CANONICAL_OF]->(direct) "
+        "RETURN count(DISTINCT order) AS count"
+    ),
     "orders_with_multiple_canonical_merchants": (
         "MATCH (order:Order)-[:ORDERED_FROM]->(outlet:Outlet)-[:OUTLET_OF]->"
         "(merchant:Merchant)-[:CANONICAL_OF]->(identity:MerchantIdentity) "
