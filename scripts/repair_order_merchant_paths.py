@@ -39,6 +39,9 @@ _SOURCE_MERCHANT_PATTERNS = (
 )
 
 
+_QUARANTINED = "quarantined_missing_merchant_evidence"
+
+
 def _normalize(value: object) -> str:
     return " ".join(_SPACE.sub(" ", str(value or "")).casefold().split())
 
@@ -234,7 +237,8 @@ def plan_repair(session: Any) -> dict[str, object]:
         if target_identity is None:
             if order.get("order_type") != "instamart":
                 unresolved.append(order_id)
-                actions.append({"order_id": order_id, "action": "quarantine"})
+                if order.get("identity_status") != _QUARANTINED:
+                    actions.append({"order_id": order_id, "action": "quarantine"})
             continue
         if (
             source_name
@@ -284,9 +288,9 @@ def apply_repair(tx: Any, actions: list[dict[str, str]]) -> int:
         if action["action"] == "quarantine":
             result = tx.run(
                 "MATCH (order:Order {node_id: $order_id}) "
-                "SET order.identity_status = 'quarantined_missing_merchant_evidence' "
-                "RETURN count(*) AS changed",
+                "SET order.identity_status = $status RETURN count(*) AS changed",
                 order_id=action["order_id"],
+                status=_QUARANTINED,
             ).single()
         elif action["action"] == "ensure_identity":
             result = tx.run(
