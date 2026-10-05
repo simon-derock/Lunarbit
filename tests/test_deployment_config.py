@@ -167,3 +167,20 @@ def test_live_aura_workflow_scopes_secrets_and_never_dumps_logs() -> None:
     ]
     assert len(install_and_build) == 2
     assert all("secrets." not in step for step in install_and_build)
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    sorted(path.name for path in (ROOT / ".github/workflows").glob("*.y*ml")),
+)
+def test_workflows_drop_checkout_credentials_and_pin_tools(workflow: str) -> None:
+    lines = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8").splitlines()
+
+    for index, line in enumerate(lines):
+        if "uses: actions/checkout@" in line:
+            following = "\n".join(lines[index + 1 : index + 4])
+            assert "persist-credentials: false" in following
+        if "--with playwright" in line:
+            assert re.search(r"--with playwright==\d+\.\d+\.\d+", line)
+        if line.strip().startswith("image: "):
+            assert re.search(r"@sha256:[0-9a-f]{64}$", line.strip())
