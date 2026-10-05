@@ -42,3 +42,11 @@ def test_integrity_audits_are_read_only_and_return_all_checks() -> None:
     )
     assert "orders_with_duplicate_canonical_outlet_paths" in result
     assert "orders_with_multiple_canonical_merchants" in result
+
+
+def test_audit_detects_direct_links_that_contradict_the_outlet_path() -> None:
+    query = AUDITS["orders_with_conflicting_merchant_paths"]
+
+    assert "-[:ORDERED_FROM]->(direct:MerchantIdentity)" in query
+    assert "-[:CANONICAL_OF]->(direct)" in query
+    assert "RETURN count(DISTINCT order) AS count" in query
