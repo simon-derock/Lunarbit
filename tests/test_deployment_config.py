@@ -73,7 +73,7 @@ def test_api_image_provisions_the_non_root_session_directory() -> None:
 def test_public_container_ci_supplies_the_live_graph_boundary() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "image: neo4j:5.26-community" in workflow
+    assert "image: neo4j:5.26-community@sha256:" in workflow
     assert "--env NEO4J_URI=bolt://127.0.0.1:7687" in workflow
     assert "--api-url http://127.0.0.1:8000" in workflow
 
