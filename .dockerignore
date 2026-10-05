@@ -1,13 +1,29 @@
+# Only the files each Dockerfile copies explicitly are needed; keep everything else,
+# especially private data and local environments, out of the build context.
 .env
+.env.*
 .git
 .github
+.venv
+.claude
+.codex
+.agents
+.lunarbit
+.mypy_cache
+.pytest_cache
+.ruff_cache
 data
 samples
+simon-derock
 frontend
 memory.md
 MEMORY.md
 PLAN.md
 tests
 scripts/run_mistral_agentic_chunking.py
-__pycache__
-*.pyc
+**/__pycache__
+**/*.pyc
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-*
