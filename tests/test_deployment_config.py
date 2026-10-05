@@ -184,3 +184,11 @@ def test_workflows_drop_checkout_credentials_and_pin_tools(workflow: str) -> Non
             assert re.search(r"--with playwright==\d+\.\d+\.\d+", line)
         if line.strip().startswith("image: "):
             assert re.search(r"@sha256:[0-9a-f]{64}$", line.strip())
+
+
+def test_checkpoint_deserialization_is_strict_in_image_and_ci() -> None:
+    dockerfile = (ROOT / "Dockerfile.api").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "LANGGRAPH_STRICT_MSGPACK=true" in dockerfile
+    assert 'LANGGRAPH_STRICT_MSGPACK: "true"' in workflow
