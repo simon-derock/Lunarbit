@@ -11,6 +11,8 @@ the repository.
 - **API service** runs `Dockerfile.api` as the unprivileged `lunarbit` user.
   Mount durable storage at `/var/lib/lunarbit`; the service writes the bounded
   conversation database and its `*.langgraph.sqlite3` checkpoint database there.
+  Use encrypted persistent storage. SQLite supports a single API replica; move
+  sessions to an authenticated shared store before scaling out.
 - **Frontend** is the Vite application under `/frontend`. Build it with
   `npm ci && npm run build` and publish `frontend/dist` as a static site.
 
@@ -65,6 +67,28 @@ headers; keep those headers enabled in any equivalent static-host configuration.
    request before enabling traffic.
 5. Verify the mounted volume survives replacement and that private routes reject
    missing or invalid bearer tokens.
+6. Inspect the API image as non-root and confirm it contains no private corpus
+   or credential marker.
+7. Record the image digest, schema/index versions, migration status, and the
+   rollback image digest before promotion.
+
+## Security controls
+
+- HTTPS-only ingress with HSTS; explicit CORS origins, never `*`.
+- Rotate API tokens and provider credentials; revoke the previous value after
+  a successful rollout.
+- Use a Neo4j read-only account for query traffic and separate ingestion
+  credentials; enforce encrypted Aura connections.
+- Keep request, traversal, row, action, session, and rate limits enabled.
+- Redact questions, answers, evidence, tokens, Cypher, and provider payloads
+  from logs and traces.
+- Enable dependency/image scanning, alerting on readiness failures, and
+  encrypted backups with a tested restore procedure.
+- Roll back by image digest, not by rebuilding from an unpinned dependency
+  range.
+
+The narrower public-only service is documented in
+[`deploy-public-api.md`](deploy-public-api.md).
 
 ## GitHub security prerequisites
 

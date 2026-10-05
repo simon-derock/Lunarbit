@@ -38,9 +38,11 @@ an unprivileged container user.
   rejected at startup.
 - Do not set `COHERE_API_KEY` or `LUNARBIT_PRIVATE_API_TOKEN` on this service.
   The public launcher neither needs nor mounts the private runtime.
-- Grant the Aura account read access only. The aggregate reader itself uses
-  Neo4j read sessions and returns classes, relationship types, and counts only.
-- Configure the Nexus Insight build with
+- Grant the Aura account read access only. The navigation and merchant
+  neighborhood readers use Neo4j read sessions and return a bounded slice of
+  allowlisted labels under hashed public aliases; source text, canonical IDs,
+  and raw personal names never leave the server.
+- Configure the frontend build with
   `VITE_LUNARBIT_API_URL=https://your-public-api.example`.
 - The API applies process-local limits of 60 public requests/minute and 30
   private requests/minute per client address. A rejected request returns `429`
@@ -73,7 +75,7 @@ Use the repeatable audit in the release pipeline or immediately after deployment
 ```sh
 uv run python scripts/verify_public_release.py \
   --api-url https://your-public-api.example \
-  --origin https://your-nexus-insight.example
+  --origin https://your-frontend.example
 ```
 
 It checks the documented route surface, health and readiness, exact CORS origin,
@@ -82,5 +84,5 @@ reviewed showcase trace, and absence of private retrieval routes. It does not
 print API response bodies.
 
 The same audit, public container build, repository-hygiene check, Python suite,
-and Nexus Insight build run in [the GitHub Actions workflow](../.github/workflows/ci.yml)
+and frontend build run in [the GitHub Actions workflow](../.github/workflows/ci.yml)
 for every pull request and push to `main`.
