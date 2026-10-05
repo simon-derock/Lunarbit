@@ -150,3 +150,20 @@ def test_docker_build_context_excludes_local_environments() -> None:
     ignored = set((ROOT / ".dockerignore").read_text(encoding="utf-8").split())
 
     assert {".venv", ".claude", ".lunarbit", "**/__pycache__", "**/*.pyc", ".env.*"} <= ignored
+
+
+def test_live_aura_workflow_scopes_secrets_and_never_dumps_logs() -> None:
+    workflow = (ROOT / ".github/workflows/live-aura.yml").read_text(encoding="utf-8")
+    job_header = workflow.split("    steps:", maxsplit=1)[0]
+
+    assert "secrets." not in job_header
+    for line in workflow.splitlines():
+        if "docker logs" in line:
+            assert line.rstrip().endswith("\\"), "container logs must be piped through a filter"
+    install_and_build = [
+        step
+        for step in workflow.split("      - ")
+        if step.startswith(("run: uv sync", "run: docker build"))
+    ]
+    assert len(install_and_build) == 2
+    assert all("secrets." not in step for step in install_and_build)
