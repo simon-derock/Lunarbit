@@ -2,13 +2,13 @@
 
 > **A public, privacy-safe, six-year personal-commerce intelligence system built from Zomato and Swiggy documents.**
 
-**Version:** 2.0  
-**Updated:** 2026-08-03  
+**Version:** 2.1  
+**Updated:** 2026-10-05  
 **Owner:** Philip Simon Derock  
 **Repository:** `lunarbit`  
 **Primary objective:** Produce an exceptional live public demo and a defensible AI Engineer portfolio project.  
 **Primary data:** Approximately 500+ Zomato, Swiggy Food, and Swiggy Instamart PDFs collected over several years.  
-**Primary deployment:** Neo4j AuraDB + Python/FastAPI/LangGraph + Nexus Insight (TanStack Start) + Vercel.
+**Primary deployment:** Neo4j AuraDB + Python/FastAPI/LangGraph + React/Vite frontend (`/frontend`) with same-origin serverless proxies.
 **Primary embedding model:** Cohere `embed-v4.0`, with dimension selected by benchmark.  
 
 ---
@@ -326,7 +326,7 @@ exact Cypher + lexical + dense + graph traversal + rerank + verification
         ↓
 FastAPI service
         ↓
-Next.js public frontend on Vercel
+React/Vite frontend with same-origin API proxies
 ```
 
 ### 6.1 Final stack
@@ -343,9 +343,9 @@ neo4j-graphrag-python where useful
 Cohere Embed v4
 Cohere Rerank
 FastAPI
-Next.js
-Vercel
-pytest + Hypothesis
+React + Vite + TypeScript
+static host with same-origin API proxies (Vercel-compatible)
+pytest + Hypothesis + Vitest
 ```
 
 ### 6.2 Storage decision
@@ -2203,7 +2203,7 @@ draft candidate
 
 Do not run expensive self-consistency on every chunk. Trigger it for unknown templates, conflicting financial values, low confidence, or benchmark-designated hard cases.
 
-### 18.5 Safety
+### 18.7 Safety
 
 - no arbitrary graph writes from an LLM;
 - parameterized Cypher;
@@ -2213,6 +2213,32 @@ Do not run expensive self-consistency on every chunk. Trigger it for unknown tem
 - bounded retries;
 - deterministic financial tools;
 - abstain on missing evidence.
+
+### 18.8 Initial implementation gate
+
+The first online LangGraph implementation is intentionally small and
+production-oriented:
+
+```text
+guardrail
+→ governed plan
+→ bounded Neo4j/runtime retrieval
+→ evidence verification
+→ final answer or abstention
+```
+
+`WorkflowState` is typed and checkpointed per conversation thread. LangGraph
+owns state transitions and resumability; the existing planner, read-only
+Cypher templates, deterministic financial calculations, citation contracts,
+and abstention policy remain authoritative. Each node must be independently
+testable, and no model-generated value may directly mutate canonical graph or
+financial truth. The public workflow boundary translates guardrail, input,
+checkpoint, state, and execution failures into typed exceptions so API layers
+can expose safe status codes without leaking database details or source data.
+The authenticated `/v1/private/chat` route passes its conversation session ID
+as the LangGraph thread ID and retains bounded slot merging for follow-ups.
+Legacy answer backends remain compatibility adapters only; production
+launchers must configure the LangGraph workflow.
 
 ---
 
@@ -2308,6 +2334,31 @@ Publish:
 - failure examples;
 - known limitations.
 
+### 19.8 Frontend migration boundary
+
+The retired `web/` and `visualization/Nexus Insight/` applications are not
+part of the target product surface. `/frontend` is the sole retained frontend
+source and is connected to the authenticated and public API contracts.
+Unlicensed or provenance-unknown
+visual samples are not publishable assets.
+
+The first frontend integration slice is complete: Vite/React/Tailwind build
+shell, typed public snapshot/query-plan client, privacy-safe DTO adapter,
+live-aggregate status, explicit unavailable state, and graph-console smoke
+tests. Synthetic graph nodes are never rendered on API failure.
+
+The live browser projection now uses a bounded navigation slice rather than
+class-only aggregates: reviewed merchant/item names, orders, money components,
+evidence structures, reconciliation runs, and anonymized delivery mentions are
+mapped to stable public aliases and selected relationships. The API returns
+`503` when this live projection is unavailable; it never silently substitutes a
+synthetic graph in the product launcher.
+Private chat is server-authenticated: the browser calls same-origin
+`/api/private/*` routes, and a server-side proxy injects the bearer token, so no
+credential is bundled into browser JavaScript. Streamed answers carry
+citations, verification state, graph-focus IDs, session history, and HITL
+review/resume transitions.
+
 ---
 
 ## 20. Deployment
@@ -2315,16 +2366,16 @@ Publish:
 ### 20.1 Runtime
 
 ```text
-Next.js frontend on Vercel
+React/Vite static frontend + same-origin /api proxies
         ↓
-FastAPI serverless/service deployment
+FastAPI container service with a durable session volume
         ↓
 Neo4j AuraDB
 Cohere Embed/Rerank APIs
 LLM provider
 ```
 
-If FastAPI runtime constraints on the chosen Vercel setup become restrictive, deploy the API to a lightweight Python host while keeping Next.js on Vercel. The public architecture and repository remain unchanged.
+The API runs as a container (`Dockerfile.api`) on a Python host with durable storage for SQLite sessions and LangGraph checkpoints; the static frontend may be hosted separately. The public architecture and repository remain unchanged.
 
 ### 20.2 Offline versus online work
 
@@ -2384,7 +2435,7 @@ Public-safe fields may include, after review:
 
 Use synthetic data where a real longitudinal pattern could reveal a personal behavioural fingerprint. The public demo may combine a synthetic six-year mirror, safe aggregates, and a few manually redacted real examples.
 
-### 20.3 Secrets
+### 20.4 Secrets
 
 - Aura credentials are server-side only;
 - Cohere and LLM keys are server-side only;
@@ -2605,54 +2656,6 @@ A query trace must make it possible to answer:
 
 Logs must never contain raw secrets or unredacted private fields.
 
-### 18.5 Initial implementation gate
-
-The first online LangGraph implementation is intentionally small and
-production-oriented:
-
-```text
-guardrail
-→ governed plan
-→ bounded Neo4j/runtime retrieval
-→ evidence verification
-→ final answer or abstention
-```
-
-`WorkflowState` is typed and checkpointed per conversation thread. LangGraph
-owns state transitions and resumability; the existing planner, read-only
-Cypher templates, deterministic financial calculations, citation contracts,
-and abstention policy remain authoritative. Each node must be independently
-testable, and no model-generated value may directly mutate canonical graph or
-financial truth. The public workflow boundary translates guardrail, input,
-checkpoint, state, and execution failures into typed exceptions so API layers
-can expose safe status codes without leaking database details or source data.
-The authenticated `/v1/private/chat` route passes its conversation session ID
-as the LangGraph thread ID and retains bounded slot merging for follow-ups.
-Legacy answer backends remain compatibility adapters only; production
-launchers must configure the LangGraph workflow.
-
-### 18.6 Frontend migration boundary
-
-The retired `web/` and `visualization/Nexus Insight/` applications are not
-part of the target product surface. `/frontend` is the sole retained frontend
-source and will be connected to the authenticated/public API contracts after
-its build shell and API client are finalized. Unlicensed or provenance-unknown
-visual samples are not publishable assets.
-
-The first frontend integration slice is complete: Vite/React/Tailwind build
-shell, typed public snapshot/query-plan client, privacy-safe DTO adapter,
-live-aggregate status, explicit unavailable state, and graph-console smoke
-tests. Synthetic graph nodes are never rendered on API failure.
-
-The live browser projection now uses a bounded navigation slice rather than
-class-only aggregates: reviewed merchant/item names, orders, money components,
-evidence structures, reconciliation runs, and anonymized delivery mentions are
-mapped to stable public aliases and selected relationships. The API returns
-`503` when this live projection is unavailable; it never silently substitutes a
-synthetic graph in the product launcher.
-Private chat remains server-authenticated and is not bundled with browser
-credentials; it will be added through an explicit session/auth boundary.
-
 ---
 
 ## 23. Compact repository structure
@@ -2665,7 +2668,6 @@ lunarbit/
 ├── PLAN.md
 ├── MEMORY.md
 ├── pyproject.toml
-├── package.json
 ├── .env.example
 │
 ├── src/lunarbit/
@@ -2688,9 +2690,8 @@ lunarbit/
 │   ├── build_graph.py
 │   └── run_evals.py
 │
-├── web/
-│   ├── app/
-│   ├── components/
+├── frontend/              # React/Vite graph console + /api proxies
+│   ├── api/
 │   └── package.json
 │
 ├── data/
@@ -3213,7 +3214,8 @@ Control: mandatory `MEMORY.md` start/end protocol and conflict reconciliation.
   four `NEO4J_*` environment variables; explicit CLI values remain supported.
 - Require an idempotent write and a post-write count equality check against the
   archive before exposing the graph to the API.
-- Current verified Aura baseline: 53,983 nodes and 85,607 relationships from
+- Last verified Aura baseline (2026-09-24; re-verify after the instance is
+  restored): 53,983 nodes and 85,607 relationships from
   the complete idempotent economic-corpus load. The latest integrity audit
   reports zero duplicate canonical outlet paths, zero orders with multiple
   canonical merchants, and one intentionally quarantined food record with no
@@ -3242,7 +3244,7 @@ It becomes advanced through:
 
 ---
 
-## 32. Research references
+## 33. Research references
 
 Use official documentation as the implementation source of truth and re-check versions during development.
 
