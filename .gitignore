@@ -43,6 +43,14 @@ coverage/
 # Local tooling and operating-system files.
 .DS_Store
 *.log
+.claude/
+
+# Conversation and checkpoint stores contain private questions and answers.
+.lunarbit/
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-*
 
 # Profile README is maintained outside the Lunarbit project tree.
 simon-derock/

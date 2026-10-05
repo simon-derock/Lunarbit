@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 _APPROVED_DATA_PATHS = frozenset({"data/public/README.md", "data/evals/README.md"})
 _PRIVATE_SUFFIXES = (".eml", ".key", ".mbox", ".pdf", ".pem", ".zip")
+# Conversation and checkpoint stores hold private questions and answers, including their
+# SQLite write-ahead and shared-memory sidecars.
+_DATABASE_FILE = re.compile(r"\.(?:db|sqlite3?)(?:-(?:wal|shm|journal))?$", re.IGNORECASE)
 
 
 class RepositoryHygieneError(ValueError):
@@ -25,7 +29,9 @@ def prohibited_tracked_paths(paths: Iterable[str]) -> tuple[str, ...]:
         if normalized.startswith("data/") and normalized not in _APPROVED_DATA_PATHS:
             prohibited.add(normalized)
             continue
-        if normalized.casefold().endswith(tuple(_PRIVATE_SUFFIXES)):
+        if normalized.casefold().endswith(tuple(_PRIVATE_SUFFIXES)) or _DATABASE_FILE.search(
+            filename
+        ):
             prohibited.add(normalized)
             continue
         if filename != ".env.example" and (filename == ".env" or filename.startswith(".env.")):
