@@ -292,11 +292,11 @@ _TEMPLATES: dict[QueryTemplate, tuple[str, frozenset[str]]] = {
     ),
     QueryTemplate.DELIVERY_MENTION_COUNT: (
         "MATCH (order:Order)-[:HAS_DELIVERY_MENTION]->(mention:PersonMention) "
+        "OPTIONAL MATCH (mention)-[:RESOLVED_TO]->(identity:PersonIdentity) "
+        "WITH order, mention, identity WHERE mention.normalized_value_private = $normalized_name "
+        "OR identity.public_id = $normalized_name "
         "MATCH (mention)-[:MENTIONED_IN]->(chunk:EvidenceChunk) "
         "MATCH (source:LunarbitNode)-[:HAS_CHUNK]->(chunk) "
-        "OPTIONAL MATCH (mention)-[:RESOLVED_TO]->(identity:PersonIdentity) "
-        "WHERE mention.normalized_value_private = $normalized_name "
-        "OR identity.public_id = $normalized_name "
         "RETURN order.node_id AS order_id, mention.node_id AS mention_id, "
         "identity.public_id AS person_public_id, "
         "chunk.node_id AS chunk_id, chunk.source_hash AS source_hash, "
