@@ -65,8 +65,58 @@ def test_governed_queries_are_read_only_parameterized_and_bounded() -> None:
 
     ranking = governed_query(QueryTemplate.MERCHANT_ORDER_RANKING, {"limit": 5})
     assert ranking.cypher.index("LIMIT $limit") < ranking.cypher.index(
-        "OPTIONAL MATCH (identity)<-[:CANONICAL_OF]"
+        "OPTIONAL MATCH (order)-[:DOCUMENTED_BY]"
     )
+
+
+_MERCHANT_SCOPED_PARAMETERS: dict[QueryTemplate, dict[str, str | int]] = {
+    QueryTemplate.MERCHANT_ORDER_RANKING: {"limit": 5},
+    QueryTemplate.MERCHANT_ORDER_COUNT: {"normalized_name": "sample kitchen", "limit": 5},
+    QueryTemplate.MERCHANT_SPEND_TOTAL: {"merchant_name": "sample kitchen", "limit": 5},
+    QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY: {
+        "merchant_name": "sample kitchen",
+        "item_name": "biryani",
+        "limit": 5,
+    },
+    QueryTemplate.FEE_DISCOUNT_ANALYSIS: {"merchant_name": "sample kitchen", "limit": 5},
+    QueryTemplate.DELIVERY_FEE_COUNTERFACTUAL: {"merchant_name": "sample kitchen", "limit": 5},
+    QueryTemplate.SPENDING_CONCENTRATION: {"limit": 5},
+}
+
+
+@pytest.mark.parametrize("template", tuple(_MERCHANT_SCOPED_PARAMETERS))
+def test_merchant_queries_reach_orders_through_either_canonical_path_once(
+    template: QueryTemplate,
+) -> None:
+    cypher = governed_query(template, _MERCHANT_SCOPED_PARAMETERS[template]).cypher
+
+    assert "MATCH (identity)<-[:ORDERED_FROM]-(order:Order) RETURN order UNION" in cypher
+    assert (
+        "MATCH (identity)<-[:CANONICAL_OF]-(:Merchant)<-[:OUTLET_OF]-(:Outlet)"
+        "<-[:ORDERED_FROM]-(order:Order) RETURN order" in cypher
+    )
+    assert "<-[:OUTLET_OF]-(outlet:Outlet)" not in cypher
+
+
+@pytest.mark.parametrize(
+    ("template", "parameters"),
+    (
+        (
+            QueryTemplate.MERCHANT_ITEM_PRICE_HISTORY,
+            {"merchant_name": "sample kitchen", "item_name": "biryani", "limit": 5},
+        ),
+        (QueryTemplate.ITEM_PRICE_CHANGE_RANKING, {"limit": 5}),
+        (QueryTemplate.PERSONAL_FOOD_PRICE_INDEX, {"limit": 5}),
+    ),
+)
+def test_item_queries_exclude_numeric_extraction_artifacts(
+    template: QueryTemplate,
+    parameters: dict[str, str | int],
+) -> None:
+    cypher = governed_query(template, parameters).cypher
+
+    assert "'numeric_extraction_quarantined'" in cypher
+    assert "=~ '[0-9]+([.,][0-9]+)?'" in cypher
 
 
 def test_delivery_query_supports_pseudonymous_identity_ids() -> None:
