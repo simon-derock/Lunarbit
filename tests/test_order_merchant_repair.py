@@ -197,3 +197,12 @@ def test_repair_converges_for_identities_created_from_source_receipts() -> None:
     )
 
     assert _actions(plan_repair(session)) == []
+
+
+def test_already_quarantined_order_is_not_replanned() -> None:
+    order = _order(outlet_identity=None)
+    order["identity_status"] = "quarantined_missing_merchant_evidence"
+    plan = plan_repair(_RepairSession((order,)))
+
+    assert _actions(plan) == []
+    assert plan["unresolved_order_ids"] == ["order:1"]
