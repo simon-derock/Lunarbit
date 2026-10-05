@@ -5,7 +5,7 @@
 > **Lunarbit is a finance-first GraphRAG system that reconstructs six years of personal food commerce into an auditable economic-intelligence graph—revealing how prices, fees, discounts, merchants, and spending behavior evolve over time.**
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/backend%20tests-332%20collected-2ea44f)](tests/)
+[![CI](https://github.com/simon-derock/Lunarbit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simon-derock/Lunarbit/actions/workflows/ci.yml)
 [![Type checks](https://img.shields.io/badge/mypy-strict-2ea44f)](https://mypy.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/ruff-clean-2ea44f)](https://docs.astral.sh/ruff/)
 [![Privacy](https://img.shields.io/badge/private%20corpus-never%20committed-6f42c1)](#privacy-by-design)
@@ -42,7 +42,7 @@ flowchart TB
     C["Canonical truth<br/>validation, reversible resolution, Decimal finance"]
     D["Temporal knowledge graph<br/>events, Neo4j, evidence relationships"]
     E["Governed GraphRAG<br/>exact, BM25, HNSW, RRF, reranking, verification"]
-    F["Product boundary<br/>FastAPI, privacy-safe projection, Nexus Insight"]
+    F["Product boundary<br/>FastAPI, privacy-safe projection, graph console"]
     A --> B --> C --> D --> E --> F
 ```
 
@@ -177,15 +177,15 @@ This makes questions such as “why did spending rise?” executable rather than
 
 ## Public product surface
 
-**Nexus Insight** is the browser-facing intelligence workspace. It calls a dedicated public FastAPI process, never Neo4j directly and never the private answer runtime.
+The browser-facing graph console lives in [`frontend/`](frontend/) (React 19, Vite, `react-force-graph-2d`). It never connects to Neo4j or a model provider; same-origin `/api/public`, `/api/query`, and `/api/private` proxies forward only allowlisted routes to FastAPI.
 
-- aggregate topology exposes graph classes, relationship types, and counts—not canonical IDs or source fields;
-- reviewed showcase scenarios return deterministic calculations, public graph paths, and synthetic evidence cards;
-- unreviewed or unsupported requests abstain visibly;
-- private embeddings, source text, personal identifiers, credentials, and raw invoices stay server-side;
-- the visual system supports isolated synthetic commerce profiles and independent visual profiles without crossing data boundaries.
+- the live projection is a bounded slice of real orders, canonical merchants, items, money components, reconciliations, evidence structures, and anonymized delivery mentions under hashed public aliases—never canonical IDs or source text;
+- selecting a merchant loads its full reviewed neighborhood through `/v1/public/merchant/{public_id}/neighborhood`, with Swiggy and Zomato listings collapsed into one canonical restaurant;
+- Ask Lunarbit streams governed answers with citations, verification state, graph-focus IDs, session history, and human review for ambiguous scopes; the bearer token stays in the server-side proxy;
+- unreviewed or unsupported requests abstain visibly, and an unavailable projection renders an explicit empty state rather than synthetic data;
+- private embeddings, source text, personal identifiers, credentials, and raw invoices stay server-side.
 
-The authenticated private API provides typed retrieval, evidence-grounded answers, and bounded follow-up context through `/v1/private/retrieval`, `/v1/private/answer`, and `/v1/private/chat`. Public planning and reviewed demonstrations are available through `/v1/query/plan` and `/v1/public/showcase-answer`.
+The authenticated private API provides typed retrieval, evidence-grounded answers, and bounded follow-up context through `/v1/private/retrieval`, `/v1/private/answer`, `/v1/private/chat`, `/v1/private/chat/stream`, session history, and the HITL `review` / `review/resume` routes. Public planning and reviewed demonstrations are available through `/v1/query/plan` and `/v1/public/showcase-answer`.
 
 ## Privacy by design
 
@@ -229,19 +229,22 @@ The test surface covers extraction coordinates, mail-only orders, chunk and mone
 Python 3.12+ · Pydantic v2 · PyMuPDF/pdfplumber · pytest/Hypothesis
 Neo4j 5.26 · Neo4j HNSW · Lucene/BM25 · Cohere Embed v4/Rerank v4
 FastAPI · Neo4j Python driver · deterministic RRF · Decimal finance
-React 19 · TanStack Start · TypeScript · Nexus Insight · Vite
+LangGraph · SQLite checkpoints · Gemini/Mistral structured planning
+React 19 · TypeScript · Vite · Tailwind · react-force-graph · Vitest
 ```
 
-The architecture is LangGraph-ready for explicit offline and online workflow orchestration, while canonical writes and financial truth remain application-owned and deterministic. The deployment target is a server-side FastAPI service with Neo4j AuraDB and a privacy-reviewed public projection.
+Online answers run through a checkpointed LangGraph workflow, while canonical writes and financial truth remain application-owned and deterministic. The deployment target is a server-side FastAPI service with Neo4j AuraDB and a privacy-reviewed public projection.
 
 ## Run the local checks
 
 ```bash
+uv sync --extra dev --extra api --extra graph --extra agent
 uv run pytest -q
 uv run ruff check src scripts tests
 uv run ruff format --check src scripts tests
 uv run mypy --strict src
 uv run python scripts/verify_repository_hygiene.py
+(cd frontend && npm ci && npm test -- --run && npm run build)
 ```
 
 Build the deterministic private stages:
@@ -253,14 +256,15 @@ uv run python scripts/build_chunks.py --input data/processed
 
 The graph, economic-intelligence, embedding, and evaluation builders consume versioned private archives; use each script’s `--help` contract for the required roots before running them.
 
-Run the public API and active Nexus Insight workspace:
+Run the API and the graph console (the Vite dev server proxies `/api/*` to `127.0.0.1:8000` and reads `NEO4J_*` and `LUNARBIT_PRIVATE_API_TOKEN` from the ignored root `.env`):
 
 ```bash
-uv run python scripts/serve_public_api.py
+uv run python scripts/serve_api.py          # private + public routes
+# or: uv run python scripts/serve_public_api.py   (public routes only)
 
-cd "visualization/Nexus Insight"
-npm install
-npm run dev
+cd frontend
+npm ci
+npm run dev                                 # http://127.0.0.1:5173
 ```
 
 Provider-backed work is always opt-in. Put credentials only in the ignored `.env`, start with a bounded smoke run, and inspect deterministic validation output before scaling. See [`PLAN.md`](PLAN.md) for the complete ontology, acceptance criteria, retrieval policy, and deployment gates.
@@ -271,15 +275,17 @@ Provider-backed work is always opt-in. Put credentials only in the ignored `.env
 src/lunarbit/                 contracts, extraction, graph, finance, retrieval, API
 scripts/                      deterministic builds, embeddings, indexes, evaluation, servers
 tests/                        extraction, finance, graph, retrieval, privacy, API, and TDD
-visualization/Nexus Insight/  active public React/TanStack workspace
-web/                          retained synthetic profile workspace
+frontend/                     React/Vite graph console and same-origin API proxies
+cypher/ · config/             Neo4j schema and reviewed merchant aliases
+docs/                         deployment runbook and public-API guide
+.github/workflows/            CI, CodeQL, dependency review, live Aura smoke
 PLAN.md                       architecture, schema, decisions, and acceptance gates
-MEMORY.md                     append-only engineering handoff
+MEMORY.md                     current state and engineering decisions
 ```
 
 ## Status and definition of done
 
-Implemented locally: deterministic extraction, mail-only order handling, rich agentic chunking, reversible resolution, Decimal financial truth, temporal economic compilation, Neo4j ingestion, HNSW/Lucene/BM25/RRF retrieval, Cohere reranking, citation verification, authenticated FastAPI answers, canonical-oracle evaluation, public projection, and the Nexus Insight boundary.
+Implemented locally: deterministic extraction, mail-only order handling, rich agentic chunking, reversible resolution, Decimal financial truth, temporal economic compilation, Neo4j ingestion, HNSW/Lucene/BM25/RRF retrieval, Cohere reranking, citation verification, authenticated FastAPI answers, LangGraph orchestration with durable checkpoints and HITL review, streamed Ask Lunarbit, canonical-oracle evaluation, the public projection, and the graph console.
 
 Remaining release gates: human-reviewed natural-language evaluation, cloud hosting with a durable session volume, live browser E2E coverage, and final public privacy review. The complete economic graph is already loaded and verified in Neo4j Aura; measured results, private artifacts, reviewed projections, and planned capabilities are never presented as the same thing.
 

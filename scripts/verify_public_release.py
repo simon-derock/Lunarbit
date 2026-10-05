@@ -18,7 +18,7 @@ Response = tuple[int, Mapping[str, object] | None, str | None, Mapping[str, str]
 def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url", required=True, help="deployed public FastAPI origin")
-    parser.add_argument("--origin", required=True, help="deployed Nexus Insight browser origin")
+    parser.add_argument("--origin", required=True, help="deployed frontend browser origin")
     parser.add_argument("--timeout", type=float, default=10.0)
     return parser.parse_args()
 
