@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -82,3 +83,53 @@ def test_ci_explicitly_loads_timeout_plugin_when_autoload_is_disabled() -> None:
 
     assert 'PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"' in workflow
     assert "pytest -p pytest_timeout" in workflow
+
+
+_USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<ref>\S+)(?P<rest>.*)$")
+_PINNED_ACTION = re.compile(r"^[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}$")
+_PINNED_IMAGE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
+_VERSION_COMMENT = re.compile(r"^\s+# v\d+(?:\.\d+){0,2}\s*$")
+
+
+def _unpinned_action_refs(workflow: str) -> list[str]:
+    """Return every external action reference that is not immutably pinned."""
+    unpinned: list[str] = []
+    for line in workflow.splitlines():
+        match = _USES.match(line)
+        if match is None:
+            continue
+        ref, rest = match["ref"], match["rest"]
+        if ref.startswith("./"):
+            continue
+        if _PINNED_IMAGE.match(ref):
+            continue
+        if not (_PINNED_ACTION.match(ref) and _VERSION_COMMENT.match(rest)):
+            unpinned.append(line.strip())
+    return unpinned
+
+
+@pytest.mark.parametrize(
+    "line",
+    (
+        "      - uses: actions/checkout@v4",
+        "      - uses: actions/checkout@main",
+        "      - uses: actions/checkout@3d3c42e",
+        "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # latest",
+        "        uses: github/codeql-action/init@v4.38.2",
+        "      - uses: docker://alpine:3.20",
+    ),
+)
+def test_workflow_pin_audit_rejects_floating_action_refs(line: str) -> None:
+    assert _unpinned_action_refs(line) == [line.strip()]
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    sorted(path.name for path in (ROOT / ".github/workflows").glob("*.y*ml")),
+)
+def test_workflow_actions_are_pinned_to_immutable_release_shas(workflow: str) -> None:
+    text = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+
+    assert any(_USES.match(line) for line in text.splitlines())
+    assert _unpinned_action_refs(text) == []
