@@ -13,9 +13,9 @@
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, abstention, or HITL review quality drops. The report schema is `grounded-answer-evaluation-v1.1.0`.
 - Deployment verification: the complete economic archive was loaded idempotently into Aura and verified at exactly 53,983 nodes and 85,607 relationships (298 write batches; replay unchanged). The production launcher returned `/health` 200, `/ready` 200 with `graph=configured`, a live 346-node/99-edge bounded navigation projection, authenticated hybrid retrieval (`verified`, 30 dense + 30 lexical candidates, 10 evidence citations), and ordered SSE chat events. The local smoke server used a temporary writable session volume and was stopped after verification.
 - Aura operational repair (2026-09-13): applied the deterministic merchant-identity migration that had been present in the repository but absent from the live database. Aura now contains 102 canonical merchant identities, 139 provider-preserving `CANONICAL_OF` edges, and 395 orders linked through a canonical identity. Live merchant-count and global restaurant-ranking Ask queries now return `verified` answers with citations and graph-focus events through the Vite proxy.
-- Blocked (2026-10-05): the Aura host in `NEO4J_URI` returns NXDOMAIN while other DNS resolves; the instance is presumably paused or deleted. The last green live-Aura smoke ran on 2026-09-24. All live counts below are as of that date and must be re-verified after Aura is restored (resume, or recreate and reload with `scripts/ingest_graph.py`).
+- Aura (2026-10-05): the instance was paused and has been resumed. Live graph: 54,094 nodes / 86,172 relationships (the 2026-09-24 baseline plus 109 `MerchantIdentity` and 2 pseudonymous `PersonIdentity` nodes from later migrations); 454 orders = 421 resolved food + 32 Instamart + 1 quarantined food order.
 - Repository-boundary violation (open): commit `495f033` (2026-09-02) tracked `samples/` (provenance-unknown images and `samples/ref/` reference code) and the multi-key `scripts/run_mistral_agentic_chunking.py`, contradicting the 2026-08-25 licensing decision and the execution rules below. No secrets were found in either. Awaiting an owner decision: untrack, purge history, or confirm redistribution rights.
-- Latest graph-integrity audit: zero orders missing canonical outlets, zero duplicate canonical outlet paths, zero orders with multiple canonical merchants, zero numeric-only item names, zero evidence-less item observations, and zero unnormalized delivery mentions. One unresolved food record remains intentionally quarantined because its source contains no restaurant evidence; it is not counted as a graph defect.
+- Graph-integrity audit (2026-10-05, live Aura): `orders_with_conflicting_merchant_paths` = 70 (see the 2026-10-05 decision; correction pending owner approval), `food_orders_missing_outlet` = 26 (Zomato orders linked directly to their canonical restaurant by the repair; expected), `orders_with_multiple_outlets` = 27 (two Swiggy listings of the same restaurant; provenance, not conflict), `numeric_only_item_names` = 19 (platform-fee cells extracted as items; live nodes predate `quality_status`, so governed item queries also filter by name), zero orders with multiple canonical merchants, one intentionally quarantined food order. Run with `uv run --env-file .env python scripts/audit_graph_integrity.py`; the script does not load `.env` itself.
 
 ## Goal-loop scope (2026-09-01)
 
@@ -264,7 +264,7 @@ Copy the XML below as initialization context when handing Lunarbit to another co
 
 ## Next actions — ordered
 
-1. Restore the Aura instance, then re-verify live node/relationship counts, canonical merchant invariants (including why 395 of 454 orders link through a canonical identity), and the live Aura SSE plus HITL smoke.
+1. With owner approval, apply the corrected merchant repair (`scripts/repair_order_merchant_paths.py --apply`): 70 `remove_direct` + 70 `add_direct`, plan saved privately under `data/private_ops/`. Then require `orders_with_conflicting_merchant_paths` = 0, a ranking total of 421 orders, and a replanned repair with no actions; rerun the live Aura SSE plus HITL smoke.
 2. Resolve the tracked `samples/` and multi-key runner violation recorded under Blocked.
 3. Triage the ten open Dependabot PRs individually; several are majors (TypeScript 7, Vite 8, Vitest 4, neo4j 6, langgraph 1.x), and the Starlette PR would lift the `<0.47` pin that avoids a TestClient deadlock.
 4. Complete a human-reviewed language-quality golden set and measure answer/citation/abstention regressions.
@@ -273,6 +273,15 @@ Copy the XML below as initialization context when handing Lunarbit to another co
 7. Publish the reviewed public deployment and record its image digest, schema/index versions, and release evidence.
 
 ## Decisions — append-only, newest first
+
+### 2026-10-05 — Order-local evidence and outlet precedence for merchant identity
+
+- Decision: The merchant repair reads evidence only from sources that document exactly one order, treats a unique outlet-path identity as authoritative, reports contradicting order-local evidence as a conflict instead of choosing, and replaces direct links that disagree through reversible `remove_direct`/`add_direct` actions. Governed answer templates reach orders through a scoped `CALL (identity) { direct UNION outlet path }`, so each order counts once per restaurant, and item templates exclude numeric fee artifacts. The audit adds `orders_with_conflicting_merchant_paths`.
+- Rationale: The 2026-09-14 repair read every chunk of two shared Swiggy order-history reports (73 and 32 orders) as each order's evidence; the longest restaurant name in the report won, linking 70 orders from about 30 restaurants directly to Grand Chettinadu Restaurant. Private answers did not see the error only because they ignored direct links, which also hid 26 legitimate direct-only Zomato orders. The public merchant neighborhood did follow the bad links.
+- Alternatives rejected: Trusting text matches over resolved outlets; deleting all direct links (loses the 26 legitimate ones); switching templates to direct links only (fresh builds emit outlet paths only); applying the data correction without a reviewed plan.
+- Files/contracts affected: `scripts/repair_order_merchant_paths.py`, `scripts/audit_graph_integrity.py`, `src/lunarbit/retrieval.py`, and their tests. The delivery-mention template also now filters by name through `WITH ... WHERE`; previously any name returned all four mentions.
+- Validation performed: 381 Python tests, Ruff, strict MyPy; the explicit evidence pattern reaches the same 34,763 order-chunk pairs as before and no order relies only on shared sources; the corrected plan on Aura proposes exactly 70 paired remove/add actions, 0 conflicts, and no identity churn; all 17 governed templates EXPLAIN cleanly on Aura 5.27.
+- Revisit trigger: A source documents several orders but carries row-level order attribution that could safely scope its chunks.
 
 ### 2026-10-05 — Enforce immutable workflow pins with a contract test
 
@@ -511,6 +520,8 @@ Copy the XML below as initialization context when handing Lunarbit to another co
 - Do not vectorize IDs, dates, or standalone amounts.
 - Do not implement custom BM25 using Neo4j dense vectors.
 - Do not label invoice settlement assertions as bank-confirmed.
+- Do not treat chunks from a source shared by several orders (provider history reports) as evidence of one order's merchant, and never let a text match override a unique resolved outlet.
+- Do not attach a row-filtering predicate to `OPTIONAL MATCH ... WHERE`; it only nulls the optional variables. Filter through `WITH ... WHERE`.
 - Do not mount private GraphRAG routes in a browser-facing service; use `scripts/serve_public_api.py` and an explicit non-wildcard CORS allowlist.
 
 ### 2026-08-20 — Isolate the public GraphRAG boundary
