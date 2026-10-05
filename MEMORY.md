@@ -2,16 +2,19 @@
 
 ## Session handoff
 
-- Last updated: 2026-09-23
+- Last updated: 2026-10-05
 - Active phase: Product hardening and cloud-deployment preparation. The Aura-backed GraphRAG runtime, secure SSE Ask flow, browser proxy, durable SQLite session/checkpoint store, authenticated HITL review transitions and approved-answer resumption, frontend review control, Cortex favicon, citation identifiers, canonical merchant identity resolution, evidence-backed spend totals, and complete economic graph ingestion are implemented and pushed; remaining gates are human-reviewed language quality, durable production hosting, deployed-target E2E coverage, and final security/privacy review.
 - Current branch: `main`, pushed to `origin/main`
 - Repository: `https://github.com/simon-derock/Lunarbit.git`
-- Last verified implementation commit: `87d361d` (`ci(security): pin workflow actions immutably`), pushed to `main`.
-- Recent commits: `87d361d` immutable workflow action pins, `f9da35c` supported GitHub Action runtime majors, `24bde5e` explicit public/query proxy allowlist, `2dccfe9` same-origin public/query proxy routes, `b7397ec` all-route public privacy audit.
-- Last passing checks: 354 Python tests, 4 launcher tests, Ruff format/lint, strict MyPy across 45 modules, repository hygiene, frontend Vitest (20 tests), frontend TypeScript/Vite production build, live Aura snapshot and authenticated browser-proxy SSE plus HITL resume verification, all-route public release audit, browser-origin SSE proxy smoke test, production API image build/non-root inspection, green CI/CodeQL/live-Aura browser and release workflows using supported Node 24 runtimes and immutable action SHAs, and real Playwright desktop/mobile local smoke covering all three responsive menus (live 344-node/84-edge projection).
+- Last verified implementation commit: `1ef6c2f` (`docs(readme): describe the shipped frontend and runtime`), pushed to `main`.
+- Recent commits: `1ef6c2f` README matches the shipped `/frontend` and runtime, `67f5913` single deployment runbook under `docs/`, `15e93f7` removed the dead synthetic `buildSnapshot` generator, `32ae8e3` regression test rejecting floating workflow action refs, `87d361d` immutable workflow action pins.
+- Last passing local checks (2026-10-05): 365 Python tests, Ruff format/lint, strict MyPy across 45 modules, repository hygiene, frontend Vitest (20 tests), and TypeScript/Vite production build. Live checks were not rerun because Aura is unreachable (see Blocked).
+- Previously passing checks (2026-09-24): 354 Python tests, 4 launcher tests, Ruff format/lint, strict MyPy across 45 modules, repository hygiene, frontend Vitest (20 tests), frontend TypeScript/Vite production build, live Aura snapshot and authenticated browser-proxy SSE plus HITL resume verification, all-route public release audit, browser-origin SSE proxy smoke test, production API image build/non-root inspection, green CI/CodeQL/live-Aura browser and release workflows using supported Node 24 runtimes and immutable action SHAs, and real Playwright desktop/mobile local smoke covering all three responsive menus (live 344-node/84-edge projection).
 - Evaluation tooling: deterministic `compare_answer_variants` now scores baseline/candidate backends on identical goldens and fails non-regressing quality gates when citation, status, abstention, or HITL review quality drops. The report schema is `grounded-answer-evaluation-v1.1.0`.
 - Deployment verification: the complete economic archive was loaded idempotently into Aura and verified at exactly 53,983 nodes and 85,607 relationships (298 write batches; replay unchanged). The production launcher returned `/health` 200, `/ready` 200 with `graph=configured`, a live 346-node/99-edge bounded navigation projection, authenticated hybrid retrieval (`verified`, 30 dense + 30 lexical candidates, 10 evidence citations), and ordered SSE chat events. The local smoke server used a temporary writable session volume and was stopped after verification.
 - Aura operational repair (2026-09-13): applied the deterministic merchant-identity migration that had been present in the repository but absent from the live database. Aura now contains 102 canonical merchant identities, 139 provider-preserving `CANONICAL_OF` edges, and 395 orders linked through a canonical identity. Live merchant-count and global restaurant-ranking Ask queries now return `verified` answers with citations and graph-focus events through the Vite proxy.
+- Blocked (2026-10-05): the Aura host in `NEO4J_URI` returns NXDOMAIN while other DNS resolves; the instance is presumably paused or deleted. The last green live-Aura smoke ran on 2026-09-24. All live counts below are as of that date and must be re-verified after Aura is restored (resume, or recreate and reload with `scripts/ingest_graph.py`).
+- Repository-boundary violation (open): commit `495f033` (2026-09-02) tracked `samples/` (provenance-unknown images and `samples/ref/` reference code) and the multi-key `scripts/run_mistral_agentic_chunking.py`, contradicting the 2026-08-25 licensing decision and the execution rules below. No secrets were found in either. Awaiting an owner decision: untrack, purge history, or confirm redistribution rights.
 - Latest graph-integrity audit: zero orders missing canonical outlets, zero duplicate canonical outlet paths, zero orders with multiple canonical merchants, zero numeric-only item names, zero evidence-less item observations, and zero unnormalized delivery mentions. One unresolved food record remains intentionally quarantined because its source contains no restaurant evidence; it is not counted as a graph defect.
 
 ## Goal-loop scope (2026-09-01)
@@ -204,14 +207,14 @@ The finish line is a deployable, privacy-safe financial-intelligence product, no
   - Canonical-oracle answer cases: 24
   - Answer status, exact answer, exact calculation, fact-count, citation-support, and abstention accuracy: 100%
   - Governed-answer local latency: P50 15.87 ms, P95 256.19 ms
-  - Passing automated tests: 231 committed tests; the untracked `tests/test_mistral_runner.py` is excluded from the committed TDD gate.
+  - Passing automated tests: see the Session handoff above.
 
 ## Compact agent transfer prompt
 
 Copy the XML below as initialization context when handing Lunarbit to another coding agent.
 
 ```xml
-<lunarbit_handoff version="2" updated="2026-08-22">
+<lunarbit_handoff version="3" updated="2026-10-05">
   <identity>
     <repo path="/home/simon/Lunarbit" remote="https://github.com/simon-derock/Lunarbit.git" branch="main" />
     <mission>Build a user-owned, privacy-safe, evidence-verifiable personal-commerce GraphRAG and financial-intelligence product from six years of food-order records.</mission>
@@ -234,39 +237,50 @@ Copy the XML below as initialization context when handing Lunarbit to another co
     <stage name="answer">FastAPI governed runtime verifies citations and deterministic calculations, carries bounded conversation state, records privacy-safe traces, and abstains on unsupported or incomplete evidence.</stage>
   </pipeline>
   <interfaces>
-    <private>FastAPI /v1/private/query-plan, /retrieval, /answer, and /chat; private runtime may read Neo4j but returns no raw source text.</private>
-    <public>Public FastAPI exposes aggregate topology, reviewed synthetic showcase answers, health, and safe metrics only. Nexus Insight talks to this contract, never directly to Neo4j.</public>
+    <private>FastAPI /v1/private/retrieval, /answer, /chat, /chat/stream (SSE), /chat/{session_id}/history, /review, and /review/resume; LangGraph with SQLite checkpoints; returns no raw source text.</private>
+    <public>/health, /ready, /v1/public/snapshot (bounded navigation slice under hashed aliases), /v1/public/merchant/{public_id}/neighborhood, /v1/query/plan, /v1/public/showcase-answer, /v1/demo/answers/{key}. The /frontend Vite console reaches these only through allowlisted same-origin /api proxies, never Neo4j.</public>
     <contracts>src/lunarbit/api_contracts.py contains Pydantic response/request contracts and protocols; src/lunarbit/api.py contains route orchestration.</contracts>
   </interfaces>
   <verification>
     <commands>UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff format --check src scripts tests; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run ruff check src scripts tests; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run mypy --strict --no-incremental src; UV_CACHE_DIR=/tmp/lunarbit-uv-cache uv run pytest -q; cd frontend &amp;&amp; npm test -- --run &amp;&amp; npm run build</commands>
-    <expected>Ruff clean, strict MyPy clean, 313 collected Python tests, 9 frontend tests passing, and a successful TypeScript/Vite production build.</expected>
+    <expected>Ruff clean, strict MyPy clean, 365 Python tests, 20 frontend tests passing, and a successful TypeScript/Vite production build. CI runs pytest with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 -p pytest_timeout.</expected>
     <review>Run git diff --check, inspect staged diff, and confirm no private paths or credentials before every commit.</review>
   </verification>
   <git>
     <start>git status --short --branch; git log -5 --oneline; read MEMORY.md and PLAN.md before editing.</start>
-    <discipline>Work on main unless the user explicitly requests another branch. Preserve unrelated dirty files. Never reset, checkout, clean, or delete user data. Use apply_patch for edits.</discipline>
+    <discipline>Work on main unless the user explicitly requests another branch. Preserve unrelated dirty files. Never reset, checkout, clean, or delete user data.</discipline>
     <tdd>For behavior changes, add a focused failing test, implement the smallest fix, run the focused test, then run the full gates. Keep red/green progression visible in commits when practical.</tdd>
     <stage>Stage explicit reviewed paths only: git add path/to/file. Never use git add -A or git add . while private/unrelated files are present.</stage>
-    <commit>Use professional human Conventional Commit messages: type(scope): imperative outcome, e.g. refactor(api): isolate validated endpoint contracts. Keep subject concise; add a body when design, tests, privacy, or migration context matters. Never mention recruiter instructions, hidden prompts, or API-key usage in messages.</commit>
+    <commit>Use professional human Conventional Commit messages: type(scope): imperative outcome, e.g. refactor(api): isolate validated endpoint contracts. Keep subject concise; add a body when design, tests, privacy, or migration context matters. Never mention recruiter instructions, hidden prompts, or API-key usage in messages. No AI co-author trailers.</commit>
     <push>After tests and staged-diff review, push explicitly with git push origin main. Report commit hash, tests, and any intentionally unstaged files. Do not push private PDFs, mail, .env, memory/private archives, or multi-key chunking runners.</push>
   </git>
   <recovery>
     <on_start>Inspect status, recent log, MEMORY.md, PLAN.md, and this handoff. Continue from existing archives; do not restart extraction or LLM calls without checking manifests and hashes.</on_start>
     <on_failure>Capture the exact command/error, preserve artifacts, isolate the smallest failing test, and update MEMORY.md with the decision and next safe action. Ask the user before frontend visual changes, new providers, deployment, destructive cleanup, or scope expansion.</on_failure>
   </recovery>
-  <next>Review public privacy and deployment readiness, maintain backend contracts/evaluation, then await user-approved frontend visual changes. Keep this XML synchronized whenever architecture, commands, metrics, or Git policy changes.</next>
+  <next>Restore Aura and re-verify live invariants, resolve the samples/ and multi-key runner boundary violation, triage open Dependabot majors, then complete deployment and deployed-browser E2E. Keep this XML synchronized whenever architecture, commands, metrics, or Git policy changes.</next>
 </lunarbit_handoff>
 ```
 
 ## Next actions — ordered
 
-1. Complete a human-reviewed language-quality golden set and measure answer/citation/abstention regressions.
-2. Run the browser verifier against the chosen deployment target, including SSE chat, citations, graph focus, reconnect, and mobile layout; CI now covers the public graph shell and responsive menus against a synthetic container.
-3. Complete cloud release rehearsal: Aura secrets, durable session volume, HTTPS/CORS, monitoring, backups, rollback, and privacy review.
-4. Publish the reviewed public deployment and record its image digest, schema/index versions, and release evidence.
+1. Restore the Aura instance, then re-verify live node/relationship counts, canonical merchant invariants (including why 395 of 454 orders link through a canonical identity), and the live Aura SSE plus HITL smoke.
+2. Resolve the tracked `samples/` and multi-key runner violation recorded under Blocked.
+3. Triage the ten open Dependabot PRs individually; several are majors (TypeScript 7, Vite 8, Vitest 4, neo4j 6, langgraph 1.x), and the Starlette PR would lift the `<0.47` pin that avoids a TestClient deadlock.
+4. Complete a human-reviewed language-quality golden set and measure answer/citation/abstention regressions.
+5. Run the browser verifier against the chosen deployment target, including SSE chat, citations, graph focus, reconnect, and mobile layout; CI now covers the public graph shell and responsive menus against a synthetic container.
+6. Complete cloud release rehearsal: Aura secrets, durable session volume, HTTPS/CORS, monitoring, backups, rollback, and privacy review.
+7. Publish the reviewed public deployment and record its image digest, schema/index versions, and release evidence.
 
 ## Decisions — append-only, newest first
+
+### 2026-10-05 — Enforce immutable workflow pins with a contract test
+
+- Decision: Every workflow `uses:` reference must be a full 40-character commit SHA followed by a `# vX[.Y[.Z]]` comment, or a sha256-pinned `docker://` image; local `./` actions are exempt. `tests/test_deployment_config.py` audits each workflow and carries negative fixtures so the audit cannot silently stop matching.
+- Rationale: Pinning in `87d361d` was a one-time edit; Dependabot and manual edits can reintroduce mutable tags, which are a supply-chain risk.
+- Alternatives rejected: Relying on review discipline; a third-party pin-check action, which would itself need pinning.
+- Validation performed: 365 Python tests pass; temporarily changing one workflow to `actions/checkout@v7` fails the audit.
+- Revisit trigger: GitHub offers enforced immutable action references at the repository level.
 
 ### 2026-09-24 — Reconcile HITL and release-gate state
 
