@@ -133,3 +133,20 @@ def test_workflow_actions_are_pinned_to_immutable_release_shas(workflow: str) ->
 
     assert any(_USES.match(line) for line in text.splitlines())
     assert _unpinned_action_refs(text) == []
+
+
+@pytest.mark.parametrize("dockerfile", ("Dockerfile.api", "Dockerfile.public"))
+def test_api_images_pin_bases_and_keep_build_tools_out(dockerfile: str) -> None:
+    text = (ROOT / dockerfile).read_text(encoding="utf-8")
+    bases = [line.split()[1] for line in text.splitlines() if line.startswith("FROM ")]
+
+    assert bases
+    assert all(re.search(r"@sha256:[0-9a-f]{64}$", base) for base in bases)
+    assert "COPY --from=uv" not in text
+    assert "--mount=type=cache,target=/root/.cache/uv" in text
+
+
+def test_docker_build_context_excludes_local_environments() -> None:
+    ignored = set((ROOT / ".dockerignore").read_text(encoding="utf-8").split())
+
+    assert {".venv", ".claude", ".lunarbit", "**/__pycache__", "**/*.pyc", ".env.*"} <= ignored
