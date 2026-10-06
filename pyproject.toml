@@ -40,7 +40,7 @@ api = [
   "anyio>=4.10,<4.15",
   "fastapi>=0.116,<1",
   # 1.3.1 fixes the Host/path URL reconstruction and form-parsing advisories in earlier releases.
-  "starlette>=1.3.1,<1.7",
+  "starlette>=1.3.1,<1.8",
   "python-dotenv>=1.1,<2",
   "uvicorn>=0.35,<1",
 ]
