@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 agent = [
-  "huggingface-hub>=0.35,<2",
+  "huggingface-hub>=0.35,<3",
   "langgraph>=1.0.10,<2",
   "langgraph-checkpoint-sqlite>=3.1.1,<4",
   "python-dotenv>=1.1,<2",
